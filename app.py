@@ -15,6 +15,18 @@ import tempfile
 import time
 from pathlib import Path
 
+try:
+    import user_store
+    import notifications_store
+except ImportError:
+    user_store = None
+    notifications_store = None
+
+try:
+    import email_helper
+except ImportError:
+    email_helper = None
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -23,7 +35,6 @@ import streamlit as st
 import torch
 from huggingface_hub import hf_hub_download
 from PIL import Image
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 # 1. Page config (MUST be first Streamlit call)
 st.set_page_config(
@@ -32,6 +43,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# Module-level set — tracks which emails already accepted terms this server session.
+# Survives logout/re-login so the user isn't asked twice in the same browser session.
+_terms_consented_emails: set = set()
 
 # 2. Constants & configuration
 PRIMARY_COLOR = "#0F766E"
@@ -149,28 +164,28 @@ TEAM_MEMBERS = [
         "role": "Lead Developer & ML Architect",
         "bio": "Leads the MindGuard research workflow, model comparison, training pipeline, and deployment readiness for mental health risk screening.",
         "image": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=80",
-        "linkedin": "https://www.linkedin.com/",
+        "linkedin": "https://www.linkedin.com/in/diana-opiyo/",
     },
     {
         "name": "Andrew Njiyo",
         "role": "Technical Lead",
         "bio": "Guides risk-tier language, crisis-resource framing, and responsible use so model output stays grounded in human support.",
         "image": "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=900&q=80",
-        "linkedin": "https://www.linkedin.com/",
+        "linkedin": "https://www.linkedin.com/in/andrew-njiyo/",
     },
     {
         "name": "Dr. Suhila Sawesi",
         "role": "Health Informatics Advisor",
         "bio": "Reviews dataset consistency, checks label quality, and tracks model performance across text, platform exports, and OCR inputs.",
         "image": "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=900&q=80",
-        "linkedin": "https://www.linkedin.com/",
+        "linkedin": "https://www.linkedin.com/in/suhila-sawesi/",
     },
     {
         "name": "Bushra Rashrash",
         "role": "Bioinformatics Specialist",
         "bio": "Turns model workflows into practical analysis tools with accessible layouts, clearer actions, and safer reporting touchpoints.",
         "image": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=80",
-        "linkedin": "https://www.linkedin.com/",
+        "linkedin": "https://www.linkedin.com/in/bushra-rashrash/",
     },
 ]
 
@@ -386,6 +401,81 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     .team-grid, .terms-grid { grid-template-columns:1fr; }
     .team-card img { height:230px; }
 }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: #ffffff !important;
+    border-right: 1px solid #d9e3df !important;
+}
+[data-testid="stSidebar"] > div:first-child {
+    padding: 1.2rem 1rem 1.5rem !important;
+}
+[data-testid="stSidebar"] * {
+    color: #111827 !important;
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #111827 !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    margin: 0.8rem 0 0.4rem !important;
+}
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] .stCaption {
+    color: #4b5563 !important;
+    font-size: 0.78rem !important;
+}
+[data-testid="stSidebar"] .stButton > button {
+    background: #f0fdf8 !important;
+    color: #065f46 !important;
+    border: 1px solid #a7f3d0 !important;
+    border-radius: 6px !important;
+    font-size: 0.74rem !important;
+    font-weight: 600 !important;
+    padding: 0.3rem 0.6rem !important;
+    width: 100% !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: #d1fae5 !important;
+    border-color: #6ee7b7 !important;
+}
+[data-testid="stSidebar"] .stExpander {
+    border: 1px solid #d9e3df !important;
+    border-radius: 8px !important;
+    margin-bottom: 0.4rem !important;
+    background: #f8faf9 !important;
+}
+[data-testid="stSidebar"] .stExpander summary {
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    color: #111827 !important;
+}
+[data-testid="stSidebar"] code,
+[data-testid="stSidebar"] pre {
+    background: #f1f5f9 !important;
+    color: #0f766e !important;
+    font-size: 0.72rem !important;
+    border-radius: 6px !important;
+    word-break: break-all !important;
+}
+[data-testid="stSidebar"] hr {
+    border-color: #d9e3df !important;
+    margin: 0.6rem 0 !important;
+}
+[data-testid="stSidebar"] .stAlert {
+    font-size: 0.76rem !important;
+}
+/* Sidebar toggle button visibility */
+[data-testid="stSidebarCollapsedControl"] button {
+    background: #ffffff !important;
+    border: 1px solid #d9e3df !important;
+    color: #0f766e !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -426,6 +516,13 @@ _defaults = {
     "terms_accepted":   False,
     "terms_accepted_at": "",
     "theme_choice":     "Auto",   # ported from v1_Signin
+    # Session timeout & role
+    "last_activity":            datetime.datetime.now().isoformat(),
+    "session_timeout_minutes":  30,
+    "auth_name":                "",
+    "auth_role_type":           "counselor",  # "student", "counselor", "admin"
+    "notifications_unread":     0,
+    "referral_code":            "",
 }
 for _k, _v in _defaults.items():
     if _k not in st.session_state:
@@ -435,96 +532,254 @@ for _entry in st.session_state.analytics.get("history", []):
     for _field, _default in [("cls", "Unknown"), ("ts", ""), ("prob", 0.0), ("txt", "")]:
         _entry.setdefault(_field, _default)
 
+# 4b-pre. Referral query-param capture (runs every page load, before auth gate)
+_ref_code = st.query_params.get("ref", "")
+if _ref_code and not st.session_state.get("incoming_ref"):
+    st.session_state.incoming_ref = _ref_code
+
 # 4b. Auth helpers
 
 def reset_auth_state() -> None:
     st.session_state.authenticated = False
     st.session_state.auth_user = ""
+    st.session_state.auth_name = ""
     st.session_state.auth_role = "Clinical review"
+    st.session_state.auth_role_type = "counselor"
     st.session_state.terms_accepted = False
     st.session_state.terms_accepted_at = ""
+    st.session_state.referral_code = ""
+    st.session_state.notifications_unread = 0
 
 
-def _auth_success(email: str, name: str, role: str = "Clinical review") -> None:
+def _auth_success(email: str, name: str, role: str = "Clinical review", role_type: str = "counselor", referral_code: str = "") -> None:
     """Mark session as authenticated and trigger rerun."""
+    already_consented = email in _terms_consented_emails
     st.session_state.authenticated      = True
     st.session_state.auth_user          = email
     st.session_state.user_email         = email
     st.session_state.user_name          = name
+    st.session_state.auth_name          = name
     st.session_state.auth_role          = role
-    st.session_state.terms_accepted     = False
-    st.session_state.terms_accepted_at  = ""
+    st.session_state.auth_role_type     = role_type
+    st.session_state.referral_code      = referral_code
+    st.session_state.terms_accepted     = already_consented
+    st.session_state.terms_accepted_at  = (
+        st.session_state.get("terms_accepted_at", "") if already_consented else ""
+    )
+    st.session_state.last_activity      = datetime.datetime.now().isoformat()
     st.session_state.pop("terms_consent_checkbox", None)
     st.rerun()
 
 
 def render_sign_in() -> None:
     """
-    Sign-in page with three cascading auth methods:
-      Tab 1 — Google OAuth        (via auth.py / streamlit-google-auth)
-      Tab 2 — Username & Password (via auth.py / streamlit-authenticator)
-      Tab 3 — Quick Access        (email + any password — prototype fallback)
+    Sign-in page with three auth methods:
+      Tab 1 — Email & Password  (Supabase Auth — primary, supports Student/Counselor/Admin)
+      Tab 2 — Google OAuth      (streamlit-google-auth — when credentials are configured)
+      Tab 3 — Local Account     (streamlit-authenticator — admin/staff fallback)
     """
     st.markdown("""
     <style>
     html, body, .stApp { overflow-y: hidden !important; }
-    .main .block-container { max-width:1100px !important; padding:2rem 0.9rem 0.5rem !important; margin:0 auto !important; }
-    [data-testid="stHorizontalBlock"] { gap:0 !important; align-items:stretch !important; }
-    [data-testid="stHorizontalBlock"] > div { padding:0 !important; }
+    .main .block-container {
+        max-width: 1080px !important;
+        padding: 2rem 1rem 0.5rem !important;
+        margin: 0 auto !important;
+    }
+    [data-testid="stHorizontalBlock"] { gap: 0 !important; align-items: stretch !important; }
+    [data-testid="stHorizontalBlock"] > div { padding: 0 !important; }
     [data-testid="stHorizontalBlock"] > div:last-child {
-        background:#ffffff;
-        border:1px solid #d8dedb;
-        border-left:none;
-        border-radius:0 8px 8px 0;
+        background: #ffffff;
+        border: 1px solid #d1d9d5;
+        border-left: none;
+        border-radius: 0 10px 10px 0;
     }
     [data-testid="stHorizontalBlock"] > div:last-child > div:first-child {
-        padding:2.4rem 3.1rem 2rem;
-        min-height:520px;
-        box-sizing:border-box;
+        padding: 2.4rem 3rem 2rem;
+        min-height: 540px;
+        box-sizing: border-box;
     }
+    .mg-auth-unavailable {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 2.5rem 1rem;
+        color: #9ca3af;
+        font-size: 0.82rem;
+        text-align: center;
+    }
+    .mg-auth-unavailable svg { opacity: 0.35; }
+    .mg-role-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+    }
+    .mg-role-student  { background: #dbeafe; color: #1e40af; }
+    .mg-role-counselor{ background: #d1fae5; color: #065f46; }
+    .mg-role-admin    { background: #fef3c7; color: #92400e; }
     </style>
     """, unsafe_allow_html=True)
 
     left, right = st.columns([1, 1])
+
     with left:
         st.markdown("""
         <div class="auth-copy">
             <div>
                 <div class="auth-brand">
                     <div class="auth-brand-logo">
-                        <div style="font-size:22px;font-weight:700;color:#0D9488;letter-spacing:-0.5px;">MindGuard AI</div>
+                        <div style="font-size:22px;font-weight:700;color:#0D9488;letter-spacing:-0.5px;">
+                            MindGuard AI
+                        </div>
                     </div>
                 </div>
                 <div class="auth-kicker">SECURE WORKSPACE</div>
                 <div class="auth-title">Review high-risk signals with care.</div>
-                <p class="auth-text">Sign in to access the analysis workspace for text, social platforms, files, and crisis-resource lookup.</p>
+                <p class="auth-text">
+                    A consent-first clinical decision-support tool for trained mental health
+                    professionals. Sign in to access the analysis workspace.
+                </p>
             </div>
             <div class="trust-row">
-                <div class="trust-pill">Consent-first review</div>
-                <div class="trust-pill">No session storage</div>
-                <div class="trust-pill">Crisis resources nearby</div>
+                <div class="trust-pill">Consent-first</div>
+                <div class="trust-pill">No data stored</div>
+                <div class="trust-pill">Crisis resources included</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
     with right:
-        st.markdown('<div class="signin-heading"><h2>Sign in</h2><p>Choose your preferred sign-in method.</p></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="signin-heading"><h2>Sign in to MindGuard</h2>'
+            '<p>Use your account or create one below.</p></div>',
+            unsafe_allow_html=True,
+        )
 
-        tab_google, tab_local, tab_quick = st.tabs([
-            "Google", "Username & Password", "Quick Access"
+        tab_email, tab_google, tab_local = st.tabs([
+            "Email & Password", "Google", "Local Account"
         ])
 
-        # Tab 1: Google OAuth
+        # ── Tab 1: Supabase email/password (primary) ─────────────────────
+        with tab_email:
+            sub_signin, sub_register = st.tabs(["Sign In", "Create Account"])
+
+            with sub_signin:
+                with st.form("ep_signin_form"):
+                    ep_email    = st.text_input("Email", placeholder="name@organization.org", key="ep_signin_email")
+                    ep_password = st.text_input("Password", type="password", placeholder="Enter password", key="ep_signin_password")
+                    ep_submit   = st.form_submit_button("Sign in", use_container_width=True)
+                if ep_submit:
+                    if not ep_email.strip() or not ep_password.strip():
+                        st.warning("Enter an email and password to continue.")
+                    elif user_store is None:
+                        st.error("User store module not available.")
+                    else:
+                        _user = user_store.authenticate_user(ep_email.strip(), ep_password)
+                        if _user:
+                            _role_display = _user.get("role", "counselor").capitalize()
+                            _auth_success(
+                                email=_user["email"],
+                                name=_user.get("name", _user["email"].split("@")[0]),
+                                role=_role_display,
+                                role_type=_user.get("role", "counselor"),
+                                referral_code=_user.get("referral_code", ""),
+                            )
+                        else:
+                            st.error("Invalid email or password.")
+
+            with sub_register:
+                with st.form("ep_register_form"):
+                    reg_name     = st.text_input("Full Name", placeholder="Jane Doe", key="reg_name")
+                    reg_email    = st.text_input("Email", placeholder="name@organization.org", key="reg_email")
+                    reg_password = st.text_input("Password", type="password", placeholder="Create a password", key="reg_password")
+                    reg_confirm  = st.text_input("Confirm Password", type="password", placeholder="Repeat password", key="reg_confirm")
+                    reg_role     = st.selectbox("Role", ["Student", "Counselor"], key="reg_role")
+                    # DOB — only for students
+                    reg_dob = None
+                    if reg_role == "Student":
+                        reg_dob = st.date_input(
+                            "Date of Birth",
+                            value=None,
+                            min_value=datetime.date(1940, 1, 1),
+                            max_value=datetime.date.today(),
+                            key="reg_dob",
+                        )
+                    # Parent email — only for students under 18
+                    reg_parent_email = ""
+                    if reg_role == "Student" and reg_dob is not None:
+                        _today = datetime.date.today()
+                        _age   = _today.year - reg_dob.year - ((_today.month, _today.day) < (reg_dob.month, reg_dob.day))
+                        if _age < 18:
+                            reg_parent_email = st.text_input(
+                                "Parent/Guardian Email",
+                                placeholder="parent@example.com",
+                                key="reg_parent_email",
+                            )
+                    reg_submit = st.form_submit_button("Register", use_container_width=True)
+
+                if reg_submit:
+                    if user_store is None:
+                        st.error("User store module not available.")
+                    elif not reg_name.strip() or not reg_email.strip() or not reg_password:
+                        st.warning("Name, email, and password are required.")
+                    elif reg_password != reg_confirm:
+                        st.error("Passwords do not match.")
+                    else:
+                        _dob_str = reg_dob.isoformat() if reg_dob else ""
+                        _role_key = reg_role.lower()
+                        _referred_by = st.session_state.get("incoming_ref", "")
+                        _ok, _msg = user_store.register_user(
+                            email=reg_email.strip(),
+                            name=reg_name.strip(),
+                            password=reg_password,
+                            role=_role_key,
+                            dob_str=_dob_str,
+                            parent_email=reg_parent_email,
+                            referred_by=_referred_by,
+                        )
+                        if _ok:
+                            if _referred_by:
+                                st.session_state.pop("incoming_ref", None)
+                            # Notify parent if minor
+                            if reg_parent_email and email_helper is not None:
+                                _sent, _err = email_helper.send_parent_notification(
+                                    reg_parent_email,
+                                    reg_name.strip(),
+                                    reg_email.strip(),
+                                )
+                                if not _sent:
+                                    st.info(f"Account created. Parent notification could not be sent: {_err}")
+                            st.success("Registration successful! Please sign in using the Sign In tab.")
+                        else:
+                            st.error(_msg)
+
+        # ── Tab 2: Google OAuth ───────────────────────────────────────────
         with tab_google:
             try:
                 from auth import init_google_auth
                 g_auth = init_google_auth()
                 if g_auth is None:
-                    st.info(
-                        "Google sign-in is not configured. "
-                        "Place your downloaded `google_credentials.json` in the project root, "
-                        "or set `GOOGLE_CREDENTIALS_FILE` in `.env`."
-                    )
+                    st.markdown("""
+                    <div class="mg-auth-unavailable">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        <strong>Google sign-in is not configured</strong>
+                        <span>Add your <code>google_credentials.json</code> to the project root,
+                        or set <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code>
+                        in <code>.env</code>, then restart the app.</span>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     g_auth.login()
                     if st.session_state.get("connected"):
@@ -534,52 +789,63 @@ def render_sign_in() -> None:
                             name=info.get("name", "User"),
                         )
             except ImportError:
-                st.warning("Google auth module not installed. Run: `pip install streamlit-google-auth`")
+                st.markdown(
+                    '<div class="mg-auth-unavailable">'
+                    "<strong>Google auth package not installed</strong>"
+                    "<span>Run: <code>pip install streamlit-google-auth</code></span>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
             except Exception as e:
                 st.error(f"Google auth error: {e}")
 
-        # Tab 2: streamlit-authenticator (username + hashed password)
+        # ── Tab 3: Local / admin account (streamlit-authenticator) ───────
         with tab_local:
+            st.caption("For staff and administrator accounts managed by your institution.")
             try:
                 from auth import init_local_auth
-                authenticator, config = init_local_auth()
+                authenticator, _lcfg = init_local_auth()
                 result = authenticator.login(location="main")
-                name, auth_status, username = result if result else (None, None, None)
-                if auth_status:
-                    email = config["credentials"]["usernames"].get(username, {}).get("email", username)
-                    _auth_success(email=email, name=name)
-                elif auth_status is False:
+                _lname, _lstatus, _lusername = result if result else (None, None, None)
+                if _lstatus:
+                    _lemail = _lcfg["credentials"]["usernames"].get(
+                        _lusername, {}
+                    ).get("email", _lusername)
+                    _auth_success(
+                        email=_lemail,
+                        name=_lname,
+                        role="Admin",
+                        role_type="admin",
+                    )
+                elif _lstatus is False:
                     st.error("Incorrect username or password.")
-                elif auth_status is None:
-                    st.caption("Default demo credentials: username `admin` / password `admin123`")
             except ImportError:
-                st.warning("Local auth module not installed. Run: `pip install streamlit-authenticator PyYAML`")
+                st.markdown(
+                    '<div class="mg-auth-unavailable">'
+                    "<strong>Auth package not installed</strong>"
+                    "<span>Run: <code>pip install streamlit-authenticator PyYAML</code></span>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
             except Exception as e:
                 st.warning(f"Local auth unavailable: {e}")
 
-        # Tab 3: Quick Access — email + any password (prototype fallback)
-        with tab_quick:
-            st.caption("Prototype gate — accepts any email and password. Replace with real credentials before production.")
-            with st.form("signin_form_quick"):
-                email    = st.text_input("Email", placeholder="name@organization.org", key="auth_email_input")
-                password = st.text_input("Password", type="password", placeholder="Enter password", key="auth_password_input")
-                role     = st.selectbox(
-                    "Workspace",
-                    ["Clinical review", "Research team", "Data annotation", "Product demo"],
-                    key="auth_role_input",
-                )
-                submitted = st.form_submit_button("Sign in", use_container_width=True)
-            if submitted:
-                if email.strip() and password.strip():
-                    _auth_success(email=email.strip(), name=email.strip().split("@")[0], role=role)
-                else:
-                    st.warning("Enter an email and password to continue.")
 
-
-@st.dialog("MindGuard Terms and Conditions", width="large")
-def render_terms_dialog() -> None:
+def render_terms_page() -> None:
+    """
+    Full-page terms screen shown once per server session per user.
+    Rendered inline (not as @st.dialog) so st.rerun() fully exits the screen.
+    """
     st.markdown("""
-    <p class="section-label">Required before workspace access</p>
+    <style>
+    .terms-page-wrap {
+        max-width: 820px; margin: 2rem auto; background: #ffffff;
+        border: 1px solid #d9e3df; border-radius: 12px;
+        padding: 2rem 2.4rem 1.6rem; box-shadow: 0 8px 24px rgba(15,23,42,0.07);
+    }
+    </style>
+    <div class="terms-page-wrap">
+    <p class="section-label">Required once per session</p>
     <h2>Practitioner Use and Responsibility Agreement</h2>
     <p>This application is a clinical decision-support tool intended for use by trained professionals, including school psychologists, licensed counselors, or designated mental health staff.</p>
     <div class="terms-alert"><strong>Emergency notice:</strong> If someone may be in immediate danger, contact emergency services or a crisis line now. Do not wait for a model result.</div>
@@ -595,75 +861,171 @@ def render_terms_dialog() -> None:
         <div class="terms-clause"><strong>Emergency Responsibility</strong><span>This system is not a real-time crisis response service. You remain responsible for appropriate emergency action when imminent risk is identified.</span></div>
         <div class="terms-clause"><strong>Agreement</strong><span>By continuing, you confirm that you are a qualified professional user, will use this system within its intended scope, and accept responsibility for all decisions made using its outputs.</span></div>
     </div>
+    </div>
     """, unsafe_allow_html=True)
+
     accepted = st.checkbox(
-        "I confirm that I am a qualified professional user, I agree to this Practitioner Use and Responsibility Agreement, and I accept responsibility for decisions made using system outputs.",
+        "I confirm that I am a qualified professional user, I agree to this Practitioner "
+        "Use and Responsibility Agreement, and I accept responsibility for decisions made "
+        "using system outputs.",
         key="terms_consent_checkbox",
     )
-    left, right = st.columns([1, 1])
+    left, _, right = st.columns([1, 2, 1])
     with left:
         if st.button("Sign out", use_container_width=True, key="terms_sign_out"):
             reset_auth_state()
             st.rerun()
     with right:
-        if st.button("I consent and continue", use_container_width=True, disabled=not accepted, key="terms_accept"):
+        if st.button(
+            "I consent and continue →",
+            use_container_width=True,
+            disabled=not accepted,
+            key="terms_accept",
+            type="primary",
+        ):
+            _email = st.session_state.get("auth_user", "")
+            _terms_consented_emails.add(_email)
             st.session_state.terms_accepted = True
             st.session_state.terms_accepted_at = datetime.datetime.now().isoformat(timespec="seconds")
             st.rerun()
+
+# 4c. Session timeout helper
+def check_session_timeout() -> None:
+    """Auto-logout after session_timeout_minutes of inactivity. Shows 5-min warning."""
+    if not st.session_state.get("authenticated"):
+        return
+    timeout_mins = st.session_state.get("session_timeout_minutes", 30)
+    last = st.session_state.get("last_activity", "")
+    if not last:
+        st.session_state.last_activity = datetime.datetime.now().isoformat()
+        return
+    elapsed = (datetime.datetime.now() - datetime.datetime.fromisoformat(last)).total_seconds() / 60
+    if elapsed >= timeout_mins:
+        reset_auth_state()
+        st.warning("You were signed out due to inactivity.")
+        st.rerun()
+    elif elapsed >= timeout_mins - 5:
+        mins_left = int(timeout_mins - elapsed)
+        st.warning(f"Your session will expire in ~{mins_left} minute(s) due to inactivity.")
+
 
 # 5. Auth gate
 if not st.session_state["authenticated"]:
     render_sign_in()
     st.stop()
 
+check_session_timeout()
+
 if not st.session_state["terms_accepted"]:
-    render_terms_dialog()
+    render_terms_page()
     st.stop()
 
 # 6. Model loading (cached)
 
 @st.cache_resource
 def load_model_and_tokenizer():
-    """Load Mental-RoBERTa. Tries HuggingFace first, falls back to local files."""
+    """
+    Load Mental-RoBERTa in order of availability:
+      1. HuggingFace private repo  (HF_REPO_ID + HF_TOKEN  in .env or st.secrets)
+      2. Local files               (mindguard_tokenizer/ + mindguard_best_weights.pt)
+      3. Base public model         (mental/mental-roberta-base — no fine-tuned weights)
+    """
+    # Lazy import — avoids Streamlit worker sys.modules conflicts at module load time
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+    def _get(key: str, default: str = "") -> str:
+        """Read from env var first, fall back to st.secrets."""
+        val = os.environ.get(key, "")
+        if val:
+            return val
+        try:
+            return st.secrets.get(key, default)
+        except Exception:
+            return default
+
     try:
         with open("mindguard_model_config.json") as f:
             config = json.load(f)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        base_model  = config.get("model_name", "mental/mental-roberta-base")
+        hf_repo     = _get("HF_REPO_ID")
+        hf_token    = _get("HF_TOKEN")
+        token_kwargs = {"token": hf_token} if hf_token else {}
 
-        try:
-            hf_repo = st.secrets["HF_REPO_ID"]
-            hf_token = st.secrets["HF_TOKEN"]
-            tokenizer = AutoTokenizer.from_pretrained(
-                hf_repo,
-                token=hf_token,
-                subfolder="mindguard_tokenizer",
-            )
-            local_path = "mindguard_model_local"
-            load_from = local_path if os.path.exists(local_path) else config["model_name"]
-            model = AutoModelForSequenceClassification.from_pretrained(
-                load_from, num_labels=2, ignore_mismatched_sizes=True,
-            )
-            weights_path = hf_hub_download(
-                repo_id=hf_repo, filename="mindguard_best_weights.pt", token=hf_token,
-            )
-            state_dict = torch.load(weights_path, map_location=device)
-        except Exception:
-            # Fall back to local files
-            tokenizer = AutoTokenizer.from_pretrained("mindguard_tokenizer")
-            local_path = "mindguard_model_local"
-            load_from = local_path if os.path.exists(local_path) else config["model_name"]
-            model = AutoModelForSequenceClassification.from_pretrained(
-                load_from, num_labels=2, ignore_mismatched_sizes=True,
-            )
-            state_dict = torch.load("mindguard_best_weights.pt", map_location=device)
+        # ── Path 1: HuggingFace repo (weights required; tokenizer optional) ─
+        if hf_repo:
+            try:
+                # Always try weights first — if the repo exists this will work
+                weights_path = hf_hub_download(
+                    repo_id=hf_repo, filename="mindguard_best_weights.pt", **token_kwargs,
+                )
+                # Tokenizer: repo subfolder if uploaded, otherwise use base model
+                try:
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        hf_repo, subfolder="mindguard_tokenizer", **token_kwargs,
+                    )
+                except Exception:
+                    tokenizer = AutoTokenizer.from_pretrained(base_model, **token_kwargs)
 
-        model.load_state_dict(state_dict)
+                # Architecture: local saved model or base model
+                local_arch = "mindguard_model_local"
+                arch_src   = local_arch if os.path.isdir(local_arch) else base_model
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    arch_src, num_labels=2, ignore_mismatched_sizes=True,
+                )
+
+                # Load fine-tuned weights
+                try:
+                    state_dict = torch.load(weights_path, map_location=device, weights_only=True)
+                except TypeError:
+                    # weights_only not supported in older PyTorch builds
+                    state_dict = torch.load(weights_path, map_location=device)
+
+                model.load_state_dict(state_dict)
+                model = model.to(device)
+                model.eval()
+                return model, tokenizer, config, device
+            except Exception:
+                pass  # fall through to local
+
+        # ── Path 2: Local files ────────────────────────────────────────────
+        local_tok     = "mindguard_tokenizer"
+        local_weights = "mindguard_best_weights.pt"
+        if os.path.isdir(local_tok) and os.path.isfile(local_weights):
+            tokenizer = AutoTokenizer.from_pretrained(local_tok)
+            local_arch = "mindguard_model_local"
+            arch_src   = local_arch if os.path.isdir(local_arch) else base_model
+            model = AutoModelForSequenceClassification.from_pretrained(
+                arch_src, num_labels=2, ignore_mismatched_sizes=True,
+            )
+            state_dict = torch.load(local_weights, map_location=device, weights_only=True)
+            model.load_state_dict(state_dict)
+            model = model.to(device)
+            model.eval()
+            return model, tokenizer, config, device
+
+        # ── Path 3: Base public model (no fine-tuned weights) ─────────────
+        tokenizer = AutoTokenizer.from_pretrained(base_model, **token_kwargs)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            base_model, num_labels=2, ignore_mismatched_sizes=True, **token_kwargs,
+        )
         model = model.to(device)
         model.eval()
+        st.warning(
+            "Running in **base model mode** — fine-tuned weights not found. "
+            "Predictions are less accurate. To load the full MindGuard model, "
+            "set `HF_REPO_ID` in `.env` **or** run `python save_model_local.py`.",
+            icon="⚠️",
+        )
         return model, tokenizer, config, device
 
     except Exception as e:
-        st.error(f"Could not load Mental-RoBERTa model: {e}")
+        st.error(
+            f"**Could not load the model.** {e}\n\n"
+            "**Setup options:**\n"
+            "- Add `HF_REPO_ID=your-hf-username/your-repo` to `.env` (plus `HF_TOKEN`)\n"
+            "- Or run `python save_model_local.py` to cache the model locally"
+        )
         st.stop()
 
 
@@ -1007,8 +1369,8 @@ def download_audio(url: str, out_dir: str) -> str:
         trim_result = subprocess.run(trim_cmd, capture_output=True, timeout=60)
         if trim_result.returncode == 0 and os.path.exists(trimmed) and os.path.getsize(trimmed) > 1000:
             return trimmed
-    except Exception:
-        pass
+    except Exception as _e:
+        st.warning(f"Audio trim failed: {_e}")
     return mp3
 
 
@@ -1183,7 +1545,7 @@ def fetch_youtube(channel_input: str, api_key: str) -> list:
                 if len(comment_text) > 5:
                     posts.append({"text": comment_text, "date": dt, "url": f"https://youtube.com/watch?v={video_id}", "video_id": video_id})
         except Exception:
-            pass
+            pass  # comment fetch is best-effort, video still analyzed
     posts.sort(key=lambda x: x["date"])
     return posts
 
@@ -1246,7 +1608,7 @@ def parse_uploaded_file(uploaded_file) -> list:
             dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=i)
             if date_col:
                 try: dt = pd.to_datetime(row[date_col], utc=True)
-                except Exception: pass
+                except Exception: pass  # date column inference is best-effort
             posts.append({"text": text, "date": dt, "url": ""})
     elif name.endswith(".json"):
         try:
@@ -1322,6 +1684,97 @@ def scrape_twitter_public(profile_url: str, months: int = 3) -> list:
 # 8. main_app()
 
 def main_app() -> None:
+    # Update last activity for session timeout tracking
+    st.session_state.last_activity = datetime.datetime.now().isoformat()
+
+    # Load referral code from user store if not already set
+    if not st.session_state.get("referral_code") and user_store is not None:
+        _u = user_store.get_user(st.session_state.auth_user)
+        if _u:
+            st.session_state.referral_code = _u.get("referral_code", "")
+
+    # Load unread notification count
+    _unread_list = []
+    if notifications_store is not None:
+        _unread_list = notifications_store.get_unread_for_user(st.session_state.auth_user)
+    st.session_state.notifications_unread = len(_unread_list)
+
+    # Sidebar — user info, notifications, referral, admin
+    with st.sidebar:
+        # ── User info ────────────────────────────────────────────────
+        _role_type = st.session_state.get("auth_role_type", "counselor")
+        _role_colors = {
+            "student":   ("🎓", "#dbeafe", "#1e40af"),
+            "counselor": ("🩺", "#d1fae5", "#065f46"),
+            "admin":     ("🔑", "#fef3c7", "#92400e"),
+        }
+        _role_icon, _role_bg, _role_fg = _role_colors.get(_role_type, ("👤", "#f3f4f6", "#374151"))
+        st.markdown(
+            f'<div style="background:{_role_bg};border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">'
+            f'<div style="font-size:0.7rem;font-weight:700;color:{_role_fg};text-transform:uppercase;letter-spacing:0.05em">'
+            f'{_role_icon} {_role_type.capitalize()}</div>'
+            f'<div style="font-size:0.78rem;color:#111827;font-weight:600;margin-top:2px;word-break:break-all">'
+            f'{st.session_state.get("auth_user","")}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Notifications ─────────────────────────────────────────────
+        st.markdown("### Notifications")
+        _unread_count = st.session_state.notifications_unread
+        if _unread_count > 0:
+            st.info(f"{_unread_count} unread notification(s)", icon="🔔")
+        else:
+            st.caption("No new notifications.")
+
+        if _unread_list:
+            if st.button("Mark all as read", key="notif_mark_all_read"):
+                for _n in _unread_list:
+                    notifications_store.mark_read(_n["id"], st.session_state.auth_user)
+                st.rerun()
+            for _notif in _unread_list:
+                _subj = _notif.get("subject", "(no subject)")
+                _date = _notif.get("timestamp", "")[:10]
+                with st.expander(f"{_subj} · {_date}"):
+                    st.markdown(f"**From:** {_notif.get('sender','')}")
+                    st.markdown(_notif.get("body", ""))
+                    if st.button("Mark as read", key=f"notif_read_{_notif['id']}"):
+                        notifications_store.mark_read(_notif["id"], st.session_state.auth_user)
+                        st.rerun()
+
+        # ── Admin: send notification ──────────────────────────────────
+        if _role_type == "admin" and notifications_store is not None:
+            st.markdown("---")
+            st.markdown("### Send Message")
+            with st.expander("Compose notification"):
+                _notif_subject    = st.text_input("Subject", key="admin_notif_subject")
+                _notif_body       = st.text_area("Message", key="admin_notif_body", height=90)
+                _notif_target_opt = st.selectbox("To", ["All users", "Specific email"], key="admin_notif_target_opt")
+                _notif_target     = "all"
+                if _notif_target_opt == "Specific email":
+                    _notif_target = st.text_input("Recipient email", key="admin_notif_target_email")
+                if st.button("Send", key="admin_notif_send"):
+                    if _notif_subject and _notif_body:
+                        notifications_store.create_notification(
+                            sender_email=st.session_state.auth_user,
+                            target=_notif_target if _notif_target else "all",
+                            subject=_notif_subject,
+                            body=_notif_body,
+                        )
+                        st.success("Notification sent.")
+                    else:
+                        st.warning("Subject and message are required.")
+
+        # ── Referral link ─────────────────────────────────────────────
+        _ref = st.session_state.get("referral_code", "")
+        if _ref:
+            st.markdown("---")
+            st.markdown("### Refer a Colleague")
+            _base_url = os.environ.get("APP_BASE_URL", "http://localhost:8501")
+            _ref_url  = f"{_base_url}?ref={_ref}"
+            st.caption("Share this link to invite others:")
+            st.code(_ref_url, language=None)
+
     header_col, signout_col = st.columns([6.2, 0.9], vertical_alignment="center")
     with header_col:
         st.markdown(f"""

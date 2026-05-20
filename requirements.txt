@@ -16,3 +16,5 @@ streamlit-google-auth>=1.1.0
 streamlit-authenticator>=0.3.3
 PyYAML>=6.0
 python-dotenv>=1.0.0
+playwright>=1.41.0
+supabase>=2.0.0
