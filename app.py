@@ -276,8 +276,8 @@ html, body { margin: 0; padding: 0; }
     --shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
 }
 .stApp {
-    background:#f5f7f6 !important;
-    font-family: 'Inter', sans-serif;
+    background:#f7f9fb !important;
+    font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
     color: var(--ink);
 }
 .main .block-container { max-width:100% !important; padding:0.65rem 0.9rem 0.65rem !important; margin:0 !important; }
@@ -312,10 +312,10 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .stTextArea textarea:focus::placeholder, .stTextInput input:focus::placeholder { color:transparent !important; opacity:0 !important; }
 [data-testid="stFileUploader"] section { background:#ffffff !important; border:1.5px dashed #cfd8d4 !important; border-radius:8px !important; padding:0.65rem !important; }
 [data-testid="stFileUploader"] section p { font-size:0.72rem !important; color:var(--body) !important; }
-.stButton > button, .stFormSubmitButton > button, [data-testid="stFormSubmitButton"] button { background:var(--teal-deep) !important; color:#ffffff !important; font-weight:800 !important; padding:0 1rem !important; border-radius:8px !important; border:none !important; font-size:0.78rem !important; box-shadow:0 8px 18px rgba(15,110,86,0.22) !important; transition:all 0.25s ease !important; width:100%; height:38px; }
+.stButton > button, .stFormSubmitButton > button, [data-testid="stFormSubmitButton"] button { background:linear-gradient(135deg, var(--teal-deep) 0%, var(--teal) 100%) !important; color:#ffffff !important; font-weight:700 !important; padding:0 1rem !important; border-radius:8px !important; border:none !important; font-size:0.78rem !important; box-shadow:0 2px 8px rgba(15,110,86,0.20) !important; transition:all 0.2s ease !important; width:100%; height:38px; letter-spacing:0.01em; }
 .stButton > button *, .stFormSubmitButton > button *, [data-testid="stFormSubmitButton"] button * { color:#ffffff !important; }
-.stButton > button:hover, .stFormSubmitButton > button:hover, [data-testid="stFormSubmitButton"] button:hover { background:var(--teal-hover) !important; transform:translateY(-1px) !important; color:#ffffff !important; }
-.stButton > button:disabled, .stFormSubmitButton > button:disabled, [data-testid="stFormSubmitButton"] button:disabled { background:#d7e1dd !important; color:#64748b !important; box-shadow:none !important; }
+.stButton > button:hover, .stFormSubmitButton > button:hover, [data-testid="stFormSubmitButton"] button:hover { opacity:0.9 !important; box-shadow:0 4px 14px rgba(15,110,86,0.28) !important; }
+.stButton > button:disabled, .stFormSubmitButton > button:disabled, [data-testid="stFormSubmitButton"] button:disabled { background:#e5e7eb !important; color:#9ca3af !important; box-shadow:none !important; }
 [data-testid="stDownloadButton"] > button { background:#ffffff !important; color:var(--ink) !important; border:1px solid var(--line) !important; border-radius:8px !important; font-size:0.74rem !important; height:34px; padding:0 0.8rem !important; }
 .result-card { background:var(--panel); border-radius:8px; padding:0.75rem 0.85rem; margin:0.35rem 0; border:1px solid var(--line); animation:slideUp 0.35s ease-out; box-shadow:var(--shadow); }
 @keyframes slideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
@@ -402,79 +402,12 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     .team-card img { height:230px; }
 }
 
-/* ── Sidebar ─────────────────────────────────────────────────────── */
-[data-testid="stSidebar"] {
-    background: #ffffff !important;
-    border-right: 1px solid #d9e3df !important;
-}
-[data-testid="stSidebar"] > div:first-child {
-    padding: 1.2rem 1rem 1.5rem !important;
-}
-[data-testid="stSidebar"] * {
-    color: #111827 !important;
-}
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
-    color: #111827 !important;
-    font-size: 0.82rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.04em !important;
-    text-transform: uppercase !important;
-    margin: 0.8rem 0 0.4rem !important;
-}
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span,
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] .stCaption {
-    color: #4b5563 !important;
-    font-size: 0.78rem !important;
-}
-[data-testid="stSidebar"] .stButton > button {
-    background: #f0fdf8 !important;
-    color: #065f46 !important;
-    border: 1px solid #a7f3d0 !important;
-    border-radius: 6px !important;
-    font-size: 0.74rem !important;
-    font-weight: 600 !important;
-    padding: 0.3rem 0.6rem !important;
-    width: 100% !important;
-}
-[data-testid="stSidebar"] .stButton > button:hover {
-    background: #d1fae5 !important;
-    border-color: #6ee7b7 !important;
-}
-[data-testid="stSidebar"] .stExpander {
-    border: 1px solid #d9e3df !important;
-    border-radius: 8px !important;
-    margin-bottom: 0.4rem !important;
-    background: #f8faf9 !important;
-}
-[data-testid="stSidebar"] .stExpander summary {
-    font-size: 0.78rem !important;
-    font-weight: 600 !important;
-    color: #111827 !important;
-}
-[data-testid="stSidebar"] code,
-[data-testid="stSidebar"] pre {
-    background: #f1f5f9 !important;
-    color: #0f766e !important;
-    font-size: 0.72rem !important;
-    border-radius: 6px !important;
-    word-break: break-all !important;
-}
-[data-testid="stSidebar"] hr {
-    border-color: #d9e3df !important;
-    margin: 0.6rem 0 !important;
-}
-[data-testid="stSidebar"] .stAlert {
-    font-size: 0.76rem !important;
-}
-/* Sidebar toggle button visibility */
+/* ── Sidebar collapse toggle ─────────────────────────────── */
 [data-testid="stSidebarCollapsedControl"] button {
-    background: #ffffff !important;
-    border: 1px solid #d9e3df !important;
-    color: #0f766e !important;
+    background: #0F766E !important;
+    border: none !important;
+    color: #ffffff !important;
+    border-radius: 0 6px 6px 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -483,110 +416,125 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 MG_UI_CSS = """
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
 
-/* Hide default Streamlit collapse control so the sidebar feels pinned */
-[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+/* ── Reset & Base ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, .stApp {
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
+  background: #f7f9fb !important;
+}
+[data-testid="stHeader"] { display: none !important; }
+[data-testid="stSidebarCollapsedControl"],
 [data-testid="collapsedControl"] { display: none !important; }
+[data-testid="block-container"],
+.main .block-container {
+  padding: 0.5rem 1.25rem 1.5rem !important;
+  max-width: 100% !important;
+}
 
-/* Override stApp background + font for authenticated app */
-.stApp { background: #f7f9fb !important; font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important; }
-
-/* ── Dark sidebar — pinned, always visible ────────────────────── */
+/* ── Dark Sidebar ──────────────────────────────────────────────── */
 [data-testid="stSidebar"] {
-    background: #080d12 !important;
-    border-right: 1px solid #161d26 !important;
-    min-width: 220px !important;
-    max-width: 220px !important;
-    width: 220px !important;
-    padding: 0 !important;
+  background: #080d12 !important;
+  border-right: 1px solid #161d26 !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  width: 220px !important;
+  padding: 0 !important;
 }
-[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0 !important; }
-[data-testid="stSidebar"] * {
-    color: #6b7280 !important;
-    font-family: 'DM Sans', system-ui, sans-serif !important;
+[data-testid="stSidebar"] > div:first-child {
+  padding: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
+[data-testid="stSidebar"] [data-testid="stElementContainer"] { padding: 0 !important; margin: 0 !important; }
+[data-testid="stSidebar"] [data-testid="stMarkdown"] { width: 100% !important; }
+
+/* Hide the hidden Streamlit nav/signout buttons (still clickable via JS .click()) */
+[data-testid="stSidebar"] [data-testid="stButton"],
+[data-testid="stSidebar"] .stButton {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+  opacity: 0 !important;
 }
 
-/* Sidebar nav buttons (Streamlit st.button overrides for sidebar) */
-[data-testid="stSidebar"] .stButton { margin: 0 !important; padding: 0 !important; }
-[data-testid="stSidebar"] .stButton > button {
-    background: transparent !important;
-    border: none !important;
-    border-radius: 7px !important;
-    padding: 7px 12px !important;
-    margin: 1px 6px !important;
-    width: calc(100% - 12px) !important;
-    text-align: left !important;
-    font-size: 0.76rem !important;
-    font-weight: 500 !important;
-    color: #6b7280 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 9px !important;
-    transition: background 0.15s, color 0.15s !important;
-    box-shadow: none !important;
-    height: auto !important;
-    min-height: 0 !important;
-    line-height: 1.4 !important;
+/* Sidebar custom HTML classes */
+.mg-sidebar * { font-family: 'DM Sans', system-ui, sans-serif !important; }
+.sb-brand {
+  display: flex; align-items: center; gap: 9px;
+  padding: 16px 14px 12px; border-bottom: 1px solid #161d26;
 }
-[data-testid="stSidebar"] .stButton > button:hover {
-    background: #0e1520 !important;
-    color: #d1d5db !important;
-    transform: none !important;
+.sb-logo {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(135deg, #0F766E, #1D9E75);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 0.72rem; flex-shrink: 0;
 }
-[data-testid="stSidebar"] .stButton > button * { color: inherit !important; }
-[data-testid="stSidebar"] .stButton > button p { color: inherit !important; margin: 0 !important; font-size: 0.76rem !important; }
+.sb-name { color: #f3f4f6; font-size: 0.88rem; font-weight: 700; letter-spacing: -0.02em; }
+.sb-section-label {
+  color: #4b5563; font-size: 0.58rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em; padding: 12px 14px 5px;
+}
+.sb-nav { padding: 4px 0; }
+.sb-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px; margin: 1px 6px; border-radius: 7px;
+  font-size: 0.76rem; color: #6b7280; cursor: pointer;
+  transition: background 0.15s, color 0.15s; user-select: none;
+}
+.sb-item:hover { background: #0e1520; color: #d1d5db; }
+.sb-item i { font-size: 15px; color: inherit; }
+.sb-item.active {
+  background: #0f2724; color: #e2f4f1;
+  font-weight: 600; border-left: 2px solid #1D9E75; padding-left: 10px;
+}
+.sb-item.active i { color: #34d399; }
+.sb-footer {
+  padding: 11px 14px; border-top: 1px solid #161d26;
+  display: flex; align-items: center; gap: 9px; margin-top: 4px;
+}
+.sb-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, #0F766E, #1D9E75);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 0.72rem; flex-shrink: 0;
+}
+.sb-uname { color: #f3f4f6; font-size: 0.76rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-uemail { color: #4b5563; font-size: 0.64rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-pill {
+  background: rgba(15,118,110,0.15); color: #34d399;
+  border: 1px solid rgba(52,211,153,0.18); border-radius: 999px;
+  padding: 2px 7px; font-size: 0.58rem; font-weight: 700;
+  text-transform: uppercase; flex-shrink: 0;
+}
+.sb-signout {
+  margin: 2px 6px 10px; padding: 7px 12px; border-radius: 7px;
+  font-size: 0.72rem; color: #6b7280; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid #1e2836; background: transparent;
+  transition: background 0.15s, color 0.15s; width: calc(100% - 12px);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.sb-signout:hover { background: #1a2233; color: #d1d5db; }
 
-/* Sidebar brand block */
-.mg-sb-brand {
-    display: flex; align-items: center; gap: 9px;
-    padding: 15px 14px 12px; border-bottom: 1px solid #161d26;
-}
-.mg-sb-logo {
-    width: 30px; height: 30px; border-radius: 8px;
-    background: linear-gradient(135deg, #0F766E, #1D9E75);
-    display: flex; align-items: center; justify-content: center;
-    color: #fff !important; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;
-}
-.mg-sb-name { color: #f3f4f6 !important; font-size: 0.88rem; font-weight: 700; letter-spacing: -0.02em; }
-.mg-sb-section { color: #4b5563 !important; font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; padding: 12px 14px 5px; }
-.mg-sb-active {
-    display: flex; align-items: center; gap: 9px;
-    padding: 8px 12px 8px 10px; margin: 1px 6px;
-    border-radius: 7px; font-size: 0.76rem;
-    background: #0f2724; color: #e2f4f1 !important;
-    font-weight: 600; border-left: 2px solid #1D9E75;
-}
-.mg-sb-active i { color: #34d399 !important; font-size: 15px; }
-.mg-sb-footer {
-    padding: 11px 14px; border-top: 1px solid #161d26;
-    display: flex; align-items: center; gap: 9px;
-    margin-top: 12px;
-}
-.mg-sb-avatar {
-    width: 30px; height: 30px; border-radius: 50%;
-    background: linear-gradient(135deg, #0F766E, #1D9E75);
-    display: flex; align-items: center; justify-content: center;
-    color: #fff !important; font-weight: 700; font-size: 0.72rem; flex-shrink: 0;
-}
-.mg-sb-uname { color: #f3f4f6 !important; font-size: 0.76rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mg-sb-uemail { color: #4b5563 !important; font-size: 0.64rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mg-sb-pill {
-    background: rgba(15,118,110,0.15); color: #34d399 !important;
-    border: 1px solid rgba(52,211,153,0.18); border-radius: 999px;
-    padding: 2px 7px; font-size: 0.58rem; font-weight: 700;
-    text-transform: uppercase; flex-shrink: 0;
-}
-
-/* ── Topbar ─────────────────────────────────────────────────────── */
+/* ── Topbar ────────────────────────────────────────────────────── */
 .mg-topbar {
-    height: 46px; background: rgba(255,255,255,0.97);
-    border-bottom: 0.5px solid rgba(229,231,235,0.8);
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; position: sticky; top: 0; z-index: 100;
-    margin: 0 -0.9rem 14px;
+  height: 48px; background: rgba(255,255,255,0.97);
+  border-bottom: 1px solid rgba(229,231,235,0.9);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; margin: -0.5rem -1.25rem 1rem;
+  position: sticky; top: 0; z-index: 100;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgba(15,23,42,0.05);
 }
 .mg-topbar-title { font-size: 0.84rem; font-weight: 600; color: #1f2937; }
 .mg-topbar-right { display: flex; align-items: center; gap: 12px; }
@@ -594,85 +542,255 @@ MG_UI_CSS = """
 .mg-topbar-bell i { font-size: 18px; }
 .mg-bell-dot { position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; background: #ef4444; border-radius: 50%; border: 1.5px solid #fff; }
 .mg-topbar-av {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: linear-gradient(135deg, #0F766E, #1D9E75);
-    display: flex; align-items: center; justify-content: center;
-    color: #fff !important; font-weight: 700; font-size: 0.65rem; cursor: pointer;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, #0F766E, #1D9E75);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 0.65rem; cursor: pointer;
 }
 
-/* ── Panel cards (main content) ─────────────────────────────────── */
-.mg-panel {
-    background: #ffffff; border-radius: 12px;
-    border: 0.5px solid rgba(229,231,235,0.8);
-    padding: 16px 18px;
-    box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+/* ── Column gaps ───────────────────────────────────────────────── */
+[data-testid="stHorizontalBlock"] {
+  gap: 0.75rem !important;
+  align-items: stretch !important;
+}
+
+/* ── Panels via st.container(border=True) ──────────────────────── */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: #ffffff !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(229,231,235,0.9) !important;
+  box-shadow: 0 1px 6px rgba(15,23,42,0.05) !important;
+  overflow: hidden !important;
+  height: 100% !important;
 }
 .mg-panel-title {
-    font-size: 0.78rem; font-weight: 700; color: #1f2937;
-    margin-bottom: 10px; padding-bottom: 8px;
-    border-bottom: 1px solid #f1f5f9;
-    display: flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; font-weight: 700; color: #1f2937;
+  margin-bottom: 10px; padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex; align-items: center; gap: 6px;
 }
 .mg-panel-title i { font-size: 15px; color: #0F766E; }
 
-/* Risk gauge stats row */
-.mg-risk-row { display: flex; gap: 8px; margin-top: 10px; }
-.mg-risk-stat {
-    flex: 1; background: #fafbfc; border-radius: 8px;
-    border: 0.5px solid #f1f5f9; padding: 7px 8px; text-align: center;
+/* ── Widget overrides ──────────────────────────────────────────── */
+/* Labels */
+[data-testid="stWidgetLabel"] label p,
+[data-testid="stWidgetLabel"] > label,
+.stTextInput label, .stTextArea label,
+.stSelectbox label, .stSlider label,
+.stFileUploader label {
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  letter-spacing: 0.01em !important;
 }
+
+/* Text inputs */
+[data-testid="stTextInput"] input {
+  background: #fafbfc !important;
+  border: 1.5px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  font-size: 0.81rem !important;
+  color: #374151 !important;
+  padding: 8px 12px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+  box-shadow: none !important;
+}
+[data-testid="stTextInput"] input:focus {
+  border-color: #0F766E !important;
+  box-shadow: 0 0 0 3px rgba(15,118,110,0.1) !important;
+  outline: none !important;
+}
+[data-testid="stTextInput"] input::placeholder { color: #9ca3af !important; }
+
+/* Textarea */
+[data-testid="stTextArea"] textarea {
+  background: #fafbfc !important;
+  border: 1.5px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  font-size: 0.81rem !important;
+  color: #374151 !important;
+  padding: 10px 12px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  line-height: 1.55 !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+  resize: vertical !important;
+}
+[data-testid="stTextArea"] textarea:focus {
+  border-color: #0F766E !important;
+  box-shadow: 0 0 0 3px rgba(15,118,110,0.1) !important;
+  outline: none !important;
+}
+[data-testid="stTextArea"] textarea::placeholder { color: #9ca3af !important; }
+
+/* Select boxes */
+[data-baseweb="select"] > div:first-child {
+  background: #fafbfc !important;
+  border: 1.5px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  font-size: 0.81rem !important;
+  color: #374151 !important;
+  transition: border-color 0.15s !important;
+}
+[data-baseweb="select"] > div:first-child:focus-within {
+  border-color: #0F766E !important;
+}
+
+/* Primary buttons (teal gradient) */
+[data-testid="stBaseButton-primary"] button {
+  background: linear-gradient(135deg, #0F766E 0%, #1D9E75 100%) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  padding: 8px 18px !important;
+  box-shadow: 0 2px 8px rgba(15,118,110,0.22) !important;
+  transition: opacity 0.15s, box-shadow 0.15s !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  letter-spacing: 0.01em !important;
+}
+[data-testid="stBaseButton-primary"] button:hover {
+  opacity: 0.88 !important;
+  box-shadow: 0 4px 12px rgba(15,118,110,0.3) !important;
+  transform: none !important;
+}
+
+/* Secondary buttons */
+[data-testid="stBaseButton-secondary"] button {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  color: #374151 !important;
+  font-size: 0.78rem !important;
+  font-weight: 500 !important;
+  padding: 7px 16px !important;
+  box-shadow: none !important;
+  transition: background 0.15s, border-color 0.15s !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+[data-testid="stBaseButton-secondary"] button:hover {
+  background: #f9fafb !important;
+  border-color: #d1d5db !important;
+  transform: none !important;
+}
+
+/* Download button */
+[data-testid="stDownloadButton"] button {
+  background: #fff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  color: #0F766E !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+}
+[data-testid="stDownloadButton"] button:hover {
+  background: #f0fdf9 !important;
+  border-color: #0F766E !important;
+  transform: none !important;
+}
+
+/* Tabs */
+[data-testid="stTabs"] [role="tablist"] {
+  border-bottom: 1px solid #f1f5f9 !important;
+  gap: 0 !important;
+  background: transparent !important;
+}
+[data-testid="stTabs"] button[role="tab"] {
+  font-size: 0.74rem !important;
+  font-weight: 500 !important;
+  color: #6b7280 !important;
+  padding: 8px 16px !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: color 0.15s !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+  color: #0F766E !important;
+  border-bottom-color: #0F766E !important;
+  font-weight: 600 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+[data-testid="stTabs"] button[role="tab"]:hover {
+  color: #374151 !important;
+  background: transparent !important;
+  transform: none !important;
+}
+
+/* Sliders */
+[data-testid="stSlider"] [data-baseweb="slider"] > div { background: #e5e7eb !important; }
+[data-testid="stSlider"] [role="slider"] {
+  background: #0F766E !important;
+  border: 2px solid #fff !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important;
+}
+
+/* Expanders */
+[data-testid="stExpander"] {
+  border: 1px solid #f1f5f9 !important;
+  border-radius: 8px !important;
+  background: #fafbfc !important;
+  overflow: hidden !important;
+}
+[data-testid="stExpander"] summary {
+  font-size: 0.77rem !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  padding: 8px 14px !important;
+}
+
+/* Metrics */
+[data-testid="stMetric"] {
+  background: #fff !important;
+  border: 0.5px solid #f1f5f9 !important;
+  border-top: 2px solid #0F766E !important;
+  border-radius: 10px !important;
+  padding: 12px 14px !important;
+}
+[data-testid="stMetricLabel"] p {
+  font-size: 0.64rem !important;
+  font-weight: 700 !important;
+  color: #9ca3af !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+[data-testid="stMetricValue"] {
+  font-size: 1.3rem !important;
+  font-weight: 800 !important;
+  color: #0F766E !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* Headings */
+.stApp h2 { font-size: 1.1rem !important; font-weight: 700 !important; color: #1f2937 !important; font-family: 'DM Sans', system-ui, sans-serif !important; letter-spacing: -0.02em !important; }
+.stApp h3 { font-size: 0.92rem !important; font-weight: 700 !important; color: #1f2937 !important; font-family: 'DM Sans', system-ui, sans-serif !important; }
+.divider { border: none; border-top: 0.5px solid #f1f5f9; margin: 0.6rem 0; }
+.section-label { font-size: 0.62rem !important; font-weight: 700 !important; color: #0F766E !important; text-transform: uppercase !important; letter-spacing: 0.1em !important; margin: 0.4rem 0 0.15rem !important; }
+
+/* ── Risk display components ─────────────────────────────────── */
+.mg-risk-row { display: flex; gap: 8px; margin-top: 10px; }
+.mg-risk-stat { flex: 1; background: #fafbfc; border-radius: 8px; border: 0.5px solid #f1f5f9; padding: 7px 8px; text-align: center; }
 .mg-risk-val { font-size: 0.85rem; font-weight: 700; color: #0F766E; }
 .mg-risk-lbl { font-size: 0.58rem; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }
-
-/* Alert / safe boxes */
-.mg-alert-box {
-    margin-top: 8px; background: #fef2f2;
-    border: 0.5px solid #fecaca; border-radius: 7px;
-    padding: 7px 10px; font-size: 0.7rem; color: #991b1b;
-    font-weight: 600; display: flex; align-items: center; gap: 6px;
-}
+.mg-alert-box { margin-top: 8px; background: #fef2f2; border: 0.5px solid #fecaca; border-radius: 7px; padding: 7px 10px; font-size: 0.7rem; color: #991b1b; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .mg-alert-box i { font-size: 14px; }
-.mg-safe-box {
-    margin-top: 8px; background: #f0fdf4;
-    border: 0.5px solid #bbf7d0; border-radius: 7px;
-    padding: 7px 10px; font-size: 0.7rem; color: #166534;
-    font-weight: 600; display: flex; align-items: center; gap: 6px;
-}
+.mg-safe-box { margin-top: 8px; background: #f0fdf4; border: 0.5px solid #bbf7d0; border-radius: 7px; padding: 7px 10px; font-size: 0.7rem; color: #166534; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .mg-safe-box i { font-size: 14px; }
-
-/* Session analytics stat cards */
 .mg-stat-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 10px; }
-.mg-stat-card {
-    background: #fff; border: 0.5px solid #f1f5f9;
-    border-top: 2px solid #0F766E; border-radius: 8px;
-    padding: 8px 6px; text-align: center;
-}
+.mg-stat-card { background: #fff; border: 0.5px solid #f1f5f9; border-top: 2px solid #0F766E; border-radius: 8px; padding: 8px 6px; text-align: center; }
 .mg-stat-num { font-size: 1.3rem; font-weight: 800; color: #0F766E; letter-spacing: -0.02em; }
 .mg-stat-lbl { font-size: 0.55rem; color: #9ca3af; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
-
-/* History rows */
 .mg-history-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 0.5px solid #f9fafb; }
 .mg-h-cls { font-size: 0.65rem; font-weight: 700; min-width: 80px; }
 .mg-h-cls.risk { color: #dc2626; }
 .mg-h-cls.safe { color: #0F6E56; }
 .mg-h-ts { font-size: 0.6rem; color: #9ca3af; min-width: 38px; }
 .mg-h-txt { font-size: 0.62rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-
-/* Mode toggle */
-.mg-mode-wrap { display: flex; gap: 6px; margin-bottom: 10px; }
-.mg-mode-btn {
-    flex: 1; padding: 5px 0; border-radius: 7px;
-    border: 0.5px solid #e5e7eb; background: #fafbfc;
-    font-size: 0.7rem; font-weight: 600; color: #6b7280;
-    text-align: center; cursor: pointer;
-}
-.mg-mode-btn.active { background: #0F766E; color: #fff !important; border-color: #0F766E; }
-
-/* Platform strip cards (when in platform-detail sub-tabs) */
-.mg-strip { background: #fff; border-radius: 12px; border: 0.5px solid rgba(229,231,235,0.7); overflow: hidden; }
-.mg-strip-tabs { display: flex; background: #f8fafc; border-bottom: 0.5px solid #f1f5f9; padding: 0 14px; overflow-x: auto; }
-.mg-strip-tab { padding: 10px 14px; font-size: 0.7rem; font-weight: 500; color: #94a3b8; white-space: nowrap; border-bottom: 2px solid transparent; cursor: pointer; }
-.mg-strip-tab.active { color: #0F766E !important; border-bottom-color: #0F766E; font-weight: 600; }
 </style>
 """
 
@@ -717,7 +835,7 @@ _defaults = {
     "last_activity":            datetime.datetime.now().isoformat(),
     "session_timeout_minutes":  30,
     "auth_name":                "",
-    "auth_role_type":           "counselor",  # "student", "counselor", "admin"
+    "auth_role_type":           "counsellor",  # "student", "counsellor", "admin"
     "notifications_unread":     0,
     "referral_code":            "",
     # Sidebar navigation
@@ -743,14 +861,14 @@ def reset_auth_state() -> None:
     st.session_state.auth_user = ""
     st.session_state.auth_name = ""
     st.session_state.auth_role = "Clinical review"
-    st.session_state.auth_role_type = "counselor"
+    st.session_state.auth_role_type = "counsellor"
     st.session_state.terms_accepted = False
     st.session_state.terms_accepted_at = ""
     st.session_state.referral_code = ""
     st.session_state.notifications_unread = 0
 
 
-def _auth_success(email: str, name: str, role: str = "Clinical review", role_type: str = "counselor", referral_code: str = "") -> None:
+def _auth_success(email: str, name: str, role: str = "Clinical review", role_type: str = "counsellor", referral_code: str = "") -> None:
     """Mark session as authenticated and trigger rerun."""
     already_consented = email in _terms_consented_emails
     st.session_state.authenticated      = True
@@ -882,12 +1000,13 @@ def render_sign_in() -> None:
                     else:
                         _user = user_store.authenticate_user(ep_email.strip(), ep_password)
                         if _user:
-                            _role_display = _user.get("role", "counselor").capitalize()
+                            _role_type_raw = _user.get("role_type", "counsellor")
+                            _role_display = _role_type_raw.capitalize()
                             _auth_success(
                                 email=_user["email"],
                                 name=_user.get("name", _user["email"].split("@")[0]),
                                 role=_role_display,
-                                role_type=_user.get("role", "counselor"),
+                                role_type=_role_type_raw,
                                 referral_code=_user.get("referral_code", ""),
                             )
                         else:
@@ -1906,69 +2025,88 @@ def main_app() -> None:
     # Identity bits
     _name = st.session_state.get("auth_name") or st.session_state.get("auth_user", "User")
     _email = st.session_state.get("auth_user", "")
-    _role_type = st.session_state.get("auth_role_type", "counselor")
+    _role_type = st.session_state.get("auth_role_type", "counsellor")
     _initials = "".join(p[0].upper() for p in _name.split()[:2]) if _name else "MG"
 
-    # ── SIDEBAR (dark, primary navigation) ────────────────────────────
+    # ── SIDEBAR (all-HTML with JS click dispatch) ──────────────────────
+    _pages = [
+        ("dashboard",   "ti-brain",          "Dashboard"),
+        ("reddit",      "ti-brand-reddit",   "Reddit"),
+        ("video",       "ti-video",          "Video"),
+        ("bluesky",     "ti-butterfly",      "Bluesky"),
+        ("mastodon",    "ti-cloud",          "Mastodon"),
+        ("youtube",     "ti-brand-youtube",  "YouTube"),
+        ("file",        "ti-folder-open",    "File Upload"),
+        ("facebook",    "ti-brand-facebook", "Facebook"),
+        ("twitter",     "ti-brand-x",        "Twitter / X"),
+        ("unified",     "ti-share",          "Multi-Platform"),
+        ("resources",   "ti-ambulance",      "Crisis Resources"),
+        ("team",        "ti-users",          "Team"),
+    ]
+    _current = st.session_state.get("mg_page", "dashboard")
     with st.sidebar:
-        # Brand
-        st.markdown(
-            '<div class="mg-sb-brand">'
-            '<div class="mg-sb-logo">MG</div>'
-            '<div class="mg-sb-name">MindGuard</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        # Role section label
-        st.markdown(
-            f'<div class="mg-sb-section">{_role_type.capitalize()}</div>',
-            unsafe_allow_html=True,
-        )
-
-        _pages = [
-            ("dashboard",   "ti-brain",          "Dashboard"),
-            ("reddit",      "ti-brand-reddit",   "Reddit"),
-            ("video",       "ti-video",          "Video"),
-            ("bluesky",     "ti-butterfly",      "Bluesky"),
-            ("mastodon",    "ti-cloud",          "Mastodon"),
-            ("youtube",     "ti-brand-youtube",  "YouTube"),
-            ("file",        "ti-folder-open",    "File Upload"),
-            ("facebook",    "ti-brand-facebook", "Facebook"),
-            ("twitter",     "ti-brand-x",        "Twitter / X"),
-            ("unified",     "ti-share",          "Multi-Platform"),
-            ("resources",   "ti-ambulance",      "Crisis Resources"),
-            ("team",        "ti-users",          "Team"),
-        ]
-        _current = st.session_state.get("mg_page", "dashboard")
+        _items_html = ""
         for _page_key, _icon, _label in _pages:
-            if _page_key == _current:
-                st.markdown(
-                    f'<div class="mg-sb-active">'
-                    f'<i class="ti {_icon}"></i> {_label}'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                if st.button(_label, key=f"nav_{_page_key}", use_container_width=True):
+            _is_active = _page_key == _current
+            _cls = "sb-item active" if _is_active else "sb-item"
+            _onclick = "" if _is_active else f' onclick="mgNav(\'{_label}\')"'
+            _items_html += (
+                f'<div class="{_cls}"{_onclick}>'
+                f'<i class="ti {_icon}" aria-hidden="true"></i> {_label}'
+                f'</div>\n'
+            )
+        st.markdown(f"""
+<div class="mg-sidebar">
+  <div class="sb-brand">
+    <div class="sb-logo">MG</div>
+    <div class="sb-name">MindGuard</div>
+  </div>
+  <div class="sb-section-label">{_role_type.capitalize()}</div>
+  <div class="sb-nav">{_items_html}</div>
+  <div class="sb-footer">
+    <div class="sb-avatar">{_initials}</div>
+    <div style="flex:1;min-width:0">
+      <div class="sb-uname">{_name}</div>
+      <div class="sb-uemail">{_email}</div>
+    </div>
+    <div class="sb-pill">{_role_type.capitalize()}</div>
+  </div>
+  <button class="sb-signout" onclick="mgSignOut()">
+    <i class="ti ti-logout" aria-hidden="true"></i> Sign out
+  </button>
+</div>
+<script>
+function mgNav(label) {{
+  var sb = window.parent.document.querySelector('[data-testid="stSidebar"]');
+  if (!sb) return;
+  var btns = sb.querySelectorAll('button');
+  for (var i = 0; i < btns.length; i++) {{
+    if (btns[i].innerText.trim() === label) {{ btns[i].click(); return; }}
+  }}
+}}
+function mgSignOut() {{
+  var sb = window.parent.document.querySelector('[data-testid="stSidebar"]');
+  if (!sb) return;
+  var btns = sb.querySelectorAll('button');
+  for (var i = 0; i < btns.length; i++) {{
+    if (btns[i].innerText.trim() === '__signout__') {{ btns[i].click(); return; }}
+  }}
+}}
+</script>
+""", unsafe_allow_html=True)
+        # Hidden nav triggers (zero-height, JS-clickable)
+        for _page_key, _, _label in _pages:
+            if _page_key != _current:
+                if st.button(_label, key=f"nav_{_page_key}"):
                     st.session_state.mg_page = _page_key
                     st.rerun()
-
-        # Footer — user identity
-        st.markdown(
-            f'<div class="mg-sb-footer">'
-            f'<div class="mg-sb-avatar">{_initials}</div>'
-            f'<div style="flex:1;min-width:0">'
-            f'<div class="mg-sb-uname">{_name}</div>'
-            f'<div class="mg-sb-uemail">{_email}</div>'
-            f'</div>'
-            f'<div class="mg-sb-pill">{_role_type.capitalize()}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+        if st.button("__signout__", key="sidebar_signout_hidden"):
+            reset_auth_state()
+            st.rerun()
 
     # ── TOPBAR ────────────────────────────────────────────────────────
     _page_titles = {
-        "dashboard": "Text / Image Analysis",
+        "dashboard": "Dashboard",
         "reddit":    "Reddit Analysis",
         "video":     "Video Analysis",
         "bluesky":   "Bluesky Analysis",
@@ -1982,24 +2120,32 @@ def main_app() -> None:
         "team":      "Team",
     }
     _page_title = _page_titles.get(_current, "MindGuard")
+    _page_icons = {
+        "dashboard": "ti-layout-dashboard", "reddit": "ti-brand-reddit",
+        "video": "ti-video", "bluesky": "ti-butterfly", "mastodon": "ti-cloud",
+        "youtube": "ti-brand-youtube", "file": "ti-folder-open",
+        "facebook": "ti-brand-facebook", "twitter": "ti-brand-x",
+        "unified": "ti-share", "resources": "ti-ambulance", "team": "ti-users",
+    }
+    _page_icon = _page_icons.get(_current, "ti-home")
     _bell_dot = '<div class="mg-bell-dot"></div>' if _unread_count > 0 else ""
+    _display_name = _name.split()[0] if _name else _email.split("@")[0]
     st.markdown(
         f'<div class="mg-topbar">'
+        f'<div style="display:flex;align-items:center;gap:8px">'
+        f'<i class="ti {_page_icon}" style="font-size:16px;color:#6b7280"></i>'
         f'<div class="mg-topbar-title">{_page_title}</div>'
+        f'</div>'
         f'<div class="mg-topbar-right">'
         f'<div class="mg-topbar-bell"><i class="ti ti-bell"></i>{_bell_dot}</div>'
+        f'<div style="display:flex;align-items:center;gap:8px">'
+        f'<span style="font-size:0.72rem;color:#6b7280;font-weight:500">{_display_name}</span>'
         f'<div class="mg-topbar-av">{_initials}</div>'
+        f'</div>'
         f'</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
-
-    # Sign-out (small, top-right)
-    _tb_l, _tb_r = st.columns([10, 1])
-    with _tb_r:
-        if st.button("Sign out", key="topbar_signout", help="Sign out"):
-            reset_auth_state()
-            st.rerun()
 
     # Notifications inbox (when there are unread)
     if _unread_list:
@@ -2067,161 +2213,208 @@ def main_app() -> None:
     # ── PAGE ROUTING ──────────────────────────────────────────────────
     # Dashboard: 3-column Input | Prediction | Analytics
     if _current == "dashboard":
+        # Welcome hero row
+        _a = st.session_state.analytics
+        _first_name = _name.split()[0] if _name else "there"
+        _role_badge_color = {"student": "#dbeafe|#1e40af", "counsellor": "#d1fae5|#065f46", "admin": "#fef3c7|#92400e"}.get(_role_type, "#f3f4f6|#374151")
+        _rb_bg, _rb_fg = _role_badge_color.split("|")
+        st.markdown(f"""
+<div style="display:flex;justify-content:space-between;align-items:center;
+  background:#ffffff;border-radius:12px;padding:14px 20px;margin-bottom:12px;
+  border:1px solid rgba(229,231,235,0.9);box-shadow:0 1px 6px rgba(15,23,42,0.05)">
+  <div>
+    <div style="font-size:1.0rem;font-weight:700;color:#111827;letter-spacing:-0.02em;margin-bottom:3px">
+      Welcome back, {_first_name}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:0.74rem;color:#6b7280">Mental health risk screening workspace</span>
+      <span style="background:{_rb_bg};color:{_rb_fg};border-radius:999px;
+        padding:2px 9px;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">
+        {_role_type.capitalize()}
+      </span>
+    </div>
+  </div>
+  <div style="display:flex;gap:24px;align-items:center">
+    <div style="text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#0F766E;letter-spacing:-0.03em;line-height:1">{_a['total_analyses']}</div>
+      <div style="font-size:0.58rem;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">Analysed</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#dc2626;letter-spacing:-0.03em;line-height:1">{_a['negative_count']}</div>
+      <div style="font-size:0.58rem;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">At-Risk</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#10b981;letter-spacing:-0.03em;line-height:1">{_a['positive_count']}</div>
+      <div style="font-size:0.58rem;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">Safe</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
         col_input, col_pred, col_analytics = st.columns([1, 1.2, 1])
 
         # ── Input panel ────────────────────────────────────────────────
         with col_input:
-            st.markdown(
-                '<div class="mg-panel"><div class="mg-panel-title">'
-                '<i class="ti ti-pencil"></i> Input</div>',
-                unsafe_allow_html=True,
-            )
-            m1, m2 = st.columns(2)
-            with m1:
-                if st.button("Type Text", use_container_width=True, key="mode_text_btn"):
-                    st.session_state.input_mode = "text"; st.rerun()
-            with m2:
-                if st.button("Upload Image", use_container_width=True, key="mode_image_btn"):
-                    st.session_state.input_mode = "image"; st.rerun()
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="mg-panel-title"><i class="ti ti-pencil"></i> Input</div>',
+                    unsafe_allow_html=True,
+                )
+                m1, m2 = st.columns(2)
+                with m1:
+                    if st.button("Type Text", use_container_width=True, key="mode_text_btn"):
+                        st.session_state.input_mode = "text"; st.rerun()
+                with m2:
+                    if st.button("Upload Image", use_container_width=True, key="mode_image_btn"):
+                        st.session_state.input_mode = "image"; st.rerun()
 
-            if st.session_state.input_mode == "text":
-                with st.expander("Try a sample", expanded=False):
-                    for label, tweet in SAMPLE_TWEETS.items():
-                        if st.button(label, key=f"sample_{label}", use_container_width=True):
-                            st.session_state.user_input = tweet
-                            st.session_state["text_area"] = tweet
+                if st.session_state.input_mode == "text":
+                    with st.expander("Try a sample", expanded=False):
+                        for label, tweet in SAMPLE_TWEETS.items():
+                            if st.button(label, key=f"sample_{label}", use_container_width=True):
+                                st.session_state.user_input = tweet
+                                st.session_state["text_area"] = tweet
+                                st.session_state.should_analyze = True
+                                st.rerun()
+                    user_input = st.text_area(
+                        "Enter text to analyse:",
+                        height=108,
+                        placeholder="Type or paste text here...",
+                        value=st.session_state.user_input,
+                        key="text_area",
+                    )
+                    st.session_state.user_input = user_input
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("Analyse", use_container_width=True, key="analyse_btn"):
+                            if user_input.strip():
+                                st.session_state.should_analyze = True
+                            else:
+                                st.warning("Enter some text first.")
+                    with b2:
+                        if st.button("Clear", use_container_width=True, key="clear_btn"):
+                            clear_text(); st.rerun()
+                else:
+                    uploaded_img = st.file_uploader(
+                        "Upload an image",
+                        type=["png", "jpg", "jpeg", "webp"],
+                        key="img_upload",
+                    )
+                    if uploaded_img:
+                        img_text = extract_text_from_image(uploaded_img)
+                        if img_text:
+                            st.session_state.user_input = img_text
                             st.session_state.should_analyze = True
-                            st.rerun()
-                user_input = st.text_area(
-                    "Enter text to analyse:",
-                    height=108,
-                    placeholder="Type or paste text here...",
-                    value=st.session_state.user_input,
-                    key="text_area",
-                )
-                st.session_state.user_input = user_input
-                b1, b2 = st.columns(2)
-                with b1:
-                    if st.button("Analyse", use_container_width=True, key="analyse_btn"):
-                        if user_input.strip():
-                            st.session_state.should_analyze = True
+                            st.success(f"Extracted {len(img_text)} characters from image.")
                         else:
-                            st.warning("Enter some text first.")
-                with b2:
-                    if st.button("Clear", use_container_width=True, key="clear_btn"):
-                        clear_text(); st.rerun()
-            else:
-                uploaded_img = st.file_uploader(
-                    "Upload an image",
-                    type=["png", "jpg", "jpeg", "webp"],
-                    key="img_upload",
-                )
-                if uploaded_img:
-                    img_text = extract_text_from_image(uploaded_img)
-                    if img_text:
-                        st.session_state.user_input = img_text
-                        st.session_state.should_analyze = True
-                        st.success(f"Extracted {len(img_text)} characters from image.")
-                    else:
-                        st.error("Could not extract text. Ensure the image contains readable text and pytesseract is installed.")
-            # Run inference once per click
-            if st.session_state.should_analyze and st.session_state.user_input.strip():
-                prob, ms = run_analysis(st.session_state.user_input)
-                st.session_state.last_result   = {"prob": prob, "ms": ms, "text": st.session_state.user_input}
-                st.session_state.download_text = build_download_text(st.session_state.user_input, prob, ms)
-                st.session_state.should_analyze = False
-            st.markdown('</div>', unsafe_allow_html=True)
+                            st.error("Could not extract text. Ensure the image contains readable text and pytesseract is installed.")
+                # Run inference once per click
+                if st.session_state.should_analyze and st.session_state.user_input.strip():
+                    prob, ms = run_analysis(st.session_state.user_input)
+                    st.session_state.last_result   = {"prob": prob, "ms": ms, "text": st.session_state.user_input}
+                    st.session_state.download_text = build_download_text(st.session_state.user_input, prob, ms)
+                    st.session_state.should_analyze = False
 
         # ── Prediction panel ───────────────────────────────────────────
         with col_pred:
-            st.markdown(
-                '<div class="mg-panel"><div class="mg-panel-title">'
-                '<i class="ti ti-chart-donut"></i> Prediction</div>',
-                unsafe_allow_html=True,
-            )
-            res = st.session_state.last_result
-            if res is None:
+            with st.container(border=True):
                 st.markdown(
-                    '<div style="text-align:center;padding:2.4rem 1rem;color:#9ca3af;font-size:0.78rem">'
-                    'Enter text and click Analyse.</div>',
+                    '<div class="mg-panel-title"><i class="ti ti-chart-donut"></i> Prediction</div>',
                     unsafe_allow_html=True,
                 )
-            else:
-                prob = res["prob"]; ms = res["ms"]
-                _lbl, _color, _cls = risk_label(prob)
-                conf = prob if prob >= 0.5 else (1 - prob)
-                st.plotly_chart(gauge(prob), use_container_width=True, config={"displayModeBar": False})
-                st.markdown(f"""
+                res = st.session_state.last_result
+                if res is None:
+                    st.markdown(
+                        '<div style="text-align:center;padding:2.5rem 1rem">'
+                        '<div style="width:52px;height:52px;border-radius:50%;background:#f0fdf4;'
+                        'display:flex;align-items:center;justify-content:center;margin:0 auto 12px;'
+                        'border:2px solid #bbf7d0">'
+                        '<i class="ti ti-chart-donut" style="font-size:24px;color:#0F766E"></i></div>'
+                        '<div style="font-size:0.85rem;font-weight:600;color:#374151;margin-bottom:5px">No prediction yet</div>'
+                        '<div style="font-size:0.72rem;color:#9ca3af;line-height:1.5">Enter text in the Input panel<br>and click <strong style="color:#0F766E">Analyse</strong> to see results</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    prob = res["prob"]; ms = res["ms"]
+                    _lbl, _color, _cls = risk_label(prob)
+                    conf = prob if prob >= 0.5 else (1 - prob)
+                    st.plotly_chart(gauge(prob), use_container_width=True, config={"displayModeBar": False})
+                    st.markdown(f"""
 <div class="mg-risk-row">
   <div class="mg-risk-stat"><div class="mg-risk-val" style="color:{_color}">{prob:.0%}</div><div class="mg-risk-lbl">Risk Score</div></div>
   <div class="mg-risk-stat"><div class="mg-risk-val" style="color:{_color}">{conf:.0%}</div><div class="mg-risk-lbl">Confidence</div></div>
   <div class="mg-risk-stat"><div class="mg-risk-val">{ms:.0f}ms</div><div class="mg-risk-lbl">Latency</div></div>
 </div>
 """, unsafe_allow_html=True)
-                if prob >= 0.5:
-                    st.markdown(
-                        '<div class="mg-alert-box"><i class="ti ti-alert-triangle"></i> '
-                        'Crisis alert — high-risk language detected</div>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown(
-                        '<div class="mg-safe-box"><i class="ti ti-circle-check"></i> '
-                        'No high-risk signals detected</div>',
-                        unsafe_allow_html=True,
-                    )
-                if st.session_state.download_text:
-                    st.download_button(
-                        "Download report",
-                        st.session_state.download_text,
-                        file_name="mindguard_report.txt",
-                        use_container_width=True,
-                    )
-            st.markdown('</div>', unsafe_allow_html=True)
+                    if prob >= 0.5:
+                        st.markdown(
+                            '<div class="mg-alert-box"><i class="ti ti-alert-triangle"></i> '
+                            'Crisis alert — high-risk language detected</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            '<div class="mg-safe-box"><i class="ti ti-circle-check"></i> '
+                            'No high-risk signals detected</div>',
+                            unsafe_allow_html=True,
+                        )
+                    if st.session_state.download_text:
+                        st.download_button(
+                            "Download report",
+                            st.session_state.download_text,
+                            file_name="mindguard_report.txt",
+                            use_container_width=True,
+                        )
 
         # ── Session analytics panel ───────────────────────────────────
         with col_analytics:
-            st.markdown(
-                '<div class="mg-panel"><div class="mg-panel-title">'
-                '<i class="ti ti-chart-bar"></i> Session Analytics</div>',
-                unsafe_allow_html=True,
-            )
-            a = st.session_state.analytics
-            total = a["total_analyses"]
-            if total == 0:
+            with st.container(border=True):
                 st.markdown(
-                    '<div style="text-align:center;padding:1.6rem 1rem;color:#9ca3af;font-size:0.78rem">'
-                    'No analyses yet.</div>',
+                    '<div class="mg-panel-title"><i class="ti ti-chart-bar"></i> Session Analytics</div>',
                     unsafe_allow_html=True,
                 )
-            else:
-                st.markdown(f"""
+                a = st.session_state.analytics
+                total = a["total_analyses"]
+                if total == 0:
+                    st.markdown(
+                        '<div style="text-align:center;padding:2.5rem 1rem">'
+                        '<div style="width:52px;height:52px;border-radius:50%;background:#f0fdf4;'
+                        'display:flex;align-items:center;justify-content:center;margin:0 auto 12px;'
+                        'border:2px solid #bbf7d0">'
+                        '<i class="ti ti-chart-bar" style="font-size:24px;color:#0F766E"></i></div>'
+                        '<div style="font-size:0.85rem;font-weight:600;color:#374151;margin-bottom:5px">No session data</div>'
+                        '<div style="font-size:0.72rem;color:#9ca3af;line-height:1.5">Your analysis history<br>will appear here</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(f"""
 <div class="mg-stat-row">
   <div class="mg-stat-card"><div class="mg-stat-num">{total}</div><div class="mg-stat-lbl">Analysed</div></div>
   <div class="mg-stat-card"><div class="mg-stat-num" style="color:#dc2626">{a['negative_count']}</div><div class="mg-stat-lbl">At-Risk</div></div>
   <div class="mg-stat-card"><div class="mg-stat-num" style="color:#10b981">{a['positive_count']}</div><div class="mg-stat-lbl">Safe</div></div>
 </div>
 """, unsafe_allow_html=True)
-                st.markdown(
-                    '<div style="font-size:0.6rem;font-weight:700;color:#0F766E;text-transform:uppercase;'
-                    'letter-spacing:0.1em;margin-bottom:6px;padding-bottom:6px;'
-                    'border-bottom:0.5px solid #f1f5f9">Recent history</div>',
-                    unsafe_allow_html=True,
-                )
-                for entry in reversed(a.get("history", [])[-5:]):
-                    _cls_label = entry.get("cls", "Unknown")
-                    _cls_class = "risk" if _cls_label == "Suicidal" else "safe"
-                    _txt = entry.get("txt", "")
-                    _ts = entry.get("ts", "")
                     st.markdown(
-                        f'<div class="mg-history-row">'
-                        f'<span class="mg-h-cls {_cls_class}">{_cls_label}</span>'
-                        f'<span class="mg-h-ts">{_ts}</span>'
-                        f'<span class="mg-h-txt">{_txt}</span>'
-                        f'</div>',
+                        '<div style="font-size:0.6rem;font-weight:700;color:#0F766E;text-transform:uppercase;'
+                        'letter-spacing:0.1em;margin-bottom:6px;padding-bottom:6px;'
+                        'border-bottom:0.5px solid #f1f5f9">Recent history</div>',
                         unsafe_allow_html=True,
                     )
-            st.markdown('</div>', unsafe_allow_html=True)
+                    for entry in reversed(a.get("history", [])[-5:]):
+                        _cls_label = entry.get("cls", "Unknown")
+                        _cls_class = "risk" if _cls_label == "Suicidal" else "safe"
+                        _txt = entry.get("txt", "")
+                        _ts = entry.get("ts", "")
+                        st.markdown(
+                            f'<div class="mg-history-row">'
+                            f'<span class="mg-h-cls {_cls_class}">{_cls_label}</span>'
+                            f'<span class="mg-h-ts">{_ts}</span>'
+                            f'<span class="mg-h-txt">{_txt}</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
 
     # ── Reddit page ──────────────────────────────────────────────────
     elif _current == "reddit":

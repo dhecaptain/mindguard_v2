@@ -1,0 +1,187 @@
+import { useState, useEffect } from 'react'
+import { broadcastNotification } from '../api/auth'
+import api from '../api/client'
+
+interface SystemUser {
+  id: string
+  email: string
+  name: string
+  role_type: string
+  status: string
+}
+
+export default function AdminPage() {
+  const [title, setTitle] = useState('')
+  const [message, setMessage] = useState('')
+  const [targetRole, setTargetRole] = useState('')
+  const [sending, setSending] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [users, setUsers] = useState<SystemUser[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+
+  useEffect(() => {
+    api.get('/admin/users')
+      .then(({ data }) => setUsers(data))
+      .catch(() => {})
+      .finally(() => setLoadingUsers(false))
+  }, [])
+
+  const handleBroadcast = async () => {
+    if (!title.trim() || !message.trim()) return
+    setSending(true)
+    setSuccess(null)
+    setError(null)
+    try {
+      const { sent } = await broadcastNotification(title, message, targetRole || undefined)
+      setSuccess(`Broadcast sent to ${sent} user${sent !== 1 ? 's' : ''}.`)
+      setTitle('')
+      setMessage('')
+      setTargetRole('')
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? 'Failed to send broadcast')
+    }
+    setSending(false)
+  }
+
+  const counts = {
+    total: users.length,
+    students: users.filter((u) => u.role_type === 'student').length,
+    counsellors: users.filter((u) => u.role_type === 'counsellor').length,
+  }
+
+  return (
+    <div className="flex flex-col gap-[20px]">
+      <div>
+        <h2 className="text-[1.3rem] font-bold text-[#1f2937]">Admin Panel</h2>
+        <p className="text-[0.82rem] text-[#6b7280] mt-[2px]">System administration and broadcast messaging</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-[12px]">
+        {[
+          { label: 'Total Users', value: counts.total, icon: 'ti ti-users', color: '#0F766E' },
+          { label: 'Students', value: counts.students, icon: 'ti ti-school', color: '#3b82f6' },
+          { label: 'Counsellors', value: counts.counsellors, icon: 'ti ti-stethoscope', color: '#8b5cf6' },
+        ].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl border border-[rgba(229,231,235,0.7)] p-[16px] flex items-center gap-[12px]">
+            <div className="w-[40px] h-[40px] rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${s.color}18` }}>
+              <i className={`${s.icon} text-[20px]`} style={{ color: s.color }} />
+            </div>
+            <div>
+              <div className="text-[1.4rem] font-bold text-[#1f2937]">{loadingUsers ? '—' : s.value}</div>
+              <div className="text-[0.72rem] text-[#6b7280]">{s.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Broadcast */}
+      <div className="bg-white rounded-xl border border-[rgba(229,231,235,0.7)] p-[20px]">
+        <div className="flex items-center gap-[8px] mb-[16px]">
+          <i className="ti ti-speakerphone text-[20px] text-[#0F766E]" />
+          <h3 className="text-[1rem] font-bold text-[#1f2937]">Broadcast Message</h3>
+        </div>
+        <div className="flex flex-col gap-[12px]">
+          <div>
+            <label className="text-[0.72rem] font-bold text-[#374151] uppercase tracking-[0.06em] mb-[6px] block">Recipients</label>
+            <select
+              value={targetRole}
+              onChange={(e) => setTargetRole(e.target.value)}
+              className="w-full bg-[#fafbfc] border border-[#e5e7eb] rounded-[8px] px-[12px] py-[9px] text-[0.85rem] text-[#4b5563] outline-none focus:border-[#0F766E]"
+            >
+              <option value="">All users</option>
+              <option value="student">Students only</option>
+              <option value="counsellor">Counsellors only</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[0.72rem] font-bold text-[#374151] uppercase tracking-[0.06em] mb-[6px] block">Subject</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Notification subject..."
+              className="w-full bg-[#fafbfc] border border-[#e5e7eb] rounded-[8px] px-[12px] py-[9px] text-[0.85rem] text-[#4b5563] outline-none focus:border-[#0F766E]"
+            />
+          </div>
+          <div>
+            <label className="text-[0.72rem] font-bold text-[#374151] uppercase tracking-[0.06em] mb-[6px] block">Message</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Write your message..."
+              rows={4}
+              className="w-full bg-[#fafbfc] border border-[#e5e7eb] rounded-[8px] px-[12px] py-[9px] text-[0.85rem] text-[#4b5563] outline-none focus:border-[#0F766E] resize-none"
+            />
+          </div>
+          {error && (
+            <div className="flex items-center gap-[8px] px-[12px] py-[8px] bg-[#fee2e2] border border-[#fca5a5] rounded-[8px] text-[0.78rem] text-[#991b1b]">
+              <i className="ti ti-alert-circle text-[14px]" />{error}
+            </div>
+          )}
+          {success && (
+            <div className="flex items-center gap-[8px] px-[12px] py-[8px] bg-[#d1fae5] border border-[#6ee7b7] rounded-[8px] text-[0.78rem] text-[#065f46]">
+              <i className="ti ti-circle-check text-[14px]" />{success}
+            </div>
+          )}
+          <button
+            onClick={handleBroadcast}
+            disabled={!title.trim() || !message.trim() || sending}
+            className="self-end px-[18px] py-[9px] bg-[#0F766E] text-white rounded-[8px] text-[0.82rem] font-semibold cursor-pointer hover:bg-[#115E59] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-[6px]"
+          >
+            <i className="ti ti-send text-[15px]" />
+            {sending ? 'Sending...' : 'Send Broadcast'}
+          </button>
+        </div>
+      </div>
+
+      {/* User list */}
+      <div className="bg-white rounded-xl border border-[rgba(229,231,235,0.7)] p-[20px]">
+        <div className="flex items-center gap-[8px] mb-[14px]">
+          <i className="ti ti-list text-[20px] text-[#0F766E]" />
+          <h3 className="text-[1rem] font-bold text-[#1f2937]">All Users</h3>
+        </div>
+        {loadingUsers ? (
+          <div className="flex items-center gap-[8px] text-[#6b7280] text-[0.82rem]">
+            <div className="w-[18px] h-[18px] border-2 border-[#e5e7eb] border-t-[#0F766E] rounded-full animate-spin" />
+            Loading...
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[0.8rem]">
+              <thead>
+                <tr className="text-left text-[#9ca3af] border-b border-[#f3f4f6]">
+                  <th className="pb-[8px] font-semibold">Name</th>
+                  <th className="pb-[8px] font-semibold">Email</th>
+                  <th className="pb-[8px] font-semibold">Role</th>
+                  <th className="pb-[8px] font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-[#f9fafb] hover:bg-[#fafbfc]">
+                    <td className="py-[8px] font-medium text-[#1f2937]">{u.name}</td>
+                    <td className="py-[8px] text-[#6b7280]">{u.email}</td>
+                    <td className="py-[8px]">
+                      <span className={`px-[8px] py-[2px] rounded-full text-[0.65rem] font-bold uppercase ${
+                        u.role_type === 'admin' ? 'bg-[#fef3c7] text-[#92400e]' :
+                        u.role_type === 'counsellor' ? 'bg-[#d1fae5] text-[#065f46]' :
+                        'bg-[#dbeafe] text-[#1e40af]'
+                      }`}>{u.role_type}</span>
+                    </td>
+                    <td className="py-[8px]">
+                      <span className={`px-[8px] py-[2px] rounded-full text-[0.65rem] font-bold uppercase ${
+                        u.status === 'approved' ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#f3f4f6] text-[#6b7280]'
+                      }`}>{u.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -40,6 +40,14 @@ env/
 # Checkpoints & dev artifacts
 checkpoints/
 
+# Local database — contains user data, never commit
+*.db
+mindguard.db
+
+# Binary / generated files
+*.docx
+mindguard_dashboard_preview.html
+
 # IDE
 .cursor/
 

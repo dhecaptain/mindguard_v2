@@ -135,7 +135,10 @@ def init_google_auth():
         except Exception:
             pass
         if not secret_key:
-            secret_key = "mindguard_dev_key_replace_before_production"
+            raise RuntimeError(
+                "SECRET_KEY environment variable is required for Google OAuth. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
 
         return Authenticate(
             secret_credentials_path=creds_path,
@@ -168,7 +171,16 @@ def init_local_auth():
     with open(config_path) as f:
         config = yaml.load(f, Loader=SafeLoader)
 
-    secret_key = os.environ.get("SECRET_KEY", "mindguard_dev_key_replace_before_production")
+    secret_key = os.environ.get("SECRET_KEY", "")
+    try:
+        secret_key = secret_key or st.secrets.get("SECRET_KEY", "")
+    except Exception:
+        pass
+    if not secret_key:
+        raise RuntimeError(
+            "SECRET_KEY environment variable is required. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
 
     authenticator = stauth.Authenticate(
         credentials=config["credentials"],
@@ -199,7 +211,7 @@ def _create_default_auth_config(path: str) -> None:
         },
         "cookie": {
             "expiry_days": 1,
-            "key": os.environ.get("SECRET_KEY", "mindguard_dev_key_replace_before_production"),
+            "key": os.environ.get("SECRET_KEY", ""),
             "name": "mindguard_local",
         },
     }

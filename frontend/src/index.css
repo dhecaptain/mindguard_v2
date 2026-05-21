@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --color-teal: #0F766E;
+  --color-teal-deep: #115E59;
+  --color-teal-light: #1D9E75;
+  --color-ink: #111827;
+  --color-body: #4b5563;
+  --color-muted: #6b7280;
+  --color-panel: #ffffff;
+  --color-sidebar: #080d12;
+  --color-border: rgba(229, 231, 235, 0.8);
+  --color-border-subtle: #f1f5f9;
+  --color-surface: #fafbfc;
+  --color-bg-main: #f7f9fb;
+  --color-risk-low: #22c55e;
+  --color-risk-moderate: #f59e0b;
+  --color-risk-high: #f97316;
+  --color-risk-critical: #ef4444;
+  --color-success: #0F6E56;
+  --color-danger: #dc2626;
+  --color-sidebar-hover: #0e1520;
+  --color-sidebar-active: #0f2724;
+  --color-sidebar-divider: #161d26;
+  --color-sidebar-text: #6b7280;
+  --color-sidebar-text-hover: #d1d5db;
+  --color-sidebar-text-active: #e2f4f1;
+  --font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
+}
+
+html {
+  font-size: 17px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #0F766E;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}

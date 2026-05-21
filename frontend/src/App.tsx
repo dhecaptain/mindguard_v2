@@ -1,0 +1,207 @@
+import { useEffect, useState, useCallback } from 'react'
+import { useAuthStore, useUiStore } from './store'
+import { getMe, logout as apiLogout } from './api/auth'
+import { useIdleTimeout } from './hooks/useIdleTimeout'
+import SignInPage from './components/auth/SignInPage'
+import TermsPage from './components/auth/TermsPage'
+import MainLayout from './components/layout/MainLayout'
+import AuthCallbackPage from './pages/AuthCallbackPage'
+import DashboardPage from './pages/DashboardPage'
+import RedditPage from './pages/RedditPage'
+import VideoPage from './pages/VideoPage'
+import BlueskyPage from './pages/BlueskyPage'
+import MastodonPage from './pages/MastodonPage'
+import YouTubePage from './pages/YouTubePage'
+import FileUploadPage from './pages/FileUploadPage'
+import FacebookPage from './pages/FacebookPage'
+import TwitterPage from './pages/TwitterPage'
+import MultiPlatformPage from './pages/MultiPlatformPage'
+import CrisisResourcesPage from './pages/CrisisResourcesPage'
+import TeamPage from './pages/TeamPage'
+import CounsellorDashboardPage from './pages/CounsellorDashboardPage'
+import StudentManagementPage from './pages/StudentManagementPage'
+import ReferralsPage from './pages/ReferralsPage'
+import CommunicationsPage from './pages/CommunicationsPage'
+import AlertQueuePage from './pages/AlertQueuePage'
+import ConsentTrackerPage from './pages/ConsentTrackerPage'
+import AuditLogPage from './pages/AuditLogPage'
+import AdminPage from './pages/AdminPage'
+
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000   // 15 minutes
+const IDLE_WARNING_MS = 60 * 1000         // warn 1 minute before
+
+function IdleWarningModal({ countdown, onStay, onLogout }: { countdown: number; onStay: () => void; onLogout: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
+      <div className="bg-white rounded-[16px] p-[32px] w-[380px] max-w-[90vw] shadow-2xl text-center">
+        <div className="w-[56px] h-[56px] rounded-full bg-[#fef3c7] flex items-center justify-center mx-auto mb-[16px]">
+          <i className="ti ti-clock text-[28px] text-[#d97706]" />
+        </div>
+        <h3 className="text-[1.1rem] font-bold text-[#1f2937] mb-[8px]">Session expiring soon</h3>
+        <p className="text-[0.85rem] text-[#6b7280] mb-[6px]">
+          You've been inactive. Your session will end in
+        </p>
+        <div className="text-[2rem] font-bold text-[#d97706] mb-[20px]">{countdown}s</div>
+        <div className="flex gap-[10px]">
+          <button
+            onClick={onLogout}
+            className="flex-1 px-[14px] py-[10px] rounded-[8px] text-[0.85rem] font-semibold text-[#6b7280] border border-[#d1d5db] cursor-pointer hover:bg-[#f9fafb] bg-transparent"
+          >
+            Sign out
+          </button>
+          <button
+            onClick={onStay}
+            className="flex-1 px-[14px] py-[10px] rounded-[8px] text-[0.85rem] font-semibold text-white bg-[#0F766E] cursor-pointer hover:bg-[#115E59]"
+          >
+            Stay signed in
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PageRouter() {
+  const { currentPage } = useUiStore()
+  const role = useAuthStore((s) => s.user?.role_type?.toLowerCase())
+
+  if (role === 'admin') {
+    switch (currentPage) {
+      case 'admin': return <AdminPage />
+      case 'audit-log': return <AuditLogPage />
+      default: return <AdminPage />
+    }
+  }
+
+  if (role === 'counsellor') {
+    switch (currentPage) {
+      case 'counsellor-dashboard': return <CounsellorDashboardPage />
+      case 'students': return <StudentManagementPage />
+      case 'referrals': return <ReferralsPage />
+      case 'communications': return <CommunicationsPage />
+      case 'alert-queue': return <AlertQueuePage />
+      case 'consent-tracker': return <ConsentTrackerPage />
+      case 'audit-log': return <AuditLogPage />
+      default: return <CounsellorDashboardPage />
+    }
+  }
+
+  switch (currentPage) {
+    case 'dashboard': return <DashboardPage />
+    case 'reddit': return <RedditPage />
+    case 'video': return <VideoPage />
+    case 'bluesky': return <BlueskyPage />
+    case 'mastodon': return <MastodonPage />
+    case 'youtube': return <YouTubePage />
+    case 'file': return <FileUploadPage />
+    case 'facebook': return <FacebookPage />
+    case 'twitter': return <TwitterPage />
+    case 'unified': return <MultiPlatformPage />
+    case 'resources': return <CrisisResourcesPage />
+    case 'team': return <TeamPage />
+    default: return <DashboardPage />
+  }
+}
+
+function AuthenticatedApp() {
+  const { logout } = useAuthStore()
+  const [showWarning, setShowWarning] = useState(false)
+  const [countdown, setCountdown] = useState(60)
+  const countdownRef = { current: null as ReturnType<typeof setInterval> | null }
+
+  const handleLogout = useCallback(async () => {
+    setShowWarning(false)
+    try { await apiLogout() } catch {}
+    logout()
+  }, [logout])
+
+  const handleWarning = useCallback(() => {
+    setShowWarning(true)
+    setCountdown(60)
+    countdownRef.current = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(countdownRef.current!)
+          handleLogout()
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
+  }, [handleLogout])
+
+  const { reset } = useIdleTimeout(handleWarning, handleLogout, IDLE_TIMEOUT_MS, IDLE_WARNING_MS)
+
+  const handleStay = useCallback(() => {
+    setShowWarning(false)
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    reset()
+  }, [reset])
+
+  return (
+    <>
+      <MainLayout>
+        <PageRouter />
+      </MainLayout>
+      {showWarning && (
+        <IdleWarningModal countdown={countdown} onStay={handleStay} onLogout={handleLogout} />
+      )}
+    </>
+  )
+}
+
+export default function App() {
+  const { authenticated, termsAccepted, loading, setAuth, setTermsAccepted, setLoading } = useAuthStore()
+  const setPage = useUiStore((s) => s.setPage)
+  const [initialized, setInitialized] = useState(false)
+
+  useEffect(() => {
+    const token = localStorage.getItem('mg_token')
+    if (token) {
+      getMe()
+        .then((user) => {
+          setAuth(user)
+          setTermsAccepted(true)
+          if (user.role_type?.toLowerCase() === 'counsellor') {
+            setPage('counsellor-dashboard')
+          } else if (user.role_type?.toLowerCase() === 'admin') {
+            setPage('admin')
+          }
+          setInitialized(true)
+        })
+        .catch(() => {
+          localStorage.removeItem('mg_token')
+          setLoading(false)
+          setInitialized(true)
+        })
+    } else {
+      setLoading(false)
+      setInitialized(true)
+    }
+  }, [])
+
+  if (!initialized || loading) {
+    return (
+      <div className="min-h-screen bg-[#f7f9fb] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-[12px]">
+          <div className="w-[32px] h-[32px] border-[2.5px] border-[#e5e7eb] border-t-[#0F766E] rounded-full animate-spin" />
+          <span className="text-[0.9rem] text-[#6b7280]">Loading MindGuard...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (window.location.pathname.startsWith('/auth/callback') && !authenticated) {
+    return <AuthCallbackPage />
+  }
+
+  if (!authenticated) {
+    return <SignInPage onSuccess={() => {}} />
+  }
+
+  if (!termsAccepted) {
+    return <TermsPage onAccepted={() => {}} />
+  }
+
+  return <AuthenticatedApp />
+}
