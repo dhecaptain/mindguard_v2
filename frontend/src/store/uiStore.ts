@@ -8,6 +8,7 @@ type PageKey =
   | 'students' | 'referrals' | 'communications' | 'counsellor-dashboard'
   | 'alert-queue' | 'consent-tracker' | 'audit-log'
   | 'admin'
+  | 'notification-preferences'
 
 interface UiState {
   currentPage: PageKey

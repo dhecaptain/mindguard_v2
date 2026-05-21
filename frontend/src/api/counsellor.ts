@@ -2,6 +2,8 @@ import api from './client'
 import type {
   Consent, LinkedAccount, Alert, AlertDisposition,
   AuditEvent, Note, TimelineEntry,
+  Group, GroupDetail, GroupMessage, GroupMember,
+  ConversationsResponse, NotificationPreference,
 } from '../types'
 
 export interface StudentDTO {
@@ -224,4 +226,103 @@ export async function createNote(studentId: string, body: string): Promise<Note>
 export async function getAuditLog(): Promise<AuditEvent[]> {
   const { data } = await api.get('/v1/audit')
   return data.entries ?? data
+}
+
+
+// ─── Group Messaging ──────────────────────────────────────────────────────────
+
+export async function getGroups(): Promise<{ groups: Group[]; total: number }> {
+  const { data } = await api.get('/v1/groups')
+  return data
+}
+
+export async function getGroup(id: string): Promise<GroupDetail> {
+  const { data } = await api.get(`/v1/groups/${id}`)
+  return data
+}
+
+export async function createGroup(payload: {
+  name: string
+  description?: string
+  member_ids?: string[]
+}): Promise<GroupDetail> {
+  const { data } = await api.post('/v1/groups', payload)
+  return data
+}
+
+export async function updateGroup(id: string, payload: { name?: string; description?: string }): Promise<Group> {
+  const { data } = await api.patch(`/v1/groups/${id}`, payload)
+  return data
+}
+
+export async function deleteGroup(id: string): Promise<void> {
+  await api.delete(`/v1/groups/${id}`)
+}
+
+export async function addGroupMembers(groupId: string, userIds: string[]): Promise<{ added: number }> {
+  const { data } = await api.post(`/v1/groups/${groupId}/members`, { user_ids: userIds })
+  return data
+}
+
+export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
+  await api.delete(`/v1/groups/${groupId}/members/${userId}`)
+}
+
+export async function getGroupMessages(groupId: string, limit = 50, beforeId?: string): Promise<{ messages: GroupMessage[]; total: number }> {
+  const params: any = { limit }
+  if (beforeId) params.before_id = beforeId
+  const { data } = await api.get(`/v1/groups/${groupId}/messages`, { params })
+  return data
+}
+
+export async function sendGroupMessage(groupId: string, message: string): Promise<GroupMessage> {
+  const { data } = await api.post(`/v1/groups/${groupId}/messages`, { message })
+  return data
+}
+
+export async function markGroupRead(groupId: string): Promise<void> {
+  await api.post(`/v1/groups/${groupId}/read`)
+}
+
+
+// ─── General Messaging ────────────────────────────────────────────────────────
+
+export async function getMyConversations(): Promise<ConversationsResponse> {
+  const { data } = await api.get('/messages/conversations')
+  return data
+}
+
+export async function sendDirectMessage(receiverId: string, message: string): Promise<any> {
+  const { data } = await api.post('/messages/send', { receiver_id: receiverId, message })
+  return data
+}
+
+export async function getDirectConversation(otherId: string): Promise<any[]> {
+  const { data } = await api.get(`/messages/conversations/${otherId}`)
+  return data
+}
+
+export async function markAllReadWith(otherId: string): Promise<void> {
+  await api.post(`/messages/read-all/${otherId}`)
+}
+
+
+// ─── Notification Preferences ─────────────────────────────────────────────────
+
+export async function getNotificationPreferences(): Promise<{ preferences: NotificationPreference[] }> {
+  const { data } = await api.get('/notifications/preferences')
+  return data
+}
+
+export async function updateNotificationPreference(
+  type: string,
+  payload: { enabled?: boolean; muted_groups?: string[] }
+): Promise<NotificationPreference> {
+  const { data } = await api.put(`/notifications/preferences/${type}`, payload)
+  return data
+}
+
+export async function toggleGroupMute(groupId: string, muted: boolean): Promise<{ muted_groups: string[] }> {
+  const { data } = await api.put('/notifications/preferences/mute-group', { group_id: groupId, muted })
+  return data
 }

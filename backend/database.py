@@ -171,6 +171,52 @@ def init_db():
             top_platform TEXT,
             n_posts INTEGER DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            avatar_url TEXT DEFAULT '',
+            created_by TEXT NOT NULL REFERENCES users(id),
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS group_members (
+            id TEXT PRIMARY KEY,
+            group_id TEXT NOT NULL REFERENCES groups(id),
+            user_id TEXT NOT NULL REFERENCES users(id),
+            role TEXT NOT NULL DEFAULT 'member',
+            joined_at TEXT NOT NULL,
+            UNIQUE(group_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS group_messages (
+            id TEXT PRIMARY KEY,
+            group_id TEXT NOT NULL REFERENCES groups(id),
+            sender_id TEXT NOT NULL REFERENCES users(id),
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS group_message_read (
+            id TEXT PRIMARY KEY,
+            message_id TEXT NOT NULL REFERENCES group_messages(id),
+            user_id TEXT NOT NULL REFERENCES users(id),
+            read_at TEXT NOT NULL,
+            UNIQUE(message_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS notification_preferences (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            type TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            muted_groups TEXT DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            UNIQUE(user_id, type)
+        );
     """)
     # Migrations for existing DBs
     for migration in [
@@ -218,6 +264,16 @@ def seed_defaults():
     conn.executemany(
         "INSERT INTO users (id, email, name, role_type, password_hash, status, created_at) VALUES (?,?,?,?,?,?,?)",
         users,
+    )
+    # Seed a demo conversation between student@mindguard.org and counsellor@mindguard.org
+    demo_msgs = [
+        ("msg-001", "couns-001", "stud-001", "Hello! Welcome to MindGuard. How are you feeling today?", now),
+        ("msg-002", "stud-001", "couns-001", "Hi! I'm doing okay, just wanted to check in.", now),
+        ("msg-003", "couns-001", "stud-001", "That's great to hear. I'm here whenever you need someone to talk to.", now),
+    ]
+    conn.executemany(
+        "INSERT OR IGNORE INTO communications (id, sender_id, receiver_id, message, read, created_at) VALUES (?,?,?,?,1,?)",
+        demo_msgs,
     )
     conn.commit()
     conn.close()
@@ -959,3 +1015,284 @@ def get_rolling_risk_history(student_id: str, limit: int = 90) -> list:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Group functions
+# ═════════════════════════════════════════════════════════════════════
+
+
+def create_group(name: str, description: str, created_by: str) -> dict:
+    gid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO groups (id, name, description, created_by, is_active, created_at, updated_at) "
+        "VALUES (?,?,?,?,1,?,?)",
+        (gid, name, description, created_by, now, now),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM groups WHERE id = ?", (gid,)).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_group_by_id(group_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute("SELECT * FROM groups WHERE id = ? AND is_active = 1", (group_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_group(group_id: str, name: str | None = None, description: str | None = None) -> dict | None:
+    now = datetime.now(timezone.utc).isoformat()
+    updates = ["updated_at = ?"]
+    params = [now]
+    if name is not None:
+        updates.append("name = ?")
+        params.append(name)
+    if description is not None:
+        updates.append("description = ?")
+        params.append(description)
+    params.append(group_id)
+    conn = get_db()
+    conn.execute(f"UPDATE groups SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    row = conn.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_group(group_id: str) -> bool:
+    conn = get_db()
+    cur = conn.execute("UPDATE groups SET is_active = 0 WHERE id = ?", (group_id,))
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def add_group_member(group_id: str, user_id: str, role: str = "member") -> dict | None:
+    mid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO group_members (id, group_id, user_id, role, joined_at) VALUES (?,?,?,?,?)",
+            (mid, group_id, user_id, role, now),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        return None
+    row = conn.execute("SELECT * FROM group_members WHERE id = ?", (mid,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def remove_group_member(group_id: str, user_id: str) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
+        (group_id, user_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def get_group_members(group_id: str) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT gm.*, u.name, u.email FROM group_members gm "
+        "JOIN users u ON gm.user_id = u.id WHERE gm.group_id = ? ORDER BY gm.joined_at ASC",
+        (group_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_groups_for_user(user_id: str) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT g.*,
+                  (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as member_count
+           FROM groups g
+           JOIN group_members gm ON gm.group_id = g.id
+           WHERE gm.user_id = ? AND g.is_active = 1
+           ORDER BY g.updated_at DESC""",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def is_group_member(group_id: str, user_id: str) -> bool:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?",
+        (group_id, user_id),
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def get_group_unread_count(group_id: str, user_id: str) -> int:
+    conn = get_db()
+    row = conn.execute(
+        """SELECT COUNT(*) FROM group_messages gm
+           WHERE gm.group_id = ?
+           AND gm.sender_id != ?
+           AND gm.id NOT IN (
+               SELECT message_id FROM group_message_read WHERE user_id = ?
+           )""",
+        (group_id, user_id, user_id),
+    ).fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+
+def send_group_message(group_id: str, sender_id: str, message: str) -> dict:
+    mid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO group_messages (id, group_id, sender_id, message, created_at) VALUES (?,?,?,?,?)",
+        (mid, group_id, sender_id, message, now),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": mid, "group_id": group_id, "sender_id": sender_id, "message": message, "created_at": now}
+
+
+def get_group_messages(group_id: str, limit: int = 50, before_id: str | None = None) -> list:
+    conn = get_db()
+    if before_id:
+        before = conn.execute("SELECT created_at FROM group_messages WHERE id = ?", (before_id,)).fetchone()
+        if before:
+            rows = conn.execute(
+                """SELECT gm.*, u.name as sender_name FROM group_messages gm
+                   JOIN users u ON gm.sender_id = u.id
+                   WHERE gm.group_id = ? AND gm.created_at < ?
+                   ORDER BY gm.created_at DESC LIMIT ?""",
+                (group_id, before["created_at"], limit),
+            ).fetchall()
+        else:
+            rows = []
+    else:
+        rows = conn.execute(
+            """SELECT gm.*, u.name as sender_name FROM group_messages gm
+               JOIN users u ON gm.sender_id = u.id
+               WHERE gm.group_id = ? ORDER BY gm.created_at DESC LIMIT ?""",
+            (group_id, limit),
+        ).fetchall()
+    conn.close()
+    messages = [dict(r) for r in rows]
+    messages.reverse()
+    return messages
+
+
+def mark_group_message_read(message_id: str, user_id: str) -> None:
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "INSERT OR IGNORE INTO group_message_read (id, message_id, user_id, read_at) VALUES (?,?,?,?)",
+        (str(uuid.uuid4()), message_id, user_id, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def mark_all_group_messages_read(group_id: str, user_id: str) -> None:
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """INSERT OR IGNORE INTO group_message_read (id, message_id, user_id, read_at)
+           SELECT ?, gm.id, ?, ? FROM group_messages gm
+           WHERE gm.group_id = ? AND gm.sender_id != ?""",
+        (str(uuid.uuid4()), user_id, now, group_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Notification preference functions
+# ═════════════════════════════════════════════════════════════════════
+
+NOTIFICATION_TYPES = {
+    "message", "group_message", "alert", "referral",
+    "broadcast", "consent", "approval", "system",
+}
+
+
+def get_notification_preferences(user_id: str) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM notification_preferences WHERE user_id = ?",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    existing = {r["type"]: dict(r) for r in rows}
+    result = []
+    for ntype in sorted(NOTIFICATION_TYPES):
+        if ntype in existing:
+            pref = existing[ntype]
+            muted = json.loads(pref.get("muted_groups") or "[]")
+            result.append({"type": ntype, "enabled": bool(pref["enabled"]), "muted_groups": muted})
+        else:
+            result.append({"type": ntype, "enabled": True, "muted_groups": []})
+    return result
+
+
+def set_notification_preference(user_id: str, ntype: str, enabled: bool | None = None, muted_groups: list | None = None) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT * FROM notification_preferences WHERE user_id = ? AND type = ?",
+        (user_id, ntype),
+    ).fetchone()
+    if existing:
+        updates = []
+        params = []
+        if enabled is not None:
+            updates.append("enabled = ?")
+            params.append(1 if enabled else 0)
+        if muted_groups is not None:
+            updates.append("muted_groups = ?")
+            params.append(json.dumps(muted_groups))
+        if updates:
+            params.append(user_id)
+            params.append(ntype)
+            conn.execute(f"UPDATE notification_preferences SET {', '.join(updates)} WHERE user_id = ? AND type = ?", params)
+            conn.commit()
+    else:
+        muted_json = json.dumps(muted_groups if muted_groups is not None else [])
+        enabled_val = 1 if enabled is None or enabled else 0
+        conn.execute(
+            "INSERT INTO notification_preferences (id, user_id, type, enabled, muted_groups, created_at) VALUES (?,?,?,?,?,?)",
+            (str(uuid.uuid4()), user_id, ntype, enabled_val, muted_json, now),
+        )
+        conn.commit()
+    conn.close()
+    return {"type": ntype, "enabled": enabled if enabled is not None else True, "muted_groups": muted_groups or []}
+
+
+def should_notify(user_id: str, ntype: str, group_id: str | None = None) -> bool:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT enabled, muted_groups FROM notification_preferences WHERE user_id = ? AND type = ?",
+        (user_id, ntype),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return True
+    if not row["enabled"]:
+        return False
+    if group_id and ntype == "group_message":
+        muted = json.loads(row["muted_groups"] or "[]")
+        if group_id in muted:
+            return False
+    return True

@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from 'react'
-import { useAuthStore, useUiStore } from '../../store'
+import { useAuthStore, useUiStore, useNotificationStore } from '../../store'
 import { useCounsellorStore } from '../../store/counsellorStore'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { getAlerts } from '../../api/counsellor'
-import { getNotifications, markNotificationRead } from '../../api/auth'
+import { NOTIFICATION_TYPE_LABELS, NOTIFICATION_TYPE_ICONS } from '../../types'
 
 const STUDENT_NAV_ITEMS: { key: string; icon: string; label: string }[] = [
   { key: 'dashboard', icon: 'ti ti-brain', label: 'Dashboard' },
+  { key: 'communications', icon: 'ti ti-mail', label: 'Messages' },
   { key: 'reddit', icon: 'ti ti-brand-reddit', label: 'Reddit' },
   { key: 'video', icon: 'ti ti-video', label: 'Video' },
   { key: 'bluesky', icon: 'ti ti-butterfly', label: 'Bluesky' },
@@ -49,21 +50,15 @@ function RolePill({ role }: { role?: string }) {
   )
 }
 
-interface BackendNotification {
-  id: string
-  title: string
-  message: string
-  type: string
-  read: boolean
-  created_at: string
-}
-
 export default function Sidebar() {
   const { currentPage, setPage, sidebarOpen, sidebarCollapsed, toggleSidebarCollapsed } = useUiStore()
   const { user } = useAuthStore()
   const referralCount = useCounsellorStore((s) => s.referralCount)
+  const {
+    notifications, unreadCount, fetchNotifications,
+    markRead, markAllRead, fetchPreferences, unreadByType,
+  } = useNotificationStore()
   const [openAlertCount, setOpenAlertCount] = useState(0)
-  const [notifications, setNotifications] = useState<BackendNotification[]>([])
   const [showNotifs, setShowNotifs] = useState(false)
   const [copied, setCopied] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -74,7 +69,7 @@ export default function Sidebar() {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const isCollapsed = isDesktop && sidebarCollapsed
 
-  const unread = notifications.filter((n) => !n.read).length
+  const unreadByTypeMap = unreadByType()
 
   const navItems = isAdmin
     ? ADMIN_NAV_ITEMS
@@ -100,18 +95,13 @@ export default function Sidebar() {
     return () => clearInterval(interval)
   }, [isCounsellor])
 
-  // Poll notifications every 30 seconds
+  // Poll notifications every 30 seconds + fetch preferences
   useEffect(() => {
-    const fetchNotifs = async () => {
-      try {
-        const data = await getNotifications()
-        setNotifications(data.notifications || [])
-      } catch {}
-    }
-    fetchNotifs()
-    const interval = setInterval(fetchNotifs, 30000)
+    fetchNotifications()
+    fetchPreferences()
+    const interval = setInterval(fetchNotifications, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchNotifications, fetchPreferences])
 
   // Close notification panel on outside click
   useEffect(() => {
@@ -124,21 +114,6 @@ export default function Sidebar() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [showNotifs])
-
-  const handleMarkRead = async (id: string) => {
-    try {
-      await markNotificationRead(id)
-      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n))
-    } catch {}
-  }
-
-  const handleMarkAllRead = async () => {
-    const unreadNotifs = notifications.filter((n) => !n.read)
-    for (const n of unreadNotifs) {
-      try { await markNotificationRead(n.id) } catch {}
-    }
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  }
 
   const handleCopyReferral = () => {
     const code = user?.referral_code
@@ -181,9 +156,9 @@ export default function Sidebar() {
               className="relative w-[28px] h-[28px] flex items-center justify-center rounded-[6px] hover:bg-[#161d26] transition-colors cursor-pointer bg-transparent border-none text-[#6b7280] hover:text-[#d1d5db]"
             >
               <i className="ti ti-bell text-[17px]" />
-              {unread > 0 && (
+              {unreadCount > 0 && (
                 <span className="absolute top-[-3px] right-[-3px] bg-[#ef4444] text-white text-[0.55rem] font-bold min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-[3px]">
-                  {unread > 9 ? '9+' : unread}
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
@@ -192,11 +167,20 @@ export default function Sidebar() {
               <div className="absolute top-[36px] right-0 w-[260px] sm:w-[320px] max-w-[90vw] bg-white rounded-[12px] border border-[rgba(229,231,235,0.7)] shadow-xl z-50">
                 <div className="flex items-center justify-between px-[14px] py-[10px] border-b border-[#f3f4f6]">
                   <span className="text-[0.85rem] font-bold text-[#1f2937]">Notifications</span>
-                  {unread > 0 && (
-                    <button onClick={handleMarkAllRead} className="text-[0.72rem] text-[#0F766E] font-semibold cursor-pointer bg-transparent border-none hover:underline">
-                      Mark all read
+                  <div className="flex items-center gap-[6px]">
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-[0.72rem] text-[#0F766E] font-semibold cursor-pointer bg-transparent border-none hover:underline">
+                        Mark all read
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setShowNotifs(false); setPage('notification-preferences') }}
+                      className="text-[0.72rem] text-[#6b7280] font-semibold cursor-pointer bg-transparent border-none hover:text-[#0F766E]"
+                      title="Notification settings"
+                    >
+                      <i className="ti ti-settings text-[14px]" />
                     </button>
-                  )}
+                  </div>
                 </div>
                 <div className="max-h-[320px] overflow-y-auto">
                   {notifications.length === 0 ? (
@@ -205,22 +189,38 @@ export default function Sidebar() {
                       No notifications yet
                     </div>
                   ) : (
-                    notifications.slice(0, 20).map((n) => (
-                      <div
-                        key={n.id}
-                        className={`flex items-start gap-[10px] px-[14px] py-[10px] border-b border-[#f9fafb] cursor-pointer hover:bg-[#f9fafb] transition-colors ${!n.read ? 'bg-[#f0fdf9]' : ''}`}
-                        onClick={() => handleMarkRead(n.id)}
-                      >
-                        <div className={`w-[8px] h-[8px] rounded-full mt-[5px] flex-shrink-0 ${!n.read ? 'bg-[#0F766E]' : 'bg-[#d1d5db]'}`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[0.8rem] font-semibold text-[#1f2937] truncate">{n.title}</div>
-                          <div className="text-[0.73rem] text-[#6b7280] mt-[2px] line-clamp-2">{n.message}</div>
-                          <div className="text-[0.65rem] text-[#9ca3af] mt-[3px]">
-                            {new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    notifications.slice(0, 30).map((n) => {
+                      const icon = NOTIFICATION_TYPE_ICONS[n.type] || 'ti ti-bell'
+                      const typeLabel = NOTIFICATION_TYPE_LABELS[n.type] || n.type
+                      return (
+                        <div
+                          key={n.id}
+                          className={`flex items-start gap-[10px] px-[14px] py-[10px] border-b border-[#f9fafb] cursor-pointer hover:bg-[#f9fafb] transition-colors ${!n.read ? 'bg-[#f0fdf9]' : ''}`}
+                          onClick={() => markRead(n.id)}
+                        >
+                          <div className={`w-[28px] h-[28px] rounded-full flex items-center justify-center flex-shrink-0 ${
+                            n.type === 'alert' ? 'bg-[#fef2f2] text-[#dc2626]' :
+                            n.type === 'group_message' ? 'bg-[#f5f3ff] text-[#7c3aed]' :
+                            n.type === 'message' ? 'bg-[#f0fdfa] text-[#0F766E]' :
+                            n.type === 'broadcast' ? 'bg-[#fef3c7] text-[#d97706]' :
+                            'bg-[#f3f4f6] text-[#6b7280]'
+                          }`}>
+                            <i className={`${icon} text-[14px]`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-[4px]">
+                              <span className="text-[0.62rem] font-medium text-[#6b7280] uppercase">{typeLabel}</span>
+                              {!n.read && <div className="w-[6px] h-[6px] rounded-full bg-[#0F766E]" />}
+                            </div>
+                            <div className="text-[0.8rem] font-semibold text-[#1f2937] truncate">{n.title}</div>
+                            <div className="text-[0.73rem] text-[#6b7280] mt-[2px] line-clamp-2">{n.message}</div>
+                            <div className="text-[0.65rem] text-[#9ca3af] mt-[3px]">
+                              {new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               </div>

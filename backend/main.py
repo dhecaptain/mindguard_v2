@@ -20,6 +20,9 @@ from backend.config import SUPABASE_URL, SUPABASE_ANON_KEY
 from backend.models.schemas import (
     TextAnalysisRequest, TextAnalysisResponse,
     PlatformRequest, LoginRequest, RegisterRequest, UserResponse,
+    CreateGroupRequest, UpdateGroupRequest, AddMemberRequest,
+    GroupMessageRequest, UpdateNotificationPreferenceRequest,
+    MuteGroupRequest, NOTIFICATION_TYPES,
 )
 from backend.services.predictor import predict_one, predict_batch
 from backend.utils import clean_text, risk_label, detect_socioeconomic, RESOURCES, US_STATE_RESOURCES, TEAM_MEMBERS
@@ -41,6 +44,14 @@ from backend.database import (
     create_note, get_notes,
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
+    # groups
+    create_group, get_group_by_id, update_group, delete_group,
+    add_group_member, remove_group_member, get_group_members,
+    get_groups_for_user, is_group_member, get_group_unread_count,
+    send_group_message, get_group_messages,
+    mark_group_message_read, mark_all_group_messages_read,
+    # notification preferences
+    get_notification_preferences, set_notification_preference, should_notify,
 )
 from backend.services.consent_service import (
     dispatch_consent, record_view, accept_consent, decline_consent, revoke_consent,
@@ -949,6 +960,17 @@ async def admin_broadcast(data: dict, request: Request, user: dict = Depends(req
     return {"ok": True, "sent": sent}
 
 
+# ── User directory ──────────────────────────────────────────────────
+
+@app.get("/api/users/directory")
+async def get_user_directory(role: str | None = None, user: dict = Depends(require_auth)):
+    """List users by role for starting conversations. Any authenticated user can call this."""
+    users = get_all_users()
+    if role:
+        users = [u for u in users if u["role_type"] == role]
+    return users
+
+
 # ── Resources routes ─────────────────────────────────────────────────
 
 @app.get("/api/resources")
@@ -1521,6 +1543,312 @@ async def v1_student_analyze(
         "alert_created": alert is not None,
         "alert": alert,
     }
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Group routes (counsellor-only)
+# ═════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/v1/groups")
+async def v1_list_groups(user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin"):
+        raise HTTPException(403, "Counsellor or admin access required")
+    groups = get_groups_for_user(user["id"])
+    result = []
+    for g in groups:
+        unread = get_group_unread_count(g["id"], user["id"])
+        result.append({
+            "id": g["id"],
+            "name": g["name"],
+            "description": g["description"],
+            "avatar_url": g["avatar_url"],
+            "created_by": g["created_by"],
+            "is_active": bool(g["is_active"]),
+            "member_count": g["member_count"],
+            "unread_count": unread,
+            "created_at": g["created_at"],
+            "updated_at": g["updated_at"],
+        })
+    return {"groups": result, "total": len(result)}
+
+
+@app.post("/api/v1/groups", status_code=201)
+async def v1_create_group(req: CreateGroupRequest, user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin"):
+        raise HTTPException(403, "Counsellor or admin access required")
+    try:
+        group = create_group(req.name, req.description, user["id"])
+        add_group_member(group["id"], user["id"], role="admin")
+        for mid in req.member_ids:
+            member_user = get_user_by_id(mid)
+            if member_user and member_user["role_type"] == "student":
+                add_group_member(group["id"], mid, role="member")
+                _safe_notify(mid, "Group Invitation",
+                             f"You have been added to the group '{req.name}' by {user['name']}.",
+                             "system")
+        members = get_group_members(group["id"])
+        return {
+            **group,
+            "is_active": True,
+            "member_count": len(members),
+            "members": [{
+                "id": m["id"], "user_id": m["user_id"],
+                "name": m["name"], "email": m["email"],
+                "role": m["role"], "joined_at": m["joined_at"],
+            } for m in members],
+        }
+    except Exception as exc:
+        logger.error("create_group error: %s", exc)
+        raise HTTPException(500, "Failed to create group")
+
+
+@app.get("/api/v1/groups/{group_id}")
+async def v1_get_group(group_id: str, user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin"):
+        raise HTTPException(403, "Counsellor or admin access required")
+    group = get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if not is_group_member(group_id, user["id"]):
+        raise HTTPException(403, "You are not a member of this group")
+    members = get_group_members(group_id)
+    return {
+        **group,
+        "is_active": bool(group["is_active"]),
+        "member_count": len(members),
+        "members": [{
+            "id": m["id"], "user_id": m["user_id"],
+            "name": m["name"], "email": m["email"],
+            "role": m["role"], "joined_at": m["joined_at"],
+        } for m in members],
+    }
+
+
+@app.patch("/api/v1/groups/{group_id}")
+async def v1_update_group(group_id: str, req: UpdateGroupRequest, user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin"):
+        raise HTTPException(403, "Counsellor or admin access required")
+    group = get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if group["created_by"] != user["id"] and user["role_type"] != "admin":
+        raise HTTPException(403, "Only the group creator can update this group")
+    updated = update_group(group_id, name=req.name, description=req.description)
+    if not updated:
+        raise HTTPException(404, "Group not found")
+    return {**updated, "is_active": bool(updated["is_active"])}
+
+
+@app.delete("/api/v1/groups/{group_id}")
+async def v1_delete_group(group_id: str, user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin"):
+        raise HTTPException(403, "Counsellor or admin access required")
+    group = get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if group["created_by"] != user["id"] and user["role_type"] != "admin":
+        raise HTTPException(403, "Only the group creator can delete this group")
+    ok = delete_group(group_id)
+    if not ok:
+        raise HTTPException(404, "Group not found")
+    return {"ok": True}
+
+
+@app.post("/api/v1/groups/{group_id}/members", status_code=201)
+async def v1_add_group_members(group_id: str, data: dict, user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin"):
+        raise HTTPException(403, "Counsellor or admin access required")
+    group = get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if not is_group_member(group_id, user["id"]):
+        raise HTTPException(403, "You are not a member of this group")
+    user_ids = data.get("user_ids", [])
+    if not isinstance(user_ids, list) or not user_ids:
+        raise HTTPException(400, "user_ids must be a non-empty list")
+    added = []
+    for uid in user_ids:
+        member_user = get_user_by_id(uid)
+        if member_user and member_user["role_type"] == "student":
+            result = add_group_member(group_id, uid, role="member")
+            if result:
+                added.append(result)
+                _safe_notify(uid, "Group Invitation",
+                             f"You have been added to the group '{group['name']}' by {user['name']}.",
+                             "system")
+    return {"added": len(added), "members": added}
+
+
+@app.delete("/api/v1/groups/{group_id}/members/{user_id}")
+async def v1_remove_group_member(group_id: str, user_id: str, user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin"):
+        raise HTTPException(403, "Counsellor or admin access required")
+    group = get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if not is_group_member(group_id, user["id"]) and user["role_type"] != "admin":
+        raise HTTPException(403, "You are not a member of this group")
+    if user_id == group["created_by"] and user["role_type"] != "admin":
+        raise HTTPException(400, "Cannot remove the group creator")
+    ok = remove_group_member(group_id, user_id)
+    if not ok:
+        raise HTTPException(404, "Member not found")
+    return {"ok": True}
+
+
+@app.get("/api/v1/groups/{group_id}/messages")
+async def v1_get_group_messages(
+    group_id: str,
+    limit: int = 50,
+    before_id: str | None = None,
+    user: dict = Depends(require_auth),
+):
+    group = get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if not is_group_member(group_id, user["id"]):
+        raise HTTPException(403, "You are not a member of this group")
+    messages = get_group_messages(group_id, limit=limit, before_id=before_id)
+    return {"messages": messages, "total": len(messages)}
+
+
+@app.post("/api/v1/groups/{group_id}/messages", status_code=201)
+async def v1_send_group_message(
+    group_id: str,
+    req: GroupMessageRequest,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    group = get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if not is_group_member(group_id, user["id"]):
+        raise HTTPException(403, "You are not a member of this group")
+    msg = send_group_message(group_id, user["id"], req.message)
+    # Notify other group members
+    members = get_group_members(group_id)
+    for m in members:
+        if m["user_id"] != user["id"] and should_notify(m["user_id"], "group_message", group_id):
+            _safe_notify(m["user_id"], f"Group: {group['name']}",
+                         f"{user['name']}: {req.message[:120]}{'...' if len(req.message) > 120 else ''}",
+                         "group_message")
+    msg["sender_name"] = user["name"]
+    return msg
+
+
+@app.post("/api/v1/groups/{group_id}/read")
+async def v1_mark_group_read(group_id: str, user: dict = Depends(require_auth)):
+    if not is_group_member(group_id, user["id"]):
+        raise HTTPException(403, "You are not a member of this group")
+    mark_all_group_messages_read(group_id, user["id"])
+    return {"ok": True}
+
+
+# ═════════════════════════════════════════════════════════════════════
+# General messaging routes (any authenticated user)
+# ═════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/messages/conversations")
+async def get_my_conversations(user: dict = Depends(require_auth)):
+    conversations = get_conversations(user["id"])
+    # Also fetch group previews
+    groups = get_groups_for_user(user["id"])
+    group_previews = []
+    for g in groups:
+        msgs = get_group_messages(g["id"], limit=1)
+        last_msg = msgs[-1] if msgs else None
+        unread = get_group_unread_count(g["id"], user["id"])
+        group_previews.append({
+            "type": "group",
+            "group_id": g["id"],
+            "name": g["name"],
+            "avatar_url": g.get("avatar_url", ""),
+            "member_count": g["member_count"],
+            "last_message": last_msg["message"] if last_msg else "",
+            "last_time": last_msg["created_at"] if last_msg else "",
+            "last_sender": last_msg["sender_name"] if last_msg else "",
+            "unread": unread,
+        })
+    return {"direct": conversations, "groups": group_previews}
+
+
+@app.post("/api/messages/send")
+async def send_message_any(data: dict, user: dict = Depends(require_auth)):
+    receiver_id = data.get("receiver_id")
+    message = data.get("message", "").strip()
+    if not receiver_id:
+        raise HTTPException(400, "Receiver ID required")
+    if not message:
+        raise HTTPException(400, "Message cannot be empty")
+    receiver = get_user_by_id(receiver_id)
+    if not receiver:
+        raise HTTPException(404, "Recipient not found")
+    msg = send_message(user["id"], receiver_id, message)
+    if should_notify(receiver_id, "message"):
+        _safe_notify(receiver_id, "New Message", f"New message from {user['name']}", "message")
+    return msg
+
+
+@app.get("/api/messages/conversations/{other_id}")
+async def get_conversation_any(other_id: str, user: dict = Depends(require_auth)):
+    mark_all_read(user["id"], other_id)
+    return get_conversation(user["id"], other_id)
+
+
+@app.post("/api/messages/read")
+async def mark_message_read(data: dict, user: dict = Depends(require_auth)):
+    message_id = data.get("message_id")
+    if message_id:
+        mark_read(message_id)
+    return {"ok": True}
+
+
+@app.post("/api/messages/read-all/{other_id}")
+async def mark_all_read_with(other_id: str, user: dict = Depends(require_auth)):
+    mark_all_read(user["id"], other_id)
+    return {"ok": True}
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Notification preference routes
+# ═════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/notifications/preferences")
+async def get_my_notification_preferences(user: dict = Depends(require_auth)):
+    prefs = get_notification_preferences(user["id"])
+    return {"preferences": prefs}
+
+
+@app.put("/api/notifications/preferences/mute-group")
+async def toggle_group_mute(req: MuteGroupRequest, user: dict = Depends(require_auth)):
+    prefs = get_notification_preferences(user["id"])
+    group_pref = next((p for p in prefs if p["type"] == "group_message"), None)
+    muted = list(group_pref["muted_groups"]) if group_pref else []
+    if req.muted and req.group_id not in muted:
+        muted.append(req.group_id)
+    elif not req.muted and req.group_id in muted:
+        muted.remove(req.group_id)
+    set_notification_preference(user["id"], "group_message", muted_groups=muted)
+    return {"muted_groups": muted}
+
+
+@app.put("/api/notifications/preferences/{notify_type}")
+async def update_notification_preference(
+    notify_type: str,
+    req: UpdateNotificationPreferenceRequest,
+    user: dict = Depends(require_auth),
+):
+    if notify_type not in NOTIFICATION_TYPES:
+        raise HTTPException(400, f"Invalid notification type. Must be one of: {', '.join(sorted(NOTIFICATION_TYPES))}")
+    pref = set_notification_preference(
+        user["id"], notify_type,
+        enabled=req.enabled,
+        muted_groups=req.muted_groups,
+    )
+    return pref
 
 
 if __name__ == "__main__":

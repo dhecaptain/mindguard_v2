@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { StudentDTO, Referral, Conversation, DashboardData, StudentDetail } from '../api/counsellor'
+import type { Group, GroupMessage, GroupConversationPreview } from '../types'
 
 interface CounsellorState {
   students: StudentDTO[]
@@ -12,6 +13,12 @@ interface CounsellorState {
   referralCount: number
   loading: boolean
   error: string | null
+
+  // Group messaging
+  groups: Group[]
+  groupConversations: GroupConversationPreview[]
+  activeGroupId: string | null
+  groupMessages: Record<string, GroupMessage[]>
 
   setStudents: (students: StudentDTO[]) => void
   setStudentDetail: (d: StudentDetail | null) => void
@@ -27,6 +34,14 @@ interface CounsellorState {
   updateStudentStatus: (id: string, status: string) => void
   setLoading: (v: boolean) => void
   setError: (e: string | null) => void
+
+  // Group actions
+  setGroups: (groups: Group[]) => void
+  setGroupConversations: (convs: GroupConversationPreview[]) => void
+  setActiveGroupId: (id: string | null) => void
+  setGroupMessages: (groupId: string, messages: GroupMessage[]) => void
+  addGroupMessage: (groupId: string, msg: GroupMessage) => void
+  clearMessaging: () => void
 }
 
 export const useCounsellorStore = create<CounsellorState>((set) => ({
@@ -40,6 +55,12 @@ export const useCounsellorStore = create<CounsellorState>((set) => ({
   referralCount: 0,
   loading: false,
   error: null,
+
+  // Group messaging
+  groups: [],
+  groupConversations: [],
+  activeGroupId: null,
+  groupMessages: {},
 
   setStudents: (students) => set({ students }),
   setStudentDetail: (d) => set({ studentDetail: d }),
@@ -72,4 +93,27 @@ export const useCounsellorStore = create<CounsellorState>((set) => ({
     })),
   setLoading: (v) => set({ loading: v }),
   setError: (e) => set({ error: e }),
+
+  // Group actions
+  setGroups: (groups) => set({ groups }),
+  setGroupConversations: (convs) => set({ groupConversations: convs }),
+  setActiveGroupId: (id) => set({ activeGroupId: id }),
+  setGroupMessages: (groupId, messages) =>
+    set((s) => ({ groupMessages: { ...s.groupMessages, [groupId]: messages } })),
+  addGroupMessage: (groupId, msg) =>
+    set((s) => ({
+      groupMessages: {
+        ...s.groupMessages,
+        [groupId]: [...(s.groupMessages[groupId] || []), msg],
+      },
+    })),
+  clearMessaging: () =>
+    set({
+      activeConversation: null,
+      activeGroupId: null,
+      messages: {},
+      groupMessages: {},
+      conversations: [],
+      groupConversations: [],
+    }),
 }))

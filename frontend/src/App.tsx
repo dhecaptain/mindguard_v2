@@ -22,10 +22,12 @@ import CounsellorDashboardPage from './pages/CounsellorDashboardPage'
 import StudentManagementPage from './pages/StudentManagementPage'
 import ReferralsPage from './pages/ReferralsPage'
 import CommunicationsPage from './pages/CommunicationsPage'
+import StudentCommunicationsPage from './pages/StudentCommunicationsPage'
 import AlertQueuePage from './pages/AlertQueuePage'
 import ConsentTrackerPage from './pages/ConsentTrackerPage'
 import AuditLogPage from './pages/AuditLogPage'
 import AdminPage from './pages/AdminPage'
+import NotificationPreferencesPage from './pages/NotificationPreferencesPage'
 
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000   // 15 minutes
 const IDLE_WARNING_MS = 60 * 1000         // warn 1 minute before
@@ -69,6 +71,7 @@ function PageRouter() {
     switch (currentPage) {
       case 'admin': return <AdminPage />
       case 'audit-log': return <AuditLogPage />
+      case 'notification-preferences': return <NotificationPreferencesPage />
       default: return <AdminPage />
     }
   }
@@ -82,6 +85,7 @@ function PageRouter() {
       case 'alert-queue': return <AlertQueuePage />
       case 'consent-tracker': return <ConsentTrackerPage />
       case 'audit-log': return <AuditLogPage />
+      case 'notification-preferences': return <NotificationPreferencesPage />
       default: return <CounsellorDashboardPage />
     }
   }
@@ -99,6 +103,8 @@ function PageRouter() {
     case 'unified': return <MultiPlatformPage />
     case 'resources': return <CrisisResourcesPage />
     case 'team': return <TeamPage />
+    case 'communications': return <StudentCommunicationsPage />
+    case 'notification-preferences': return <NotificationPreferencesPage />
     default: return <DashboardPage />
   }
 }

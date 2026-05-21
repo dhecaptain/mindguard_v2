@@ -53,3 +53,91 @@ class UserResponse(BaseModel):
     role: str
     role_type: str
     referral_code: str
+
+
+# ── Group schemas ──────────────────────────────────────────────────────────────
+
+class CreateGroupRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(default="", max_length=500)
+    member_ids: list[str] = Field(default_factory=list, description="Initial members to add")
+
+
+class UpdateGroupRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class AddMemberRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    role: str = Field(default="member", pattern="^(admin|member)$")
+
+
+class GroupMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=5000)
+
+
+class GroupMemberResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    email: str
+    role: str
+    joined_at: str
+
+
+class GroupResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    avatar_url: str
+    created_by: str
+    is_active: bool
+    member_count: int
+    created_at: str
+    updated_at: str
+
+
+class GroupDetailResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    avatar_url: str
+    created_by: str
+    is_active: bool
+    members: list[GroupMemberResponse]
+    created_at: str
+    updated_at: str
+
+
+class GroupMessageResponse(BaseModel):
+    id: str
+    group_id: str
+    sender_id: str
+    sender_name: str
+    message: str
+    created_at: str
+
+
+# ── Notification preference schemas ────────────────────────────────────────────
+
+NOTIFICATION_TYPES = {
+    "message", "group_message", "alert", "referral",
+    "broadcast", "consent", "approval", "system",
+}
+
+
+class NotificationPreferenceResponse(BaseModel):
+    type: str
+    enabled: bool
+    muted_groups: list[str]
+
+
+class UpdateNotificationPreferenceRequest(BaseModel):
+    enabled: bool | None = None
+    muted_groups: list[str] | None = None
+
+
+class MuteGroupRequest(BaseModel):
+    group_id: str = Field(..., min_length=1)
+    muted: bool

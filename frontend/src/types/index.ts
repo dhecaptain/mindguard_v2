@@ -208,3 +208,88 @@ export interface TimelineEntry {
   n_posts: number
   alert?: Alert
 }
+
+
+// ─── Group Messaging ──────────────────────────────────────────────────────────
+
+export interface Group {
+  id: string
+  name: string
+  description: string
+  avatar_url: string
+  created_by: string
+  is_active: boolean
+  member_count: number
+  unread_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface GroupMember {
+  id: string
+  user_id: string
+  name: string
+  email: string
+  role: 'admin' | 'member'
+  joined_at: string
+}
+
+export interface GroupDetail extends Group {
+  members: GroupMember[]
+}
+
+export interface GroupMessage {
+  id: string
+  group_id: string
+  sender_id: string
+  sender_name: string
+  message: string
+  created_at: string
+}
+
+export interface GroupConversationPreview {
+  type: 'group'
+  group_id: string
+  name: string
+  avatar_url: string
+  member_count: number
+  last_message: string
+  last_time: string
+  last_sender: string
+  unread: number
+}
+
+export interface ConversationsResponse {
+  direct: Conversation[]
+  groups: GroupConversationPreview[]
+}
+
+// ─── Notification Preferences ─────────────────────────────────────────────────
+
+export interface NotificationPreference {
+  type: string
+  enabled: boolean
+  muted_groups: string[]
+}
+
+export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
+  message: 'Direct Messages',
+  group_message: 'Group Messages',
+  alert: 'Risk Alerts',
+  referral: 'Referrals',
+  broadcast: 'Broadcasts',
+  consent: 'Consent Updates',
+  approval: 'Account Approval',
+  system: 'System Notifications',
+}
+
+export const NOTIFICATION_TYPE_ICONS: Record<string, string> = {
+  message: 'ti ti-mail',
+  group_message: 'ti ti-messages',
+  alert: 'ti ti-alert-triangle',
+  referral: 'ti ti-link',
+  broadcast: 'ti ti-bullhorn',
+  consent: 'ti ti-file-check',
+  approval: 'ti ti-user-check',
+  system: 'ti ti-info-circle',
+}
