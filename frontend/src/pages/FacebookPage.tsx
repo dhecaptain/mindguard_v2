@@ -10,17 +10,19 @@ import type { PlatformResult } from '../types'
 
 export default function FacebookPage() {
   const [profileUrl, setProfileUrl] = useState('')
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'timeline' | 'posts' | 'socio'>('timeline')
   const { facebook, loading, setPlatformResult } = usePlatformStore()
 
   const handleAnalyze = async () => {
     if (!profileUrl.trim()) return
+    setError('')
     try {
       usePlatformStore.getState().setLoading(true)
       const result = await analyzeFacebook(profileUrl)
       setPlatformResult('facebook', result)
     } catch (err: any) {
-      alert(err.message || 'Facebook analysis failed')
+      setError(err.message || 'Facebook analysis failed')
     } finally {
       usePlatformStore.getState().setLoading(false)
     }
@@ -45,6 +47,11 @@ export default function FacebookPage() {
             placeholder="https://facebook.com/username"
             className="w-full bg-[#fafbfc] border-[1.5px] border-[#e5e7eb] rounded-[7px] px-[10px] py-[7px] text-[0.7rem] text-[#4b5563] outline-none focus:border-[#0F766E] mb-[10px]"
           />
+          {error && (
+            <div className="text-[0.65rem] text-[#dc2626] bg-[#fef2f2] rounded-[6px] px-[10px] py-[7px] mb-[8px] border border-[#fecaca]">
+              {error}
+            </div>
+          )}
           <button
             onClick={handleAnalyze}
             disabled={!profileUrl.trim() || loading}

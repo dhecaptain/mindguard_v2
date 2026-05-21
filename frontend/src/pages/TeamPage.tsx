@@ -6,7 +6,7 @@ export default function TeamPage() {
   const [members, setMembers] = useState<TeamMember[]>([])
 
   useEffect(() => {
-    getTeamMembers().then(setMembers).catch(() => {})
+    getTeamMembers().then(setMembers).catch((e) => console.error('Failed to load team members:', e))
   }, [])
 
   return (

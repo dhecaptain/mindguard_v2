@@ -8,16 +8,18 @@ import { getRiskLabel, getClassification } from '../types'
 
 export default function VideoPage() {
   const [videoUrl, setVideoUrl] = useState('')
+  const [error, setError] = useState('')
   const { video, loading, setPlatformResult } = usePlatformStore()
 
   const handleAnalyze = async () => {
     if (!videoUrl.trim()) return
+    setError('')
     try {
       usePlatformStore.getState().setLoading(true)
       const result = await analyzeVideo(videoUrl)
       setPlatformResult('video', result)
     } catch (err: any) {
-      alert(err.message || 'Video analysis failed')
+      setError(err.message || 'Video analysis failed')
     } finally {
       usePlatformStore.getState().setLoading(false)
     }
@@ -52,6 +54,11 @@ export default function VideoPage() {
             placeholder="https://youtube.com/watch?v=..."
             className="w-full bg-[#fafbfc] border-[1.5px] border-[#e5e7eb] rounded-[7px] px-[10px] py-[7px] text-[0.7rem] text-[#4b5563] outline-none focus:border-[#0F766E] mb-[10px]"
           />
+          {error && (
+            <div className="text-[0.65rem] text-[#dc2626] bg-[#fef2f2] rounded-[6px] px-[10px] py-[7px] mb-[8px] border border-[#fecaca]">
+              {error}
+            </div>
+          )}
           <button
             onClick={handleAnalyze}
             disabled={!videoUrl.trim() || loading}

@@ -35,8 +35,8 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
       return {
         analytics: {
           total_analyses: state.analytics.total_analyses + 1,
-          positive_count: state.analytics.positive_count + (prob >= 0.5 ? 0 : 1),
-          negative_count: state.analytics.negative_count + (prob >= 0.5 ? 1 : 0),
+          positive_count: state.analytics.positive_count + (prob >= 0.5 ? 1 : 0),
+          negative_count: state.analytics.negative_count + (prob >= 0.5 ? 0 : 1),
           history,
         },
       }

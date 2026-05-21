@@ -11,17 +11,19 @@ import type { PlatformResult } from '../types'
 export default function RedditPage() {
   const [username, setUsername] = useState('')
   const [minRisk, setMinRisk] = useState(0)
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'timeline' | 'posts' | 'socio'>('timeline')
   const { reddit, loading, setPlatformResult } = usePlatformStore()
 
   const handleAnalyze = async () => {
     if (!username.trim()) return
+    setError('')
     try {
       usePlatformStore.getState().setLoading(true)
       const result = await analyzeReddit(username, minRisk, 20)
       setPlatformResult('reddit', result)
     } catch (err: any) {
-      alert(err.message || 'Reddit analysis failed')
+      setError(err.message || 'Reddit analysis failed')
     } finally {
       usePlatformStore.getState().setLoading(false)
     }
@@ -61,6 +63,11 @@ export default function RedditPage() {
             />
             <span className="text-[0.78rem] text-[#6b7280] font-semibold min-w-[36px]">{(minRisk * 100).toFixed(0)}%</span>
           </div>
+          {error && (
+            <div className="text-[0.72rem] text-[#dc2626] bg-[#fef2f2] rounded-[6px] px-[10px] py-[7px] mb-[8px] border border-[#fecaca]">
+              {error}
+            </div>
+          )}
           <button
             onClick={handleAnalyze}
             disabled={!username.trim() || loading}

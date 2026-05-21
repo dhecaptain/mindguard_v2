@@ -12,6 +12,7 @@ export default function FileUploadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [minRisk, setMinRisk] = useState(0)
   const [fileName, setFileName] = useState('')
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'timeline' | 'posts' | 'socio'>('timeline')
   const { file, loading, setPlatformResult } = usePlatformStore()
 
@@ -24,12 +25,13 @@ export default function FileUploadPage() {
   }
 
   const handleAnalyze = async (file: File) => {
+    setError('')
     try {
       usePlatformStore.getState().setLoading(true)
       const result = await analyzeFile(file, minRisk, 20)
       setPlatformResult('file', result)
     } catch (err: any) {
-      alert(err.message || 'File analysis failed')
+      setError(err.message || 'File analysis failed')
     } finally {
       usePlatformStore.getState().setLoading(false)
     }
@@ -59,6 +61,11 @@ export default function FileUploadPage() {
               <p className="text-[0.65rem] text-[#0F766E] mt-[6px] font-medium">{fileName}</p>
             )}
           </div>
+          {error && (
+            <div className="text-[0.65rem] text-[#dc2626] bg-[#fef2f2] rounded-[6px] px-[10px] py-[7px] mb-[8px] border border-[#fecaca]">
+              {error}
+            </div>
+          )}
           <div className="text-[0.62rem] font-bold text-[#374151] uppercase tracking-[0.06em] mb-[4px]">Min risk score</div>
           <div className="flex items-center gap-[8px]">
             <input

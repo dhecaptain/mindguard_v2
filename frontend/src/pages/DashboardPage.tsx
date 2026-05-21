@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useAnalysisStore, usePlatformStore } from '../store'
 import { analyzeText, analyzeImage } from '../api/analysis'
 import InputPanel from '../components/dashboard/InputPanel'
@@ -7,7 +8,8 @@ import type { AnalysisResult } from '../types'
 import { getRiskLabel, getClassification } from '../types'
 
 export default function DashboardPage() {
-  const { analytics, setLastResult, updateAnalytics } = useAnalysisStore()
+  const [error, setError] = useState('')
+  const { analytics, lastResult, setLastResult, updateAnalytics } = useAnalysisStore()
   const { setLoading } = usePlatformStore()
 
   const handleAnalyze = async (text: string) => {
@@ -25,7 +27,7 @@ export default function DashboardPage() {
       setLastResult(result)
       updateAnalytics(res.prob, text)
     } catch (err: any) {
-      alert(err.message || 'Analysis failed')
+      setError(err.message || 'Analysis failed')
     } finally {
       setLoading(false)
     }
@@ -46,16 +48,19 @@ export default function DashboardPage() {
       setLastResult(result)
       updateAnalytics(res.prob, '[Image OCR]')
     } catch (err: any) {
-      alert(err.message || 'Image analysis failed')
+      setError(err.message || 'Image analysis failed')
     } finally {
       setLoading(false)
     }
   }
 
-  const lastResult = useAnalysisStore.getState().lastResult
-
   return (
     <>
+      {error && (
+        <div className="text-[0.72rem] text-[#dc2626] bg-[#fef2f2] rounded-[8px] px-[14px] py-[9px] mb-[12px] border border-[#fecaca]">
+          {error}
+        </div>
+      )}
       {/* 3-column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_1fr] gap-[16px]">
         <InputPanel onAnalyze={handleAnalyze} onImageUpload={handleImageUpload} />

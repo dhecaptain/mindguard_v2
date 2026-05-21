@@ -337,11 +337,21 @@ _platform_results: dict[str, dict] = defaultdict(dict)
 
 @app.post("/api/platforms/reddit")
 async def analyze_reddit(req: PlatformRequest, user: dict = Depends(require_auth)):
+    client_id = os.getenv("REDDIT_CLIENT_ID", "")
+    client_secret = os.getenv("REDDIT_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        raise HTTPException(400,
+            "Reddit API not configured. Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET environment variables.")
+
+    if not req.username.strip():
+        raise HTTPException(400, "Reddit username is required.")
+
     try:
         import praw
+        import prawcore
         reddit = praw.Reddit(
-            client_id=os.getenv("REDDIT_CLIENT_ID", ""),
-            client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
+            client_id=client_id,
+            client_secret=client_secret,
             user_agent="MindGuard/1.0",
         )
         redditor = reddit.redditor(req.username)
@@ -377,12 +387,19 @@ async def analyze_reddit(req: PlatformRequest, user: dict = Depends(require_auth
         return result
 
     except ImportError:
-        raise HTTPException(501, "PRAW not installed")
+        raise HTTPException(501, "PRAW not installed. Install with: pip install praw")
+    except prawcore.exceptions.NotFound:
+        raise HTTPException(404, f"Reddit user '{req.username}' not found.")
+    except prawcore.exceptions.Forbidden:
+        raise HTTPException(403, f"Access forbidden for Reddit user '{req.username}'.")
+    except prawcore.exceptions.ResponseException as e:
+        logger.error("Reddit API error: %s", e)
+        raise HTTPException(502, f"Reddit API responded with an error: {e}")
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Reddit analysis error: %s", e)
-        raise HTTPException(400, "Reddit analysis failed")
+        raise HTTPException(400, f"Reddit analysis failed: {e}")
 
 
 @app.post("/api/platforms/bluesky")

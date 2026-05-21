@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { getResources, getStateResources } from '../api/resources'
 import type { CrisisResource } from '../types'
 
-const CONTRIES = ['Kenya', 'UK', 'Australia', 'Canada', 'International']
+const COUNTRIES = ['Kenya', 'UK', 'Australia', 'Canada', 'International']
 
 export default function CrisisResourcesPage() {
   const [resources, setResources] = useState<Record<string, CrisisResource[]>>({})
@@ -11,8 +11,8 @@ export default function CrisisResourcesPage() {
   const [selectedState, setSelectedState] = useState('')
 
   useEffect(() => {
-    getResources().then(setResources).catch(() => {})
-    getStateResources().then(setStateResources).catch(() => {})
+    getResources().then(setResources).catch((e) => console.error('Failed to load resources:', e))
+    getStateResources().then(setStateResources).catch((e) => console.error('Failed to load state resources:', e))
   }, [])
 
   const isUsa = selectedCountry === 'USA — Select a State'
@@ -36,7 +36,7 @@ export default function CrisisResourcesPage() {
             onChange={(e) => { setSelectedCountry(e.target.value); setSelectedState('') }}
             className="w-full bg-[#fafbfc] border-[1.5px] border-[#e5e7eb] rounded-[7px] px-[10px] py-[7px] text-[0.7rem] text-[#4b5563] outline-none focus:border-[#0F766E] mb-[10px]"
           >
-            {[...CONTRIES, 'USA — Select a State'].map((c) => (
+            {[...COUNTRIES, 'USA — Select a State'].map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>

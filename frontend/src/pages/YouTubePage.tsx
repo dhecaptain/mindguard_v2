@@ -12,17 +12,19 @@ export default function YouTubePage() {
   const [channelUrl, setChannelUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [minRisk, setMinRisk] = useState(0)
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'timeline' | 'posts' | 'socio'>('timeline')
   const { youtube, loading, setPlatformResult } = usePlatformStore()
 
   const handleAnalyze = async () => {
     if (!channelUrl.trim() || !apiKey.trim()) return
+    setError('')
     try {
       usePlatformStore.getState().setLoading(true)
       const result = await analyzeYouTube(channelUrl, apiKey, minRisk, 20)
       setPlatformResult('youtube', result)
     } catch (err: any) {
-      alert(err.message || 'YouTube analysis failed')
+      setError(err.message || 'YouTube analysis failed')
     } finally {
       usePlatformStore.getState().setLoading(false)
     }
@@ -67,6 +69,11 @@ export default function YouTubePage() {
             />
             <span className="text-[0.68rem] text-[#6b7280] font-semibold min-w-[32px]">{(minRisk * 100).toFixed(0)}%</span>
           </div>
+          {error && (
+            <div className="text-[0.65rem] text-[#dc2626] bg-[#fef2f2] rounded-[6px] px-[10px] py-[7px] mb-[8px] border border-[#fecaca]">
+              {error}
+            </div>
+          )}
           <button
             onClick={handleAnalyze}
             disabled={!channelUrl.trim() || !apiKey.trim() || loading}
