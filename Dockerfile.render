@@ -7,19 +7,7 @@ RUN npm ci
 COPY frontend/ .
 RUN npm run build
 
-# ─── Stage 2: Download model weights ───────────────────────────────────────────
-FROM python:3.11-slim AS model-builder
-
-WORKDIR /build
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt huggingface_hub
-
-ARG HF_TOKEN
-ENV HF_TOKEN=$HF_TOKEN
-COPY backend/scripts/download_model.py /build/download_model.py
-RUN python /build/download_model.py
-
-# ─── Stage 3: Runtime ──────────────────────────────────────────────────────────
+# ─── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -32,18 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Frontend build
 COPY --from=frontend /app/dist /app/frontend
 
-# Model weights (download_model.py always creates these paths, even without HF_TOKEN)
-RUN mkdir -p /app/mindguard_model_local /app/mindguard_tokenizer
-COPY --from=model-builder /build/weights /app/mindguard_model_local
-COPY --from=model-builder /build/tokenizer_config.json /app/mindguard_tokenizer/
-COPY --from=model-builder /build/vocab.json /app/mindguard_tokenizer/
-COPY --from=model-builder /build/merges.txt /app/mindguard_tokenizer/
-
 # Backend
 COPY backend/requirements.txt /app/
-# Install CPU-only torch first (avoids pulling the much larger CUDA build)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir gunicorn transformers huggingface_hub -r requirements.txt
+RUN pip install --no-cache-dir gunicorn -r requirements.txt
 COPY backend/ /app/backend/
 
 ENV FRONTEND_DIR=/app/frontend
@@ -51,13 +30,13 @@ ENV PYTHONPATH=/app
 
 EXPOSE 10000
 
-HEALTHCHECK --interval=60s --timeout=10s --start-period=90s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:10000/api/health', timeout=5).raise_for_status()"
 
 CMD ["gunicorn", "backend.main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--workers", "1", \
      "--bind", "0.0.0.0:10000", \
-     "--timeout", "300", \
+     "--timeout", "120", \
      "--keep-alive", "5", \
      "--log-level", "info"]
