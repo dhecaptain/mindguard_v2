@@ -82,7 +82,7 @@ function RiskLineChart({ entries }: { entries: TimelineEntry[] }) {
           const step = Math.ceil(entries.length / 6)
           return i % step === 0 || i === entries.length - 1
         })
-        .map((e, _idx, arr) => {
+        .map((e, _idx) => {
           const origIdx = entries.indexOf(e)
           return (
             <text

@@ -69,8 +69,6 @@ export default function Sidebar() {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const isCollapsed = isDesktop && sidebarCollapsed
 
-  const unreadByTypeMap = unreadByType()
-
   const navItems = isAdmin
     ? ADMIN_NAV_ITEMS
     : isCounsellor

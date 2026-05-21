@@ -32,11 +32,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Frontend build
 COPY --from=frontend /app/dist /app/frontend
 
-# Model weights
-COPY --from=model-builder /build/weights /app/mindguard_model_local 2>/dev/null || true
-COPY --from=model-builder /build/tokenizer_config.json /app/mindguard_tokenizer/ 2>/dev/null || true
-COPY --from=model-builder /build/vocab.json /app/mindguard_tokenizer/ 2>/dev/null || true
-COPY --from=model-builder /build/merges.txt /app/mindguard_tokenizer/ 2>/dev/null || true
+# Model weights (download_model.py always creates these paths, even without HF_TOKEN)
+RUN mkdir -p /app/mindguard_model_local /app/mindguard_tokenizer
+COPY --from=model-builder /build/weights /app/mindguard_model_local
+COPY --from=model-builder /build/tokenizer_config.json /app/mindguard_tokenizer/
+COPY --from=model-builder /build/vocab.json /app/mindguard_tokenizer/
+COPY --from=model-builder /build/merges.txt /app/mindguard_tokenizer/
 
 # Backend
 COPY backend/requirements.txt /app/

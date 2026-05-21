@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useAuthStore, useCounsellorStore, useNotificationStore } from '../store'
+import { useAuthStore, useNotificationStore } from '../store'
 import {
   getMyConversations, sendDirectMessage, getDirectConversation,
   getGroupMessages, sendGroupMessage, markGroupRead,
@@ -30,7 +30,6 @@ export default function StudentCommunicationsPage() {
   const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [showNewMessage, setShowNewMessage] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 

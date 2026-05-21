@@ -1,15 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useAuthStore, useCounsellorStore, useNotificationStore } from '../store'
 import {
-  getConversations, getConversation, sendMessage,
   getMyConversations, sendDirectMessage, getDirectConversation,
-  getGroups, getGroupMessages, sendGroupMessage, markGroupRead,
+  getGroupMessages, sendGroupMessage, markGroupRead,
   getGroup, addGroupMembers, removeGroupMember,
 } from '../api/counsellor'
 import GroupCreateDialog from '../components/counsellor/GroupCreateDialog'
 import GroupMemberList from '../components/counsellor/GroupMemberList'
 import NewMessageDialog from '../components/shared/NewMessageDialog'
-import type { GroupMessage, GroupConversationPreview, GroupDetail } from '../types'
+import type { GroupDetail } from '../types'
 
 function formatTime(d: string) {
   if (!d) return ''
@@ -155,9 +154,6 @@ export default function CommunicationsPage() {
     setShowNewMessage(false)
     handleSelectConversation(selectedUser.id)
   }
-
-  const totalUnread = conversations.reduce((a, c) => a + c.unread, 0) +
-    groupConversations.reduce((a, g) => a + g.unread, 0)
 
   return (
     <div className="flex flex-col gap-[16px] h-[calc(100vh-130px)]">

@@ -8,7 +8,7 @@ export default function GaugeChart({ prob }: GaugeChartProps) {
   const displayPct = intensity * 100
   const color = isRisk ? '#dc2626' : '#0F6E56'
 
-  const cx = 80, cy = 84, startX = 12, endX = 148
+  const startX = 12, endX = 148
   const radius = (endX - startX) / 2
   const circumference = Math.PI * radius
 

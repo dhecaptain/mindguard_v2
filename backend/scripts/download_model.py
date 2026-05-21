@@ -9,6 +9,9 @@ import shutil
 TOKEN = os.environ.get("HF_TOKEN", "")
 if not TOKEN:
     print("No HF_TOKEN set — skipping model download (base model will be used)")
+    os.makedirs("./weights", exist_ok=True)
+    for fname in ["tokenizer_config.json", "vocab.json", "merges.txt"]:
+        open(f"./{fname}", "a").close()
     raise SystemExit(0)
 
 import huggingface_hub as hf

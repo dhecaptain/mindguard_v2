@@ -294,7 +294,6 @@ export default function AlertQueuePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Alert | null>(null)
-  const refreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = async (status: 'OPEN' | 'CLOSED') => {
     setLoading(true)

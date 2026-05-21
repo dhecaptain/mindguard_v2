@@ -2,7 +2,7 @@ import api from './client'
 import type {
   Consent, LinkedAccount, Alert, AlertDisposition,
   AuditEvent, Note, TimelineEntry,
-  Group, GroupDetail, GroupMessage, GroupMember,
+  Group, GroupDetail, GroupMessage,
   ConversationsResponse, NotificationPreference,
 } from '../types'
 
