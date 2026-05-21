@@ -1,10 +1,23 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+let _client: SupabaseClient | null = null
+let _available = false
 
-export const supabaseAvailable = !!(supabaseUrl && supabaseAnonKey)
+export async function initSupabase(): Promise<void> {
+  try {
+    const res = await fetch('/api/config')
+    const { supabase_url, supabase_anon_key } = await res.json()
+    if (supabase_url && supabase_anon_key) {
+      _client = createClient(supabase_url, supabase_anon_key)
+      _available = true
+    }
+  } catch {}
+}
 
-export const supabase = supabaseAvailable
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : (null as unknown as ReturnType<typeof createClient>)
+export function getSupabase(): SupabaseClient {
+  return _client as SupabaseClient
+}
+
+export function isSupabaseAvailable(): boolean {
+  return _available
+}

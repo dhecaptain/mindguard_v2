@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore, useUiStore } from './store'
 import { getMe, logout as apiLogout } from './api/auth'
+import { initSupabase } from './lib/supabase'
 import { useIdleTimeout } from './hooks/useIdleTimeout'
 import SignInPage from './components/auth/SignInPage'
 import TermsPage from './components/auth/TermsPage'
@@ -162,6 +163,7 @@ export default function App() {
   const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
+    initSupabase()
     const token = localStorage.getItem('mg_token')
     if (token) {
       getMe()

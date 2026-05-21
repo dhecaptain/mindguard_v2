@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '../../store'
 import { useUiStore } from '../../store'
 import { login, register } from '../../api/auth'
-import { supabase, supabaseAvailable } from '../../lib/supabase'
+import { getSupabase, isSupabaseAvailable } from '../../lib/supabase'
 
 interface SignInPageProps {
   onSuccess: () => void
@@ -205,9 +205,9 @@ export default function SignInPage({ onSuccess }: SignInPageProps) {
                 </div>
               </div>
 
-              {supabaseAvailable && (
+              {isSupabaseAvailable() && (
                 <button
-                  onClick={() => supabase.auth.signInWithOAuth({
+                  onClick={() => getSupabase().auth.signInWithOAuth({
                     provider: 'google',
                     options: { redirectTo: `${window.location.origin}/auth/callback` },
                   })}

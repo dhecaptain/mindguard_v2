@@ -1878,6 +1878,14 @@ async def update_notification_preference(
     return pref
 
 
+@app.get("/api/config")
+async def get_frontend_config():
+    return {
+        "supabase_url": SUPABASE_URL or "",
+        "supabase_anon_key": SUPABASE_ANON_KEY or "",
+    }
+
+
 _frontend_dir = os.getenv("FRONTEND_DIR", "")
 if _frontend_dir and Path(_frontend_dir).is_dir():
     app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")

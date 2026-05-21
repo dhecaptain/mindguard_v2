@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { getSupabase } from '../lib/supabase'
 import { useAuthStore } from '../store'
 import { googleLogin } from '../api/auth'
 
@@ -11,7 +11,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        const { data: { session }, error: sessionError } = await getSupabase().auth.getSession()
         if (sessionError) throw sessionError
         if (!session) throw new Error('No session found')
 
