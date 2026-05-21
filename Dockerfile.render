@@ -1,0 +1,73 @@
+# ─── Stage 1: Build frontend ───────────────────────────────────────────────────
+FROM node:20-alpine AS frontend
+
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
+
+# ─── Stage 2: Download model weights ───────────────────────────────────────────
+FROM python:3.11-slim AS model-builder
+
+WORKDIR /build
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt huggingface_hub
+
+ARG HF_TOKEN
+RUN --mount=type=secret,id=HF_TOKEN \
+    TOKEN=${HF_TOKEN:-$(cat /run/secrets/HF_TOKEN 2>/dev/null || echo "")} && \
+    if [ -n "$TOKEN" ]; then \
+      python -c "
+from huggingface_hub import snapshot_download, hf_hub_download
+repo = 'kopiyodiana/mindguard-mental-roberta'
+snapshot_download(repo_id=repo, allow_patterns='mindguard_tokenizer/*',
+                  token='$TOKEN', local_dir='./download')
+import shutil, os
+for f in os.listdir('./download/mindguard_tokenizer'):
+    shutil.move(os.path.join('./download/mindguard_tokenizer', f), './')
+shutil.rmtree('./download/mindguard_tokenizer')
+hf_hub_download(repo_id=repo, filename='mindguard_best_weights.pt',
+                token='$TOKEN', local_dir='./weights')
+"; \
+    fi
+
+# ─── Stage 3: Runtime ──────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Frontend build
+COPY --from=frontend /app/dist /app/frontend
+
+# Model weights
+COPY --from=model-builder /build/weights /app/mindguard_model_local 2>/dev/null || true
+COPY --from=model-builder /build/tokenizer_config.json /app/mindguard_tokenizer/ 2>/dev/null || true
+COPY --from=model-builder /build/vocab.json /app/mindguard_tokenizer/ 2>/dev/null || true
+COPY --from=model-builder /build/merges.txt /app/mindguard_tokenizer/ 2>/dev/null || true
+
+# Backend
+COPY backend/requirements.txt /app/
+RUN pip install --no-cache-dir gunicorn -r requirements.txt
+COPY backend/ /app/backend/
+
+ENV FRONTEND_DIR=/app/frontend
+ENV PYTHONPATH=/app
+
+EXPOSE 10000
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=90s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:10000/api/health', timeout=5).raise_for_status()"
+
+CMD ["gunicorn", "backend.main:app", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--workers", "1", \
+     "--bind", "0.0.0.0:10000", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--log-level", "info"]

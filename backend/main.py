@@ -13,8 +13,11 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 import numpy as np
+from pathlib import Path
+
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.config import SUPABASE_URL, SUPABASE_ANON_KEY
 from backend.models.schemas import (
@@ -1874,6 +1877,11 @@ async def update_notification_preference(
     )
     return pref
 
+
+_frontend_dir = os.getenv("FRONTEND_DIR", "")
+if _frontend_dir and Path(_frontend_dir).is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+    logger.info("Serving frontend from %s", _frontend_dir)
 
 if __name__ == "__main__":
     import uvicorn
