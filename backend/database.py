@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import secrets
 import sqlite3
 import string
@@ -9,7 +10,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = Path(__file__).resolve().parent.parent / "mindguard.db"
+DB_PATH = Path(os.getenv("MINDGUARD_DB_DIR", str(Path(__file__).resolve().parent.parent))) / "mindguard.db"
 
 
 def get_db() -> sqlite3.Connection:

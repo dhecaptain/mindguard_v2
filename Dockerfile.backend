@@ -1,0 +1,60 @@
+# ─── Stage 1: Download model weights ───────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt huggingface_hub
+
+ARG HF_TOKEN
+ARG HUGGINGFACE_TOKEN
+RUN --mount=type=secret,id=HF_TOKEN \
+    TOKEN=${HF_TOKEN:-$(cat /run/secrets/HF_TOKEN 2>/dev/null || echo "")} && \
+    if [ -n "$TOKEN" ]; then \
+      python -c "
+from huggingface_hub import snapshot_download, hf_hub_download
+repo = 'kopiyodiana/mindguard-mental-roberta'
+snapshot_download(repo_id=repo, allow_patterns='mindguard_tokenizer/*',
+                  token='$TOKEN', local_dir='./download')
+import shutil, os
+for f in os.listdir('./download/mindguard_tokenizer'):
+    shutil.move(os.path.join('./download/mindguard_tokenizer', f), './')
+shutil.rmtree('./download/mindguard_tokenizer')
+hf_hub_download(repo_id=repo, filename='mindguard_best_weights.pt',
+                token='$TOKEN', local_dir='./weights')
+"; \
+    fi
+
+# ─── Stage 2: Runtime ──────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/weights /app/mindguard_model_local
+COPY --from=builder /build/tokenizer_config.json /app/mindguard_tokenizer/ 2>/dev/null || true
+COPY --from=builder /build/vocab.json /app/mindguard_tokenizer/ 2>/dev/null || true
+COPY --from=builder /build/merges.txt /app/mindguard_tokenizer/ 2>/dev/null || true
+COPY --from=builder /build/special_tokens_map.json /app/mindguard_tokenizer/ 2>/dev/null || true
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir gunicorn -r requirements.txt
+
+COPY backend/ /app/backend/
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/api/health', timeout=5).raise_for_status()"
+
+CMD ["gunicorn", "backend.main:app", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--workers", "2", \
+     "--bind", "0.0.0.0:8000", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--log-level", "info"]

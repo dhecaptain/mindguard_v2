@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MindGuard API", version="2.0.0")
 
+
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -78,6 +79,12 @@ app.add_middleware(
 def startup():
     init_db()
     seed_defaults()
+    logger.info("Database initialized and seeded")
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "version": "2.0.0"}
 
 
 # ── Rate limiting ─────────────────────────────────────────────────────

@@ -1,0 +1,16 @@
+.git
+.gitignore
+.gitattributes
+.env
+*.md
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+legacy/
+Try_*
+dist/
+.mindguard.db*
+*.db
+*.db-wal
+*.db-shm
