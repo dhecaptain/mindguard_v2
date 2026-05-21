@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 _TIMEOUT = 60.0
 _MODEL_ID = HF_REPO_ID if HF_TOKEN else BASE_MODEL
-_API_URL = f"https://api-inference.huggingface.co/models/{_MODEL_ID}"
+# HF moved Serverless Inference to router.huggingface.co (api-inference.huggingface.co
+# has DNS resolution issues on some hosts including Render's free tier).
+_API_URL = f"https://router.huggingface.co/hf-inference/models/{_MODEL_ID}"
 _HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
 
 
