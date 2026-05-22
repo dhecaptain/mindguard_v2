@@ -484,39 +484,42 @@ async def analyze_mastodon(req: PlatformRequest, user: dict = Depends(require_au
         raise HTTPException(400, "Handle required")
     _validate_external_host(req.instance)
     try:
-        import httpx
-
-        r = httpx.get(f"https://{req.instance}/api/v1/accounts/lookup",
-                       params={"acct": req.handle}, timeout=10.0)
-        r.raise_for_status()
-        acct = r.json()
-
-        raw_posts = []
-        max_id = None
-        for _ in range(4):
-            params = {"limit": 40, "exclude_replies": False}
-            if max_id:
-                params["max_id"] = max_id
-            r = httpx.get(f"https://{req.instance}/api/v1/accounts/{acct['id']}/statuses",
-                          params=params, timeout=10.0)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                f"https://{req.instance}/api/v1/accounts/lookup",
+                params={"acct": req.handle},
+            )
             r.raise_for_status()
-            statuses = r.json()
-            if not statuses:
-                break
+            acct = r.json()
 
-            for s in statuses:
-                try:
-                    created = datetime.fromisoformat(s["created_at"].replace("Z", "+00:00"))
-                except (ValueError, KeyError):
-                    created = datetime.now(timezone.utc)
-                if (datetime.now(timezone.utc) - created).days > 90:
-                    continue
-                raw_posts.append({
-                    "text": re.sub(r"<[^>]+>", "", s.get("content", "")),
-                    "date": s.get("created_at", ""),
-                    "url": s.get("url", ""),
-                })
-            max_id = statuses[-1]["id"]
+            raw_posts = []
+            max_id = None
+            for _ in range(4):
+                params: dict = {"limit": 40, "exclude_replies": False}
+                if max_id:
+                    params["max_id"] = max_id
+                r = await client.get(
+                    f"https://{req.instance}/api/v1/accounts/{acct['id']}/statuses",
+                    params=params,
+                )
+                r.raise_for_status()
+                statuses = r.json()
+                if not statuses:
+                    break
+
+                for s in statuses:
+                    try:
+                        created = datetime.fromisoformat(s["created_at"].replace("Z", "+00:00"))
+                    except (ValueError, KeyError):
+                        created = datetime.now(timezone.utc)
+                    if (datetime.now(timezone.utc) - created).days > 90:
+                        continue
+                    raw_posts.append({
+                        "text": re.sub(r"<[^>]+>", "", s.get("content", "")),
+                        "date": s.get("created_at", ""),
+                        "url": s.get("url", ""),
+                    })
+                max_id = statuses[-1]["id"]
 
         texts = [clean_text(p["text"]) for p in raw_posts]
         scores = await predict_batch(texts)
@@ -542,60 +545,62 @@ async def analyze_youtube(req: PlatformRequest, user: dict = Depends(require_aut
     if not req.channel_url or not req.api_key:
         raise HTTPException(400, "Channel URL and API key required")
     try:
-        import httpx
-        from urllib.parse import urlparse
-
         api_key = req.api_key
         channel_id = None
 
-        if "/channel/" in req.channel_url:
-            channel_id = req.channel_url.split("/channel/")[1].split("/")[0]
-        elif "/@" in req.channel_url:
-            handle = req.channel_url.split("/@")[1].split("/")[0]
-            r = httpx.get("https://www.googleapis.com/youtube/v3/search",
-                          params={"part": "snippet", "q": handle, "type": "channel", "key": api_key},
-                          timeout=10.0)
-            r.raise_for_status()
-            items = r.json().get("items", [])
-            if items:
-                channel_id = items[0]["snippet"]["channelId"]
-        elif "youtube.com" in req.channel_url:
-            r = httpx.get("https://www.googleapis.com/youtube/v3/search",
-                          params={"part": "snippet", "q": req.channel_url, "type": "channel", "key": api_key},
-                          timeout=10.0)
-            r.raise_for_status()
-            items = r.json().get("items", [])
-            if items:
-                channel_id = items[0]["snippet"]["channelId"]
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if "/channel/" in req.channel_url:
+                channel_id = req.channel_url.split("/channel/")[1].split("/")[0]
+            elif "/@" in req.channel_url:
+                handle = req.channel_url.split("/@")[1].split("/")[0]
+                r = await client.get(
+                    "https://www.googleapis.com/youtube/v3/search",
+                    params={"part": "snippet", "q": handle, "type": "channel", "key": api_key},
+                )
+                r.raise_for_status()
+                items = r.json().get("items", [])
+                if items:
+                    channel_id = items[0]["snippet"]["channelId"]
+            elif "youtube.com" in req.channel_url:
+                r = await client.get(
+                    "https://www.googleapis.com/youtube/v3/search",
+                    params={"part": "snippet", "q": req.channel_url, "type": "channel", "key": api_key},
+                )
+                r.raise_for_status()
+                items = r.json().get("items", [])
+                if items:
+                    channel_id = items[0]["snippet"]["channelId"]
 
-        if not channel_id:
-            raise HTTPException(400, "Could not resolve channel ID")
+            if not channel_id:
+                raise HTTPException(400, "Could not resolve channel ID")
 
-        raw_posts = []
-        next_token = None
-        for _ in range(3):
-            params = {
-                "part": "snippet", "channelId": channel_id,
-                "order": "date", "maxResults": 50, "key": api_key,
-            }
-            if next_token:
-                params["pageToken"] = next_token
-            r = httpx.get("https://www.googleapis.com/youtube/v3/search", params=params, timeout=10.0)
-            r.raise_for_status()
-            data = r.json()
-            for item in data.get("items", []):
-                vid_id = item["id"].get("videoId")
-                title = item["snippet"]["title"]
-                desc = item["snippet"]["description"]
-                published = item["snippet"]["publishedAt"]
-                raw_posts.append({
-                    "text": f"{title} {desc}",
-                    "date": published,
-                    "url": f"https://youtube.com/watch?v={vid_id}" if vid_id else "",
-                })
-            next_token = data.get("nextPageToken")
-            if not next_token:
-                break
+            raw_posts = []
+            next_token = None
+            for _ in range(3):
+                params: dict = {
+                    "part": "snippet", "channelId": channel_id,
+                    "order": "date", "maxResults": 50, "key": api_key,
+                }
+                if next_token:
+                    params["pageToken"] = next_token
+                r = await client.get(
+                    "https://www.googleapis.com/youtube/v3/search", params=params
+                )
+                r.raise_for_status()
+                data = r.json()
+                for item in data.get("items", []):
+                    vid_id = item["id"].get("videoId")
+                    title = item["snippet"]["title"]
+                    desc = item["snippet"]["description"]
+                    published = item["snippet"]["publishedAt"]
+                    raw_posts.append({
+                        "text": f"{title} {desc}",
+                        "date": published,
+                        "url": f"https://youtube.com/watch?v={vid_id}" if vid_id else "",
+                    })
+                next_token = data.get("nextPageToken")
+                if not next_token:
+                    break
 
         texts = [clean_text(p["text"]) for p in raw_posts]
         scores = await predict_batch(texts)
@@ -621,50 +626,50 @@ async def analyze_video(req: PlatformRequest, user: dict = Depends(require_auth)
         raise HTTPException(400, "Video URL required")
     try:
         import yt_dlp
+        from faster_whisper import WhisperModel
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            audio_path = os.path.join(tmpdir, "audio.mp3")
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
-                "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
-                "quiet": True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([req.video_url])
+        def _download_and_transcribe(video_url: str) -> tuple[str, str]:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ydl_opts = {
+                    "format": "bestaudio/best",
+                    "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
+                    "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}],
+                    "quiet": True,
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([video_url])
 
-            audio_file = None
-            for f in os.listdir(tmpdir):
-                if f.endswith(".mp3"):
-                    audio_file = os.path.join(tmpdir, f)
-                    break
+                audio_file = next(
+                    (os.path.join(tmpdir, f) for f in os.listdir(tmpdir) if f.endswith(".mp3")),
+                    None,
+                )
+                if not audio_file:
+                    raise RuntimeError("Could not download audio")
 
-            if not audio_file:
-                raise HTTPException(400, "Could not download audio")
+                trimmed = os.path.join(tmpdir, "trimmed.mp3")
+                proc = subprocess.run(
+                    ["ffmpeg", "-i", audio_file, "-t", "300", "-y", trimmed],
+                    capture_output=True, timeout=120,
+                )
+                if proc.returncode != 0 and not os.path.exists(trimmed):
+                    raise RuntimeError("Audio trimming failed")
 
-            trimmed = os.path.join(tmpdir, "trimmed.mp3")
-            proc = subprocess.run(
-                ["ffmpeg", "-i", audio_file, "-t", "300", trimmed],
-                capture_output=True, timeout=120,
-            )
-            if proc.returncode != 0 and not os.path.exists(trimmed):
-                raise HTTPException(500, "Audio trimming failed")
+                target = trimmed if os.path.exists(trimmed) else audio_file
+                whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
+                segments, _ = whisper.transcribe(target)
+                return " ".join(seg.text for seg in segments), target
 
-            from faster_whisper import WhisperModel
-            whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
-            segments, _ = whisper.transcribe(trimmed)
-            transcript = " ".join(seg.text for seg in segments)
-
-            prob, ms = await predict_one(clean_text(transcript))
-            label, color, level = risk_label(prob)
-            result = {
-                "ok": True,
-                "risk": prob,
-                "transcription": transcript,
-                "label": label,
-            }
-            _platform_results[user["id"]]["video"] = result
-            return result
+        transcript, _ = await asyncio.to_thread(_download_and_transcribe, req.video_url)
+        prob, ms = await predict_one(clean_text(transcript))
+        label, color, level = risk_label(prob)
+        result = {
+            "ok": True,
+            "risk": prob,
+            "transcription": transcript,
+            "label": label,
+        }
+        _platform_results[user["id"]]["video"] = result
+        return result
 
     except HTTPException:
         raise
@@ -672,6 +677,8 @@ async def analyze_video(req: PlatformRequest, user: dict = Depends(require_auth)
         raise HTTPException(501, "Video processing dependencies not installed")
     except subprocess.TimeoutExpired:
         raise HTTPException(408, "Video processing timed out")
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
     except Exception as e:
         logger.error("Video analysis error: %s", e)
         raise HTTPException(400, "Video analysis failed")
