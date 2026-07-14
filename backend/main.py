@@ -75,6 +75,16 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="MindGuard API", version="2.0.0")
 
 
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except Exception as exc:
+            if getattr(exc, "status_code", None) == 404:
+                return await super().get_response("index.html", scope)
+            raise
+
+
 def _require_analysis_staff(user: dict) -> None:
     role = str(user.get("role_type") or user.get("role") or "").lower()
     if role not in {"admin", "counsellor", "counselor"}:
@@ -2408,7 +2418,7 @@ async def get_frontend_config():
 
 _frontend_dir = os.getenv("FRONTEND_DIR", "")
 if _frontend_dir and Path(_frontend_dir).is_dir():
-    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+    app.mount("/", SPAStaticFiles(directory=_frontend_dir, html=True), name="frontend")
     logger.info("Serving frontend from %s", _frontend_dir)
 
 if __name__ == "__main__":

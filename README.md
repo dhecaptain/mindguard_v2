@@ -1,3 +1,12 @@
+---
+title: MindGuard
+emoji: 🧠
+colorFrom: teal
+colorTo: green
+sdk: docker
+app_port: 7860
+---
+
 # MindGuard
 
 > AI-powered clinical decision-support tool for early detection of suicidal ideation in digital text, built on Mental-RoBERTa and Streamlit.
