@@ -43,11 +43,3 @@ async def predict_batch(texts: list) -> np.ndarray:
     for i in range(0, len(texts), 16):
         results.extend(await asyncio.to_thread(_predict_batch_sync, texts[i : i + 16]))
     return np.array(results)
-
-
-async def keep_space_warm() -> None:
-    """Preload the local model once at startup for faster first predictions."""
-    try:
-        await asyncio.to_thread(load_model)
-    except Exception as exc:
-        logger.error("MindGuard model preload failed: %s", exc)

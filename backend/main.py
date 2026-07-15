@@ -34,7 +34,7 @@ from backend.models.schemas import (
     GroupMessageRequest, UpdateNotificationPreferenceRequest,
     MuteGroupRequest, NOTIFICATION_TYPES,
 )
-from backend.services.predictor import predict_one, predict_batch, keep_space_warm
+from backend.services.predictor import predict_one, predict_batch
 from backend.utils import clean_text, risk_label, detect_socioeconomic, calibrate_risk_score, RESOURCES, US_STATE_RESOURCES, TEAM_MEMBERS
 from backend.database import (
     init_db, seed_defaults,
@@ -106,7 +106,6 @@ async def startup():
     init_db()
     seed_defaults()
     logger.info("Database initialized and seeded")
-    asyncio.create_task(keep_space_warm())
 
 
 @app.get("/api/health")
