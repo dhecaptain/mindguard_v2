@@ -746,6 +746,16 @@ def get_institution_by_id(inst_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def list_institutions(limit: int = 500) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM institutions ORDER BY name COLLATE NOCASE ASC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ── Consent functions ─────────────────────────────────────────────────
 
 def create_consent(
@@ -802,6 +812,8 @@ def update_consent_status(consent_id: str, status: str, **kwargs) -> dict | None
         "magic_token", "magic_token_expires_at", "signature_name", "signature_ip",
         "dispatched_at", "viewed_at", "accepted_at", "declined_at", "revoked_at",
         "expires_at", "platforms_json",
+        "signed_token_hash", "reminders_sent", "response_ip", "response_user_agent",
+        "template_version", "notes",
     }
     updates = ["status = ?", "updated_at = ?"]
     params = [status, now]
@@ -835,6 +847,17 @@ def get_consents_by_student(student_id: str) -> list:
     rows = conn.execute(
         "SELECT * FROM consents WHERE student_id = ? ORDER BY created_at DESC",
         (student_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_consents(limit: int = 5000) -> list:
+    """All consents, newest first (used by the reminder/expiry scheduler)."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM consents ORDER BY created_at DESC LIMIT ?",
+        (limit,),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]

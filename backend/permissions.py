@@ -1,0 +1,111 @@
+"""RBAC permission layer over the existing role model (Delivery Brief §5).
+
+Roles remain ``student`` / ``counsellor`` / ``admin`` (plus the ``counselor``
+alias). Instead of adding new roles, per-user permissions are computed as:
+
+    role defaults ∪ permissions_json
+
+``permissions_json`` on the ``users`` row is an *additive* list of extra
+permission grants, e.g. a counsellor promoted to school-admin gets
+``["roster.upload", "students.view"]``. It is never used to *remove* a
+permission — a role's core permissions always apply.
+"""
+
+import json
+import logging
+
+from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
+
+
+# ── Permission constants ───────────────────────────────────────────────
+
+# Run social-media / text analysis (counsellors, admins).
+PERM_ANALYSIS_RUN = "analysis.run"
+# Upload / refresh the student roster CSV (school admins).
+PERM_ROSTER_UPLOAD = "roster.upload"
+# View the student roster.
+PERM_STUDENTS_VIEW = "students.view"
+# Drive the consent workflow (send, remind, revoke).
+PERM_CONSENT_MANAGE = "consent.manage"
+# Respond on the consent portal (student/parent side).
+PERM_CONSENT_RESPOND = "consent.respond"
+# Manage demo requests (internal pipeline).
+PERM_DEMO_MANAGE = "demo.manage"
+
+ALL_PERMISSIONS = frozenset({
+    PERM_ANALYSIS_RUN,
+    PERM_ROSTER_UPLOAD,
+    PERM_STUDENTS_VIEW,
+    PERM_CONSENT_MANAGE,
+    PERM_CONSENT_RESPOND,
+    PERM_DEMO_MANAGE,
+})
+
+
+# ── Role → permission matrix ───────────────────────────────────────────
+
+ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
+    "student": frozenset({PERM_CONSENT_RESPOND}),
+    "counsellor": frozenset({
+        PERM_ANALYSIS_RUN,
+        PERM_STUDENTS_VIEW,
+        PERM_CONSENT_MANAGE,
+    }),
+    "admin": frozenset(ALL_PERMISSIONS),
+}
+
+
+def normalize_role(role: str | None) -> str:
+    """Lowercase and collapse the US-spelling alias to a canonical role."""
+    r = str(role or "").strip().lower()
+    if r == "counselor":
+        return "counsellor"
+    return r if r in ROLE_PERMISSIONS else "student"
+
+
+def role_permissions(role: str | None) -> frozenset[str]:
+    return ROLE_PERMISSIONS.get(normalize_role(role), ROLE_PERMISSIONS["student"])
+
+
+def parse_extra_permissions(permissions_json: str | None) -> set[str]:
+    """Parse the additive ``permissions_json`` column (list or dict form)."""
+    if not permissions_json:
+        return set()
+    try:
+        raw = json.loads(permissions_json)
+    except (ValueError, TypeError):
+        logger.warning("permissions_json is not valid JSON: %r", permissions_json)
+        return set()
+    if isinstance(raw, dict):
+        raw = raw.get("permissions", [])
+    if not isinstance(raw, list):
+        return set()
+    extra = {str(p).strip() for p in raw if str(p).strip() in ALL_PERMISSIONS}
+    return extra
+
+
+def user_permissions(user: dict) -> frozenset[str]:
+    """Effective permissions for a user row: role defaults ∪ permissions_json."""
+    base = set(role_permissions(user.get("role_type")))
+    base |= parse_extra_permissions(user.get("permissions_json"))
+    return frozenset(base)
+
+
+def has_permission(user: dict, permission: str) -> bool:
+    return permission in user_permissions(user)
+
+
+def require_permission(user: dict, permission: str) -> None:
+    if not has_permission(user, permission):
+        raise HTTPException(
+            403,
+            f"You need the {permission} permission to perform this action.",
+        )
+
+
+def require_any_permission(user: dict, permissions) -> None:
+    user_perms = user_permissions(user)
+    if not user_perms.intersection(set(permissions)):
+        raise HTTPException(403, "You are not authorised to perform this action.")

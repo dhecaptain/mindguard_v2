@@ -54,6 +54,7 @@ from backend.database import (
     create_note, get_notes,
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
+    get_institution_by_id, list_institutions, list_students,
     # groups
     create_group, get_group_by_id, update_group, delete_group,
     add_group_member, remove_group_member, get_group_members,
@@ -65,6 +66,16 @@ from backend.database import (
 )
 from backend.services.consent_service import (
     dispatch_consent, remind_consent, record_view, accept_consent, decline_consent, revoke_consent,
+    verify_consent_token, remaining_views,
+    process_consent_reminders, process_expired_consents,
+)
+from backend.services.consent_gate import require_consent_for_analysis
+from backend.services.crypto import decrypt_pii
+from backend.services.roster_service import upsert_roster
+from backend.permissions import (
+    PERM_ANALYSIS_RUN, PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW,
+    PERM_CONSENT_MANAGE, PERM_DEMO_MANAGE,
+    require_permission, require_any_permission,
 )
 from backend.services.alert_service import compute_rolling_risk, try_create_alert
 from backend.auth import hash_password, verify_password, create_access_token, require_auth, blacklist_token
@@ -86,9 +97,7 @@ class SPAStaticFiles(StaticFiles):
 
 
 def _require_analysis_staff(user: dict) -> None:
-    role = str(user.get("role_type") or user.get("role") or "").lower()
-    if role not in {"admin", "counsellor", "counselor"}:
-        raise HTTPException(403, "Only counsellors can run social media analysis.")
+    require_permission(user, PERM_ANALYSIS_RUN)
 
 
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
@@ -106,6 +115,23 @@ async def startup():
     init_db()
     seed_defaults()
     logger.info("Database initialized and seeded")
+    asyncio.create_task(_consent_maintenance_loop())
+
+
+async def _consent_maintenance_loop() -> None:
+    """Hourly batch: expire stale consents and send day-3/day-7 reminders."""
+    while True:
+        try:
+            expired = process_expired_consents()
+            reminders = process_consent_reminders()
+            if expired or reminders["sent"] or reminders["failed"]:
+                logger.info(
+                    "consent maintenance: expired=%s reminder_sent=%s reminder_failed=%s",
+                    expired, reminders["sent"], reminders["failed"],
+                )
+        except Exception:
+            logger.exception("consent maintenance run failed")
+        await asyncio.sleep(3600)
 
 
 @app.get("/api/health")
@@ -1542,9 +1568,11 @@ async def get_team():
 # ═════════════════════════════════════════════════════════════════════
 
 def _require_counsellor(user: dict) -> None:
-    """Raise 403 if the authenticated user is not a counsellor or admin."""
-    if user["role_type"] not in ("counsellor", "admin"):
-        raise HTTPException(403, "Counsellor or admin access required")
+    """Raise 403 unless the user holds any staff-level permission."""
+    require_any_permission(user, {
+        PERM_ANALYSIS_RUN, PERM_CONSENT_MANAGE,
+        PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW, PERM_DEMO_MANAGE,
+    })
 
 
 def _client_ip(request: Request) -> str:
@@ -1717,6 +1745,10 @@ async def v1_portal_get_consent(token: str, request: Request):
     consent = get_consent_by_token(token)
     if not consent:
         raise HTTPException(404, "Consent not found or link invalid")
+    if not verify_consent_token(consent, token):
+        raise HTTPException(404, "Consent not found or link invalid")
+    if remaining_views(consent["id"]) <= 0:
+        raise HTTPException(429, "This consent link has been opened too many times. Please contact your counsellor.")
     # Validate magic token expiry
     expires = consent.get("magic_token_expires_at") or ""
     if expires and datetime.now(timezone.utc).isoformat() > expires:
@@ -1743,6 +1775,8 @@ async def v1_portal_get_consent(token: str, request: Request):
 async def v1_portal_accept_consent(token: str, data: dict, request: Request):
     consent = get_consent_by_token(token)
     if not consent:
+        raise HTTPException(404, "Consent not found or link invalid")
+    if not verify_consent_token(consent, token):
         raise HTTPException(404, "Consent not found or link invalid")
     expires = consent.get("magic_token_expires_at") or ""
     if expires and datetime.now(timezone.utc).isoformat() > expires:
@@ -1773,6 +1807,8 @@ async def v1_portal_decline_consent(token: str, request: Request):
     consent = get_consent_by_token(token)
     if not consent:
         raise HTTPException(404, "Consent not found or link invalid")
+    if not verify_consent_token(consent, token):
+        raise HTTPException(404, "Consent not found or link invalid")
     expires = consent.get("magic_token_expires_at") or ""
     if expires and datetime.now(timezone.utc).isoformat() > expires:
         raise HTTPException(410, "This consent link has expired")
@@ -1790,6 +1826,8 @@ async def v1_portal_decline_consent(token: str, request: Request):
 async def v1_portal_revoke_consent(token: str, request: Request):
     consent = get_consent_by_token(token)
     if not consent:
+        raise HTTPException(404, "Consent not found or link invalid")
+    if not verify_consent_token(consent, token):
         raise HTTPException(404, "Consent not found or link invalid")
     try:
         updated = revoke_consent(consent["id"], ip=_client_ip(request))
@@ -2019,6 +2057,89 @@ async def v1_audit_log(limit: int = 100, user: dict = Depends(require_auth)):
     return {"entries": entries, "total": len(entries)}
 
 
+# ── Roster & school-admin (Delivery Brief §5) ─────────────────────────
+
+@app.post("/api/v1/admin/roster/upload")
+async def v1_admin_roster_upload(
+    institution_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_auth),
+):
+    require_permission(user, PERM_ROSTER_UPLOAD)
+    inst = get_institution_by_id(institution_id)
+    if not inst:
+        raise HTTPException(404, "Institution not found")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Uploaded file is empty")
+    try:
+        minor_age = int(inst.get("minor_age_threshold") or 18)
+    except (TypeError, ValueError):
+        minor_age = 18
+    summary = upsert_roster(institution_id, raw, user["id"], minor_age_threshold=minor_age)
+    write_audit(
+        user["id"], user["role_type"], "ROSTER_UPLOAD", "institution", institution_id,
+        payload={"created": summary["created"], "updated": summary["updated"],
+                 "errors": len(summary["errors"]), "total": summary["total"]},
+    )
+    return summary
+
+
+@app.get("/api/v1/admin/students")
+async def v1_admin_list_students(
+    institution_id: str | None = None,
+    limit: int = 200,
+    offset: int = 0,
+    user: dict = Depends(require_auth),
+):
+    require_permission(user, PERM_STUDENTS_VIEW)
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+    rows = list_students(institution_id=institution_id, limit=limit, offset=offset)
+    out = []
+    for s in rows:
+        consent = None
+        if s.get("current_consent_id"):
+            consent = get_consent_by_id(s["current_consent_id"])
+        out.append({
+            "id": s["id"],
+            "student_id_hash": s["student_id_hash"],
+            "name": decrypt_pii(s["first_name_encrypted"]),
+            "email": decrypt_pii(s["email_encrypted"]),
+            "is_minor": bool(s["is_minor"]),
+            "grade_level": s["grade_level"],
+            "consent_status": consent["status"] if consent else None,
+        })
+    return {"students": out, "total": len(out)}
+
+
+@app.get("/api/v1/admin/institutions")
+async def v1_admin_list_institutions(user: dict = Depends(require_auth)):
+    require_any_permission(user, {PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW})
+    insts = list_institutions()
+    return {"institutions": [
+        {
+            "id": i["id"],
+            "name": i["name"],
+            "type": i.get("type"),
+            "minor_age_threshold": i.get("minor_age_threshold", 18),
+            "consent_reminder_days": i.get("consent_reminder_days", "[3,7]"),
+            "consent_expiry_days": i.get("consent_expiry_days", 30),
+        }
+        for i in insts
+    ]}
+
+
+# ── Consent maintenance (manual trigger) ──────────────────────────────
+
+@app.post("/api/v1/admin/consents/run-maintenance")
+async def v1_admin_run_consent_maintenance(user: dict = Depends(require_auth)):
+    require_permission(user, PERM_CONSENT_MANAGE)
+    expired = process_expired_consents()
+    reminders = process_consent_reminders()
+    return {"expired": expired, "reminders": reminders}
+
+
 # ── Rolling risk trigger ──────────────────────────────────────────────
 
 @app.post("/api/v1/students/{student_id}/analyze")
@@ -2032,6 +2153,7 @@ async def v1_student_analyze(
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    require_consent_for_analysis(student_id)
 
     platform = (data.get("platform") or "unknown").strip().lower()
     posts = data.get("posts")
