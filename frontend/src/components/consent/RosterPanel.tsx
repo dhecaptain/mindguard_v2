@@ -21,6 +21,7 @@ export default function RosterPanel() {
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [institutionId, setInstitutionId] = useState('')
   const [students, setStudents] = useState<RosterStudent[]>([])
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -100,6 +101,14 @@ export default function RosterPanel() {
   }
 
   const accepted = students.filter((s) => s.consent_status === 'ACCEPTED').length
+
+  const term = search.trim().toLowerCase()
+  const filteredStudents = term
+    ? students.filter((s) =>
+        s.name.toLowerCase().includes(term) ||
+        s.email.toLowerCase().includes(term) ||
+        s.id.toLowerCase().includes(term))
+    : students
 
   return (
     <div className="flex flex-col gap-[16px]">
@@ -227,17 +236,28 @@ export default function RosterPanel() {
             <span className="text-[0.9rem] font-bold text-[#1f2937]">Students</span>
             {!loading && (
               <span className="text-[0.78rem] text-[#9ca3af] ml-[4px]">
-                ({students.length}) · {accepted} consented
+                ({filteredStudents.length} of {students.length}) · {accepted} consented
               </span>
             )}
           </div>
-          <button
-            onClick={loadStudents}
-            className="flex items-center gap-[6px] px-[12px] py-[6px] bg-[#0F766E] text-white rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#115E59] transition-colors"
-          >
-            <i className="ti ti-refresh text-[14px]" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-[8px]">
+            <div className="relative">
+              <i className="ti ti-search absolute left-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#9ca3af]" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search students..."
+                className="rounded-[7px] border border-[#e5e7eb] pl-[28px] pr-[10px] py-[6px] text-[0.78rem] text-[#1f2937] placeholder-[#9ca3af] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E] w-[200px]"
+              />
+            </div>
+            <button
+              onClick={loadStudents}
+              className="flex items-center gap-[6px] px-[12px] py-[6px] bg-[#0F766E] text-white rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#115E59] transition-colors"
+            >
+              <i className="ti ti-refresh text-[14px]" />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -250,10 +270,10 @@ export default function RosterPanel() {
             <i className="ti ti-alert-circle text-[28px] mb-[6px]" />
             <span className="text-[0.82rem]">{error}</span>
           </div>
-        ) : students.length === 0 ? (
+        ) : filteredStudents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-[40px] text-[#9ca3af]">
-            <i className="ti ti-file-x text-[28px] mb-[6px]" />
-            <span className="text-[0.82rem]">No students yet — upload a roster CSV above.</span>
+            <i className="ti ti-search text-[28px] mb-[6px]" />
+            <span className="text-[0.82rem]">No students match your search.</span>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -267,7 +287,7 @@ export default function RosterPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f1f5f9]">
-                {students.map((s) => (
+                {filteredStudents.map((s) => (
                   <tr key={s.id} className="hover:bg-[#f8fafc] transition-colors">
                     <td className="py-[12px] px-[20px]">
                       <div className="text-[#1f2937] font-medium">{s.name}</div>

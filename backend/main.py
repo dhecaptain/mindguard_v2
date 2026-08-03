@@ -24,6 +24,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import SUPABASE_URL, SUPABASE_ANON_KEY
@@ -52,7 +53,7 @@ from backend.database import (
     get_counsellor_dashboard, accept_user_terms,
     # v1 additions
     create_consent, get_consent_by_id, get_consent_by_token,
-    get_consents_by_counsellor, get_consents_by_student,
+    get_consents_by_counsellor, get_consents_by_student, query_consents,
     create_linked_account, get_linked_accounts, revoke_linked_account,
     get_alerts, dispose_alert, get_open_alert_for_student,
     write_audit, get_audit_log, get_all_audit_log,
@@ -76,7 +77,7 @@ from backend.services.consent_service import (
     dispatch_consent, remind_consent, record_view, accept_consent, decline_consent, revoke_consent,
     verify_consent_token, remaining_views,
     process_consent_reminders, process_expired_consents,
-    dispatch_consents_for_students,
+    dispatch_consents_for_students, consents_to_csv,
 )
 from backend.services.consent_gate import require_consent_for_analysis
 from backend.services.crypto import decrypt_pii
@@ -1665,13 +1666,33 @@ async def v1_create_and_dispatch_consent(
 @app.get("/api/v1/consents")
 async def v1_list_consents(
     status: str | None = None,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
     user: dict = Depends(require_auth),
 ):
     _require_counsellor(user)
-    consents = get_consents_by_counsellor(user["id"])
-    if status:
-        consents = [c for c in consents if c["status"] == status.upper()]
-    return {"consents": consents, "total": len(consents)}
+    rows, total = query_consents(
+        user["id"], status=status, search=search, limit=limit, offset=offset
+    )
+    return {"consents": rows, "total": total}
+
+
+@app.get("/api/v1/consents/export")
+async def v1_export_consents(
+    status: str | None = None,
+    search: str | None = None,
+    user: dict = Depends(require_auth),
+):
+    _require_counsellor(user)
+    rows, _ = query_consents(user["id"], status=status, search=search, limit=100000)
+    csv = consents_to_csv(rows)
+    filename = "mindguard-consents.csv"
+    return Response(
+        content=csv,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/api/v1/consents/{consent_id}")

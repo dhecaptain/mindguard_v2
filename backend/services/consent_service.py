@@ -292,6 +292,47 @@ def revoke_consent(consent_id: str, ip: str | None = None) -> dict:
 
 DEFAULT_BULK_PLATFORMS = ["Reddit", "Bluesky", "Mastodon", "YouTube"]
 
+CSV_COLUMNS = [
+    "consent_id", "student_id", "student_name", "student_email",
+    "recipient_email", "recipient_role", "status", "mode", "platforms",
+    "dispatched_at", "viewed_at", "accepted_at", "declined_at",
+    "revoked_at", "expires_at", "created_at",
+]
+
+
+def _csv_cell(value) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    return f'"{text.replace(chr(34), chr(34) + chr(34))}"'
+
+
+def consents_to_csv(rows: list[dict]) -> str:
+    """Render consent rows as CSV (header + escaped cells, \\r\\n rows)."""
+    lines = [",".join(_csv_cell(col) for col in CSV_COLUMNS)]
+    for row in rows:
+        platforms = ", ".join(json.loads(row.get("platforms_json") or "[]"))
+        cells = [
+            row.get("id"),
+            row.get("student_id"),
+            row.get("student_name"),
+            row.get("student_email"),
+            row.get("recipient_email"),
+            row.get("recipient_role"),
+            row.get("status"),
+            row.get("mode"),
+            platforms,
+            row.get("dispatched_at"),
+            row.get("viewed_at"),
+            row.get("accepted_at"),
+            row.get("declined_at"),
+            row.get("revoked_at"),
+            row.get("expires_at"),
+            row.get("created_at"),
+        ]
+        lines.append(",".join(_csv_cell(c) for c in cells))
+    return "\r\n".join(lines)
+
 
 def dispatch_consents_for_students(
     students: list[dict],

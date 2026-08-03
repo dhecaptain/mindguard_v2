@@ -855,6 +855,51 @@ def get_consents_by_counsellor(counsellor_id: str) -> list:
     return [dict(r) for r in rows]
 
 
+def query_consents(
+    counsellor_id: str,
+    status: str | None = None,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list, int]:
+    """Paginated consent list for a counsellor with optional status + search.
+
+    ``search`` matches (case-insensitively) against student name, student
+    email, recipient email, and the student/consent ids. Returns
+    (rows, total) where rows is the requested page.
+    """
+    where = ["c.counsellor_id = ?"]
+    params: list = [counsellor_id]
+    if status:
+        where.append("c.status = ?")
+        params.append(status.upper())
+    if search:
+        term = f"%{search.strip()}%"
+        where.append(
+            "(LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ? OR "
+            "LOWER(c.recipient_email) LIKE ? OR LOWER(c.student_id) LIKE ? OR "
+            "LOWER(c.id) LIKE ?)"
+        )
+        params += [term, term, term, term, term]
+    where_sql = " AND ".join(where)
+
+    conn = get_db()
+    total = conn.execute(
+        f"SELECT COUNT(*) FROM consents c JOIN users u ON c.student_id = u.id WHERE {where_sql}",
+        params,
+    ).fetchone()[0]
+    limit = max(1, min(int(limit), 1000))
+    offset = max(0, int(offset))
+    rows = conn.execute(
+        f"SELECT c.*, u.name as student_name, u.email as student_email "
+        f"FROM consents c JOIN users u ON c.student_id = u.id "
+        f"WHERE {where_sql} ORDER BY c.created_at DESC LIMIT ? OFFSET ?",
+        params + [limit, offset],
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows], total
+
+
 def get_consents_by_student(student_id: str) -> list:
     conn = get_db()
     rows = conn.execute(

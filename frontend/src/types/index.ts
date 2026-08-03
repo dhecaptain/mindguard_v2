@@ -154,6 +154,11 @@ export interface Consent {
   consent_url?: string
 }
 
+export interface ConsentListResponse {
+  consents: Consent[]
+  total: number
+}
+
 // ─── Roster & School Admin (Delivery Brief §5) ────────────────────────────────
 
 export interface RosterStudent {
