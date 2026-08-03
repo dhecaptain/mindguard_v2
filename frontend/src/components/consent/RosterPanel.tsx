@@ -182,11 +182,19 @@ export default function RosterPanel() {
         </div>
 
         {summary && (
-          <div className="mt-[14px] rounded-[10px] bg-[#ecfdf5] border border-[#bbf7d0] px-[14px] py-[10px] text-[0.82rem] text-[#065f46]">
-            <div className="font-bold mb-[2px]">Upload complete</div>
+          <div className={`mt-[14px] rounded-[10px] border px-[14px] py-[10px] text-[0.82rem] ${
+            summary.parse_error
+              ? 'bg-[#fff7ed] border-[#fed7aa] text-[#9a3412]'
+              : 'bg-[#ecfdf5] border-[#bbf7d0] text-[#065f46]'
+          }`}>
+            <div className="font-bold mb-[2px]">
+              {summary.parse_error ? 'Roster rejected' : 'Upload complete'}
+            </div>
+            {summary.parse_error && (
+              <div className="mb-[6px]">{summary.parse_error}</div>
+            )}
             <div>
               {summary.created} created · {summary.updated} updated · {summary.total} total
-              {summary.skipped_minor_by_default ? ` · ${summary.skipped_minor_by_default} minor-by-default (no DOB)` : ''}
               {summary.errors.length ? ` · ${summary.errors.length} row(s) failed` : ''}
             </div>
             {summary.errors.length > 0 && (

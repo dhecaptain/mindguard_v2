@@ -186,7 +186,6 @@ export interface RosterUploadSummary {
   updated: number
   errors: Array<{ row: Record<string, string>; error: string }>
   parse_error?: string | null
-  skipped_minor_by_default?: number
   student_ids?: string[]
 }
 

@@ -90,15 +90,37 @@ def test_commit_dispatches_minor_to_parent_with_courtesy(monkeypatch, db):
 def test_commit_minor_without_parent_is_routing_error(monkeypatch, db):
     _seed_admin(db)
     inst = db.create_institution("Riverside High", "secondary")
+    
+    # 1. Verification at upload validation time:
+    # A minor without parent email is rejected at validation (cannot proceed)
     summary = roster_service.upsert_roster(
         inst["id"],
         _csv("S-1,Jane,Doe,jane@school.edu,2010-01-01,9,\n"),
         "admin-001",
     )
+    assert len(summary["errors"]) == 1
+    assert "parent_email is required" in summary["errors"][0]["error"]
+    assert summary["created"] == 0
+
+    # 2. Verification at dispatch time (defensive path):
+    # Construct a student row bypassing the CSV validator to test service robustness
+    student_payload = dict(
+        institution_id=inst["id"],
+        student_id_hash=crypto.hash_student_id("S-2"),
+        first_name_encrypted=crypto.encrypt_pii("Bob"),
+        email_encrypted=crypto.encrypt_pii("bob@school.edu"),
+        date_of_birth_encrypted=crypto.encrypt_pii("2010-01-01"),
+        is_minor=True,
+        created_by="admin-001",
+        parent_email_encrypted=None,
+    )
+    created_student = db.create_student(**student_payload)
+    created_student = db.get_student_by_id(created_student["id"])
+
     sent = []
     _fake_send(monkeypatch, sent)
     result = consent_service.dispatch_consents_for_students(
-        _students_for(db, summary), "admin-001"
+        [created_student], "admin-001"
     )
     assert result["created"] == 0
     assert result["skipped_no_parent"] == 1
