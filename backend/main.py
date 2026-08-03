@@ -33,6 +33,11 @@ from backend.models.schemas import (
     CreateGroupRequest, UpdateGroupRequest, AddMemberRequest,
     GroupMessageRequest, UpdateNotificationPreferenceRequest,
     MuteGroupRequest, NOTIFICATION_TYPES,
+    DemoRequestCreate, DemoRequestUpdate,
+)
+from backend.services.email_sender import send_html_email
+from backend.services.email_templates import (
+    demo_request_confirmation, demo_request_notification,
 )
 from backend.services.predictor import predict_one, predict_batch
 from backend.utils import clean_text, risk_label, detect_socioeconomic, calibrate_risk_score, RESOURCES, US_STATE_RESOURCES, TEAM_MEMBERS
@@ -55,6 +60,7 @@ from backend.database import (
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
     get_institution_by_id, list_institutions, list_students,
+    create_demo_request, get_demo_request, list_demo_requests, update_demo_request,
     # groups
     create_group, get_group_by_id, update_group, delete_group,
     add_group_member, remove_group_member, get_group_members,
@@ -71,6 +77,7 @@ from backend.services.consent_service import (
 )
 from backend.services.consent_gate import require_consent_for_analysis
 from backend.services.crypto import decrypt_pii
+from backend.services.demo_service import demo_email_context, work_email_warning
 from backend.services.roster_service import upsert_roster
 from backend.permissions import (
     PERM_ANALYSIS_RUN, PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW,
@@ -2138,6 +2145,101 @@ async def v1_admin_run_consent_maintenance(user: dict = Depends(require_auth)):
     expired = process_expired_consents()
     reminders = process_consent_reminders()
     return {"expired": expired, "reminders": reminders}
+
+
+# ── Demo request pipeline (Delivery Brief §6) ─────────────────────────
+
+
+@app.post("/api/v1/demo-requests", status_code=201)
+async def v1_demo_request_create(data: DemoRequestCreate, request: Request):
+    client_ip = _client_ip(request)
+    _check_rate_limit(f"demo:{client_ip}", max_requests=5, window=3600)
+    if not data.consent_to_contact:
+        raise HTTPException(400, "Consent to contact is required to submit a demo request")
+    try:
+        demo = create_demo_request(
+            full_name=data.full_name.strip(),
+            work_email=data.work_email.strip().lower(),
+            organisation=data.organisation.strip(),
+            organisation_type=data.organisation_type,
+            role_title=data.role_title,
+            country=data.country,
+            student_count_range=data.student_count_range,
+            message=data.message,
+            heard_about_us=data.heard_about_us,
+            consent_to_contact=data.consent_to_contact,
+        )
+    except Exception as exc:
+        logger.error("demo_request_create error: %s", exc)
+        raise HTTPException(500, "Failed to submit demo request")
+
+    ctx = demo_email_context(demo)
+    ok, err = send_html_email(
+        data.work_email.strip().lower(),
+        *demo_request_confirmation(ctx),
+        related_type="demo_request",
+        related_id=demo["id"],
+        metadata={"event": "confirmation"},
+    )
+    if not ok:
+        logger.warning("demo confirmation email failed for %s: %s", data.work_email, err)
+
+    notify_to = os.getenv("DEMO_NOTIFY_EMAIL", "").strip()
+    if notify_to:
+        ok, err = send_html_email(
+            notify_to,
+            *demo_request_notification(ctx),
+            related_type="demo_request",
+            related_id=demo["id"],
+            metadata={"event": "notification"},
+        )
+        if not ok:
+            logger.warning("demo notification email failed to %s: %s", notify_to, err)
+
+    write_audit(
+        None, "public", "DEMO_REQUEST_CREATED", "demo_request", demo["id"],
+        ip=client_ip,
+    )
+    return {
+        "id": demo["id"],
+        "status": demo["status"],
+        "warning": work_email_warning(data.work_email),
+    }
+
+
+@app.get("/api/v1/admin/demo-requests")
+async def v1_admin_list_demo_requests(
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    user: dict = Depends(require_auth),
+):
+    require_permission(user, PERM_DEMO_MANAGE)
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    rows = list_demo_requests(status=status, limit=limit, offset=offset)
+    return {"demo_requests": rows, "total": len(rows)}
+
+
+@app.patch("/api/v1/admin/demo-requests/{demo_request_id}")
+async def v1_admin_update_demo_request(
+    demo_request_id: str,
+    data: DemoRequestUpdate,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    require_permission(user, PERM_DEMO_MANAGE)
+    existing = get_demo_request(demo_request_id)
+    if not existing:
+        raise HTTPException(404, "Demo request not found")
+    updated = update_demo_request(demo_request_id, **data.model_dump(exclude_unset=True))
+    write_audit(
+        user["id"], user["role_type"], "DEMO_REQUEST_UPDATED",
+        "demo_request", demo_request_id,
+        payload={k: v for k, v in data.model_dump(exclude_unset=True).items()},
+        ip=_client_ip(request),
+    )
+    return updated
 
 
 # ── Rolling risk trigger ──────────────────────────────────────────────

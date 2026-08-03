@@ -278,6 +278,7 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'new',
             assigned_to TEXT REFERENCES users(id),
             notes TEXT,
+            consent_to_contact INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -312,6 +313,7 @@ def init_db():
         "ALTER TABLE consents ADD COLUMN template_version TEXT DEFAULT '1.0.0'",
         "ALTER TABLE consents ADD COLUMN notes TEXT DEFAULT ''",
         "ALTER TABLE users ADD COLUMN permissions_json TEXT DEFAULT '[]'",
+        "ALTER TABLE demo_requests ADD COLUMN consent_to_contact INTEGER DEFAULT 1",
     ]:
         try:
             conn.execute(migration)
@@ -1659,6 +1661,7 @@ def create_demo_request(
     student_count_range: str | None = None,
     message: str | None = None,
     heard_about_us: str | None = None,
+    consent_to_contact: bool = True,
 ) -> dict:
     rid = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -1667,12 +1670,12 @@ def create_demo_request(
         """INSERT INTO demo_requests (
             id, full_name, work_email, organisation, organisation_type,
             role_title, country, student_count_range, message, heard_about_us,
-            status, created_at, updated_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            status, consent_to_contact, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             rid, full_name, work_email, organisation, organisation_type,
             role_title, country, student_count_range, message, heard_about_us,
-            "new", now, now,
+            "new", 1 if consent_to_contact else 0, now, now,
         ),
     )
     conn.commit()

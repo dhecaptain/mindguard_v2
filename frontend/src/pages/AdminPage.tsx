@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { broadcastNotification } from '../api/auth'
 import api from '../api/client'
+import DemoRequestsPanel from '../components/admin/DemoRequestsPanel'
 
 interface SystemUser {
   id: string
@@ -182,6 +183,9 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Demo request pipeline */}
+      <DemoRequestsPanel />
     </div>
   )
 }

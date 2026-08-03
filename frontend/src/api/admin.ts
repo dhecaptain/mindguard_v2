@@ -1,5 +1,11 @@
 import api from './client'
-import type { Institution, RosterStudent, RosterUploadSummary } from '../types'
+import type {
+  DemoRequest,
+  DemoRequestStatus,
+  Institution,
+  RosterStudent,
+  RosterUploadSummary,
+} from '../types'
 
 // ─── Roster & School Admin (Delivery Brief §5) ────────────────────────────────
 
@@ -35,3 +41,32 @@ export async function runConsentMaintenance(): Promise<{
   const { data } = await api.post('/v1/admin/consents/run-maintenance')
   return data
 }
+
+// ─── Demo request pipeline (Delivery Brief §6) ────────────────────────────────
+
+export async function getDemoRequests(
+  status?: string,
+  limit = 100,
+): Promise<DemoRequest[]> {
+  const { data } = await api.get('/v1/admin/demo-requests', {
+    params: { limit, ...(status ? { status } : {}) },
+  })
+  return data.demo_requests ?? data
+}
+
+export async function updateDemoRequest(
+  id: string,
+  patch: Partial<Pick<DemoRequest, 'status' | 'notes' | 'assigned_to'>>,
+): Promise<DemoRequest> {
+  const { data } = await api.patch(`/v1/admin/demo-requests/${id}`, patch)
+  return data
+}
+
+export const DEMO_STATUSES: DemoRequestStatus[] = [
+  'new',
+  'contacted',
+  'qualified',
+  'demo_scheduled',
+  'closed_won',
+  'closed_lost',
+]

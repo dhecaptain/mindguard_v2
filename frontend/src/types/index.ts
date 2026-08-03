@@ -184,6 +184,35 @@ export interface RosterUploadSummary {
   skipped_minor_by_default?: number
 }
 
+// ─── Demo request pipeline (Delivery Brief §6) ────────────────────────────────
+
+export type DemoRequestStatus =
+  | 'new'
+  | 'contacted'
+  | 'qualified'
+  | 'demo_scheduled'
+  | 'closed_won'
+  | 'closed_lost'
+
+export interface DemoRequest {
+  id: string
+  full_name: string
+  work_email: string
+  organisation: string
+  organisation_type: string
+  role_title?: string | null
+  country?: string | null
+  student_count_range?: string | null
+  message?: string | null
+  heard_about_us?: string | null
+  status: DemoRequestStatus
+  assigned_to?: string | null
+  notes?: string | null
+  consent_to_contact?: number
+  created_at: string
+  updated_at: string
+}
+
 export interface LinkedAccount {
   id: string
   student_id: string
