@@ -22,6 +22,7 @@ from backend.database import (
     get_consent_events,
     get_consents_by_student,
     get_user_by_email,
+    get_user_by_id,
     get_all_consents,
     set_student_current_consent,
     update_consent_status,
@@ -30,7 +31,12 @@ from backend.database import (
 from backend.config import CONSENT_EXPIRY_DAYS, CONSENT_REMINDER_DAYS
 from backend.services.crypto import create_signed_token, hash_token, verify_signed_token, decrypt_pii
 from backend.services.email_sender import send_html_email
-from backend.services.email_templates import consent_reminder, student_courtesy_copy
+from backend.services.email_templates import (
+    admin_consent_notification,
+    consent_confirmation,
+    consent_reminder,
+    student_courtesy_copy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +260,7 @@ def accept_consent(
     )
     create_consent_event(consent_id, "accepted", actor_type="recipient",
                          metadata={"signature": signature_name, "ip": ip})
+    _notify_consent_response(updated, accepted=True)
     return updated
 
 
@@ -270,6 +277,7 @@ def decline_consent(consent_id: str, ip: str | None = None) -> dict:
     updated = update_consent_status(consent_id, "DECLINED", declined_at=now, response_ip=ip)
     write_audit(None, "recipient", "CONSENT_DECLINED", "consent", consent_id, ip=ip)
     create_consent_event(consent_id, "declined", actor_type="recipient", metadata={"ip": ip})
+    _notify_consent_response(updated, accepted=False)
     return updated
 
 
@@ -497,6 +505,66 @@ def _reminder_context(consent: dict) -> dict:
     }
     ctx.update(_footer_urls(consent["magic_token"]))
     return ctx
+
+
+def _student_first_name(consent: dict) -> str:
+    """Best-effort first name for the consent's student (users.name)."""
+    user = get_user_by_id(consent.get("student_id") or "")
+    if user and user.get("name"):
+        return str(user["name"]).strip().split()[0]
+    return consent.get("student_name") or "the student"
+
+
+def _tracker_url() -> str:
+    base = (os.getenv("APP_BASE_URL") or os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
+    return f"{base}/#consent-tracker"
+
+
+def _notify_consent_response(consent: dict, accepted: bool) -> None:
+    """Send the §4.5 confirmation + §4.6 admin notification after a response.
+
+    Never raises: a failed email must not undo an already-recorded decision.
+    The recipient always receives the confirmation; the admin notification is
+    sent to the consent's initiating counsellor when that account resolves.
+    """
+    token = consent.get("magic_token") or ""
+    status = "ACCEPTED" if accepted else "DECLINED"
+    context = {
+        "student_first_name": _student_first_name(consent),
+        "status": status,
+        "consent_url": _consent_url(token),
+        "tracker_url": _tracker_url(),
+    }
+    context.update(_footer_urls(token))
+
+    subject, html = consent_confirmation(context, accepted=accepted)
+    ok, err = send_html_email(
+        consent["recipient_email"],
+        subject,
+        html,
+        related_type="consent",
+        related_id=consent["id"],
+        metadata={"kind": "confirmation", "status": status},
+    )
+    if not ok:
+        logger.warning("consent confirmation email failed for %s: %s", consent["recipient_email"], err)
+
+    admin = get_user_by_id(consent.get("counsellor_id") or "")
+    admin_email = (admin or {}).get("email")
+    if not admin_email:
+        logger.warning("no admin user for consent %s; skipping admin notification", consent["id"])
+        return
+    subject, html = admin_consent_notification(context)
+    ok, err = send_html_email(
+        admin_email,
+        subject,
+        html,
+        related_type="consent",
+        related_id=consent["id"],
+        metadata={"kind": "admin_notification", "status": status},
+    )
+    if not ok:
+        logger.warning("admin notification failed for %s: %s", admin_email, err)
 
 
 def process_expired_consents() -> int:

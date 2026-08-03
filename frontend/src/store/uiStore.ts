@@ -10,6 +10,11 @@ type PageKey =
   | 'admin'
   | 'notification-preferences'
 
+function _initialPage(): PageKey {
+  const key = window.location.hash.replace(/^#\/?/, '')
+  return key === 'consent-tracker' ? 'consent-tracker' : 'dashboard'
+}
+
 interface UiState {
   currentPage: PageKey
   notifications: Notification[]
@@ -25,7 +30,7 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  currentPage: 'dashboard',
+  currentPage: _initialPage(),
   notifications: [],
   unreadCount: 0,
   sidebarOpen: false,
