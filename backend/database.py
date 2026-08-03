@@ -859,14 +859,17 @@ def query_consents(
     counsellor_id: str,
     status: str | None = None,
     search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list, int]:
-    """Paginated consent list for a counsellor with optional status + search.
+    """Paginated consent list for a counsellor with optional filters.
 
     ``search`` matches (case-insensitively) against student name, student
-    email, recipient email, and the student/consent ids. Returns
-    (rows, total) where rows is the requested page.
+    email, recipient email, and the student/consent ids. ``date_from`` /
+    ``date_to`` are ``YYYY-MM-DD`` bounds on ``created_at`` (UTC, inclusive).
+    Returns (rows, total) where rows is the requested page.
     """
     where = ["c.counsellor_id = ?"]
     params: list = [counsellor_id]
@@ -881,6 +884,12 @@ def query_consents(
             "LOWER(c.id) LIKE ?)"
         )
         params += [term, term, term, term, term]
+    if date_from:
+        where.append("c.created_at >= ?")
+        params.append(str(date_from))
+    if date_to:
+        where.append("c.created_at <= ?")
+        params.append(f"{str(date_to)}T23:59:59.999999")
     where_sql = " AND ".join(where)
 
     conn = get_db()
@@ -898,6 +907,30 @@ def query_consents(
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows], total
+
+
+def get_consent_with_student(consent_id: str) -> dict | None:
+    """Single consent joined with the student's user name/email."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT c.*, u.name as student_name, u.email as student_email "
+        "FROM consents c JOIN users u ON c.student_id = u.id WHERE c.id = ?",
+        (consent_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_audit_log_for_target(target_type: str, target_id: str, limit: int = 200) -> list:
+    """Immutable audit entries for a single target (e.g. a consent), newest first."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM audit_log WHERE target_type = ? AND target_id = ? "
+        "ORDER BY occurred_at DESC LIMIT ?",
+        (target_type, target_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_consents_by_student(student_id: str) -> list:

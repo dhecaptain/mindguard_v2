@@ -54,6 +54,7 @@ from backend.database import (
     # v1 additions
     create_consent, get_consent_by_id, get_consent_by_token,
     get_consents_by_counsellor, get_consents_by_student, query_consents,
+    get_consent_with_student, get_audit_log_for_target, get_consent_events,
     create_linked_account, get_linked_accounts, revoke_linked_account,
     get_alerts, dispose_alert, get_open_alert_for_student,
     write_audit, get_audit_log, get_all_audit_log,
@@ -1667,13 +1668,21 @@ async def v1_create_and_dispatch_consent(
 async def v1_list_consents(
     status: str | None = None,
     search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     limit: int = 50,
     offset: int = 0,
     user: dict = Depends(require_auth),
 ):
     _require_counsellor(user)
     rows, total = query_consents(
-        user["id"], status=status, search=search, limit=limit, offset=offset
+        user["id"],
+        status=status,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        offset=offset,
     )
     return {"consents": rows, "total": total}
 
@@ -1682,10 +1691,19 @@ async def v1_list_consents(
 async def v1_export_consents(
     status: str | None = None,
     search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     user: dict = Depends(require_auth),
 ):
     _require_counsellor(user)
-    rows, _ = query_consents(user["id"], status=status, search=search, limit=100000)
+    rows, _ = query_consents(
+        user["id"],
+        status=status,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        limit=100000,
+    )
     csv = consents_to_csv(rows)
     filename = "mindguard-consents.csv"
     return Response(
@@ -1701,12 +1719,14 @@ async def v1_get_consent(
     user: dict = Depends(require_auth),
 ):
     _require_counsellor(user)
-    consent = get_consent_by_id(consent_id)
+    consent = get_consent_with_student(consent_id)
     if not consent:
         raise HTTPException(404, "Consent not found")
     if consent["counsellor_id"] != user["id"] and user["role_type"] != "admin":
         raise HTTPException(403, "Access denied")
-    return consent
+    events = get_consent_events(consent_id)
+    audit_log = get_audit_log_for_target("consent", consent_id)
+    return {"consent": consent, "events": events, "audit_log": audit_log}
 
 
 @app.post("/api/v1/consents/{consent_id}/dispatch")

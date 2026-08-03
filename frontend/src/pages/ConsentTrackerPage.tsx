@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getConsents, createConsent, dispatchConsent, cancelConsent, remindConsent, exportConsents } from '../api/counsellor'
 import { getStudents } from '../api/counsellor'
 import RosterPanel from '../components/consent/RosterPanel'
+import ConsentDetailDrawer from '../components/consent/ConsentDetailDrawer'
 import type { Consent, ConsentStatus } from '../types'
 import type { StudentDTO } from '../api/counsellor'
 
@@ -232,10 +233,13 @@ export default function ConsentTrackerPage() {
   const [dispatchNotice, setDispatchNotice] = useState<Consent | null>(null)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [bulkNotice, setBulkNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [detailConsentId, setDetailConsentId] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(0) }, 300)
@@ -250,6 +254,8 @@ export default function ConsentTrackerPage() {
         getConsents({
           ...(filterTab !== 'all' ? { status: filterTab } : {}),
           ...(search ? { search } : {}),
+          ...(dateFrom ? { dateFrom } : {}),
+          ...(dateTo ? { dateTo } : {}),
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         }),
@@ -265,7 +271,7 @@ export default function ConsentTrackerPage() {
     }
   }
 
-  useEffect(() => { load() }, [filterTab, search, page])
+  useEffect(() => { load() }, [filterTab, search, dateFrom, dateTo, page])
 
   const handleAction = async (action: () => Promise<any>, id: string) => {
     setActionLoading(id)
@@ -288,6 +294,8 @@ export default function ConsentTrackerPage() {
       const blob = await exportConsents({
         ...(filterTab !== 'all' ? { status: filterTab } : {}),
         ...(search ? { search } : {}),
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {}),
       })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -422,6 +430,23 @@ export default function ConsentTrackerPage() {
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by student name, email, or ID..."
             className="w-full rounded-[8px] border border-[#e5e7eb] pl-[30px] pr-[10px] py-[7px] text-[0.8rem] text-[#1f2937] placeholder-[#9ca3af] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+          />
+        </div>
+        <div className="flex items-center gap-[6px]">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(0) }}
+            title="Created from"
+            className="rounded-[8px] border border-[#e5e7eb] px-[10px] py-[7px] text-[0.8rem] text-[#1f2937] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+          />
+          <span className="text-[0.78rem] text-[#9ca3af]">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setPage(0) }}
+            title="Created to"
+            className="rounded-[8px] border border-[#e5e7eb] px-[10px] py-[7px] text-[0.8rem] text-[#1f2937] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
           />
         </div>
         <button
@@ -581,6 +606,13 @@ export default function ConsentTrackerPage() {
                       </td>
                       <td className="py-[12px] px-[20px]">
                         <div className="flex items-center gap-[6px]">
+                          <button
+                            onClick={() => setDetailConsentId(consent.id)}
+                            title="View audit trail"
+                            className="px-[10px] py-[4px] border border-[#e5e7eb] bg-white text-[#374151] rounded-[6px] text-[0.72rem] font-semibold cursor-pointer hover:bg-[#f9fafb] transition-colors"
+                          >
+                            <i className="ti ti-eye text-[13px]" />
+                          </button>
                           {consent.status === 'DRAFT' && (
                             <button
                               onClick={() => handleAction(() => dispatchConsent(consent.id), consent.id)}
@@ -666,6 +698,13 @@ export default function ConsentTrackerPage() {
             setDispatchNotice(consent)
             load()
           }}
+        />
+      )}
+
+      {detailConsentId && (
+        <ConsentDetailDrawer
+          consentId={detailConsentId}
+          onClose={() => setDetailConsentId(null)}
         />
       )}
       </>)}

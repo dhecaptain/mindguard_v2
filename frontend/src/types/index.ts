@@ -149,6 +149,7 @@ export interface Consent {
   expires_at?: string
   created_at: string
   student_name?: string  // joined from users
+  student_email?: string  // joined from users
   email_sent?: boolean
   email_error?: string
   consent_url?: string
@@ -157,6 +158,34 @@ export interface Consent {
 export interface ConsentListResponse {
   consents: Consent[]
   total: number
+}
+
+export interface ConsentEvent {
+  id: string
+  consent_id: string
+  event_type: string
+  actor_type: string
+  actor_id?: string
+  metadata_json?: string
+  created_at: string
+}
+
+export interface ConsentAuditEntry {
+  id: string
+  actor_id?: string
+  actor_role?: string
+  action: string
+  target_type?: string
+  target_id?: string
+  payload_json?: string
+  ip?: string
+  occurred_at: string
+}
+
+export interface ConsentDetail {
+  consent: Consent
+  events: ConsentEvent[]
+  audit_log: ConsentAuditEntry[]
 }
 
 // ─── Roster & School Admin (Delivery Brief §5) ────────────────────────────────

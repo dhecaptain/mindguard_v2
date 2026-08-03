@@ -1,6 +1,13 @@
-"""Tests for consent tracker search, pagination and CSV export (Brief §2.7/§6)."""
+"""Tests for consent tracker search, pagination, date filter and CSV export (Brief §2.7/§6)."""
 
-from backend.database import query_consents
+from datetime import datetime, timedelta, timezone
+
+from backend.database import (
+    get_audit_log_for_target,
+    get_consent_events,
+    get_consent_with_student,
+    query_consents,
+)
 from backend.services.consent_service import consents_to_csv
 
 
@@ -94,3 +101,68 @@ def test_consents_to_csv_escapes_commas_and_quotes(db):
     csv = consents_to_csv(rows)
     assert '"S ""Quoted"" Last, Jr"' in csv
     assert '"Reddit, Inc"' in csv
+
+
+def _set_created(db, consent_id: str, days_ago: int) -> None:
+    ts = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+    conn = db.get_db()
+    conn.execute("UPDATE consents SET created_at = ? WHERE id = ?", (ts, consent_id))
+    conn.commit()
+
+
+def test_query_consents_date_filter(db):
+    s = _seed(db)
+    _set_created(db, s["c1"]["id"], 0)   # today
+    _set_created(db, s["c2"]["id"], 3)   # 3 days ago
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    rows, total = query_consents(s["counsellor"]["id"], date_from=today, date_to=today)
+    assert total == 1
+    assert rows[0]["id"] == s["c1"]["id"]
+
+    rows, total = query_consents(s["counsellor"]["id"], date_to=today)
+    assert total == 2
+
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+    rows, total = query_consents(s["counsellor"]["id"], date_from=yesterday, date_to=today)
+    assert total == 1
+    assert rows[0]["id"] == s["c1"]["id"]
+
+
+def test_query_consents_date_filter_combined_with_status(db):
+    s = _seed(db)
+    today = datetime.now(timezone.utc).date().isoformat()
+    rows, total = query_consents(
+        s["counsellor"]["id"], status="PENDING", date_from=today, date_to=today
+    )
+    assert total == 1
+    rows, total = query_consents(
+        s["counsellor"]["id"], status="DRAFT", date_from=today, date_to=today
+    )
+    assert total == 1
+    rows, total = query_consents(
+        s["counsellor"]["id"], status="ACCEPTED", date_from=today, date_to=today
+    )
+    assert total == 0
+
+
+def test_get_consent_with_student_joins_name_and_email(db):
+    s = _seed(db)
+    consent = get_consent_with_student(s["c1"]["id"])
+    assert consent["student_name"] == "Alex Roe"
+    assert consent["student_email"] == "alex@uni.edu"
+
+
+def test_consent_detail_trail_after_dispatch_and_accept(db):
+    s = _seed(db)
+    from backend.services.consent_service import accept_consent, dispatch_consent
+
+    dispatch_consent(s["c2"]["id"], s["counsellor"]["id"])
+    accept_consent(s["c2"]["id"], "Alex Roe", "1.2.3.4")
+
+    events = get_consent_events(s["c2"]["id"])
+    assert {e["event_type"] for e in events} >= {"accepted"}
+
+    audit = get_audit_log_for_target("consent", s["c2"]["id"])
+    actions = {a["action"] for a in audit}
+    assert {"CONSENT_DISPATCHED", "CONSENT_ACCEPTED"} <= actions
