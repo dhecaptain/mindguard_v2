@@ -2,7 +2,7 @@
 
 import pytest
 
-from services import crypto
+from backend.services import crypto
 
 
 def test_encrypt_decrypt_roundtrip():

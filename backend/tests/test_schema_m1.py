@@ -2,7 +2,7 @@
 
 import bcrypt
 
-from services import crypto
+from backend.services import crypto
 
 NEW_TABLES = [
     "students",

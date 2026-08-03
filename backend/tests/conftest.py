@@ -6,8 +6,8 @@ import pytest
 os.environ.setdefault("MINDGUARD_DB_DIR", "")
 os.environ.setdefault("ENCRYPTION_KEY", "a" * 64)
 
-import database  # noqa: E402
-from services import crypto  # noqa: E402
+from backend import database  # noqa: E402
+from backend.services import crypto  # noqa: E402
 
 
 @pytest.fixture()
