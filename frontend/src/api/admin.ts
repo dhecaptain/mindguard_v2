@@ -1,5 +1,6 @@
 import api from './client'
 import type {
+  AuditEvent,
   DemoRequest,
   DemoRequestStatus,
   Institution,
@@ -70,3 +71,10 @@ export const DEMO_STATUSES: DemoRequestStatus[] = [
   'closed_won',
   'closed_lost',
 ]
+
+// ─── Audit / compliance trail (Delivery Brief §12) ───────────────────────────
+
+export async function getAdminAuditLog(limit = 50): Promise<AuditEvent[]> {
+  const { data } = await api.get('/v1/admin/audit', { params: { limit } })
+  return data.entries ?? data
+}

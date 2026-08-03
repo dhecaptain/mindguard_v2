@@ -55,7 +55,7 @@ from backend.database import (
     get_consents_by_counsellor, get_consents_by_student,
     create_linked_account, get_linked_accounts, revoke_linked_account,
     get_alerts, dispose_alert, get_open_alert_for_student,
-    write_audit, get_audit_log,
+    write_audit, get_audit_log, get_all_audit_log,
     create_note, get_notes,
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
@@ -81,7 +81,7 @@ from backend.services.demo_service import demo_email_context, work_email_warning
 from backend.services.roster_service import upsert_roster
 from backend.permissions import (
     PERM_ANALYSIS_RUN, PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW,
-    PERM_CONSENT_MANAGE, PERM_DEMO_MANAGE,
+    PERM_CONSENT_MANAGE, PERM_DEMO_MANAGE, PERM_AUDIT_VIEW,
     require_permission, require_any_permission,
 )
 from backend.services.alert_service import compute_rolling_risk, try_create_alert
@@ -260,6 +260,12 @@ async def register(req: RegisterRequest, request: Request):
         for c in counsellors:
             _safe_notify(c["id"], "Minor Registration", f"Student {req.name} ({req.email}) registered and is under 18. Parental consent link sent to {req.parent_email}.", "system")
 
+    write_audit(
+        user["id"], role_type, "USER_REGISTERED",
+        "user", user["id"], payload={"minor": is_minor},
+        ip=client_ip,
+    )
+
     logger.info("Register: user=%s role=%s minor=%s ip=%s", user["id"], role_type, is_minor, client_ip)
     return {"ok": True, "user": user}
 
@@ -276,9 +282,14 @@ async def get_me(user: dict = Depends(require_auth)):
 
 
 @app.post("/api/auth/terms")
-async def accept_terms(user: dict = Depends(require_auth)):
-    accept_user_terms(user["id"])
-    logger.info("Terms accepted: user=%s", user["id"])
+async def accept_terms(request: Request, user: dict = Depends(require_auth)):
+    newly = accept_user_terms(user["id"])
+    if newly:
+        write_audit(
+            user["id"], user["role_type"], "TERMS_ACCEPTED",
+            "user", user["id"], ip=_client_ip(request),
+        )
+        logger.info("Terms accepted: user=%s", user["id"])
     return {"ok": True}
 
 
@@ -2240,6 +2251,18 @@ async def v1_admin_update_demo_request(
         ip=_client_ip(request),
     )
     return updated
+
+
+@app.get("/api/v1/admin/audit")
+async def v1_admin_audit_log(
+    action: str | None = None,
+    limit: int = 100,
+    user: dict = Depends(require_auth),
+):
+    require_permission(user, PERM_AUDIT_VIEW)
+    limit = max(1, min(limit, 1000))
+    entries = get_all_audit_log(limit=limit, action=action)
+    return {"entries": entries, "total": len(entries)}
 
 
 # ── Rolling risk trigger ──────────────────────────────────────────────

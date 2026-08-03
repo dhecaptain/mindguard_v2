@@ -33,6 +33,8 @@ PERM_CONSENT_MANAGE = "consent.manage"
 PERM_CONSENT_RESPOND = "consent.respond"
 # Manage demo requests (internal pipeline).
 PERM_DEMO_MANAGE = "demo.manage"
+# View the full compliance / audit trail.
+PERM_AUDIT_VIEW = "audit.view"
 
 ALL_PERMISSIONS = frozenset({
     PERM_ANALYSIS_RUN,
@@ -41,6 +43,7 @@ ALL_PERMISSIONS = frozenset({
     PERM_CONSENT_MANAGE,
     PERM_CONSENT_RESPOND,
     PERM_DEMO_MANAGE,
+    PERM_AUDIT_VIEW,
 })
 
 

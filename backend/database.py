@@ -1058,6 +1058,23 @@ def get_audit_log(counsellor_id: str, limit: int = 100) -> list:
     return [dict(r) for r in rows]
 
 
+def get_all_audit_log(limit: int = 100, action: str | None = None) -> list:
+    """Return the full audit trail (admin / compliance view), newest first."""
+    conn = get_db()
+    if action:
+        rows = conn.execute(
+            "SELECT * FROM audit_log WHERE action = ? ORDER BY occurred_at DESC LIMIT ?",
+            (action, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM audit_log ORDER BY occurred_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ── Notes functions ───────────────────────────────────────────────────
 
 def create_note(student_id: str, author_id: str, body: str) -> dict:
