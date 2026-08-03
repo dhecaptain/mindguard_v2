@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getConsents, createConsent, dispatchConsent, cancelConsent, remindConsent } from '../api/counsellor'
 import { getStudents } from '../api/counsellor'
+import RosterPanel from '../components/consent/RosterPanel'
 import type { Consent, ConsentStatus } from '../types'
 import type { StudentDTO } from '../api/counsellor'
 
@@ -216,6 +217,7 @@ function NewConsentModal({ students, onClose, onCreated }: NewConsentModalProps)
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ConsentTrackerPage() {
+  const [tab, setTab] = useState<'consents' | 'roster'>('consents')
   const [filterTab, setFilterTab] = useState('all')
   const [consents, setConsents] = useState<Consent[]>([])
   const [students, setStudents] = useState<StudentDTO[]>([])
@@ -266,18 +268,40 @@ export default function ConsentTrackerPage() {
         <div>
           <h2 className="text-[1.3rem] font-bold text-[#1f2937]">Consent Tracker</h2>
           <p className="text-[0.82rem] text-[#6b7280] mt-[2px]">
-            Manage data-sharing consents for your students
+            Manage data-sharing consents and the student roster
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-[6px] px-[14px] py-[8px] bg-[#0F766E] text-white rounded-[8px] text-[0.82rem] font-semibold cursor-pointer hover:bg-[#0d5c56] transition-colors"
-        >
-          <i className="ti ti-plus text-[14px]" />
-          New Consent
-        </button>
+        {tab === 'consents' && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-[6px] px-[14px] py-[8px] bg-[#0F766E] text-white rounded-[8px] text-[0.82rem] font-semibold cursor-pointer hover:bg-[#0d5c56] transition-colors"
+          >
+            <i className="ti ti-plus text-[14px]" />
+            New Consent
+          </button>
+        )}
       </div>
 
+      {/* Consents / Roster tabs */}
+      <div className="flex items-center gap-[2px] bg-[#f1f5f9] rounded-[8px] p-[4px] w-fit">
+        {(['consents', 'roster'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-[14px] py-[6px] rounded-[6px] text-[0.82rem] font-semibold cursor-pointer transition-colors border-none capitalize ${
+              tab === t
+                ? 'bg-white text-[#1f2937] shadow-sm'
+                : 'bg-transparent text-[#6b7280] hover:text-[#374151]'
+            }`}
+          >
+            {t === 'consents' ? 'Consents' : 'Roster'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'roster' && <RosterPanel />}
+
+      {tab === 'consents' && (<>
       {/* Filter tabs */}
       <div className="flex items-center gap-[2px] bg-[#f1f5f9] rounded-[8px] p-[4px] w-fit">
         {FILTER_TABS.map((t) => (
@@ -448,6 +472,7 @@ export default function ConsentTrackerPage() {
           }}
         />
       )}
+      </>)}
     </div>
   )
 }

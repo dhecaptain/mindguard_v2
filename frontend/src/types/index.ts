@@ -154,6 +154,36 @@ export interface Consent {
   consent_url?: string
 }
 
+// ─── Roster & School Admin (Delivery Brief §5) ────────────────────────────────
+
+export interface RosterStudent {
+  id: string
+  student_id_hash: string
+  name: string
+  email: string
+  is_minor: boolean
+  grade_level?: string
+  consent_status?: string | null
+}
+
+export interface Institution {
+  id: string
+  name: string
+  type?: string
+  minor_age_threshold?: number
+  consent_reminder_days?: string
+  consent_expiry_days?: number
+}
+
+export interface RosterUploadSummary {
+  total: number
+  created: number
+  updated: number
+  errors: Array<{ row: Record<string, string>; error: string }>
+  parse_error?: string | null
+  skipped_minor_by_default?: number
+}
+
 export interface LinkedAccount {
   id: string
   student_id: string
