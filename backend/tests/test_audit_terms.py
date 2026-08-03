@@ -4,6 +4,12 @@ from backend import database
 from backend import permissions as perm
 
 
+def test_health_check_reports_ok(db):
+    result = database.health_check()
+    assert result["db"] == "ok"
+    assert result["tables"] >= 1
+
+
 def _user(role: str) -> dict:
     return {"role_type": role, "permissions_json": None}
 

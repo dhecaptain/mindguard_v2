@@ -56,6 +56,7 @@ from backend.database import (
     create_linked_account, get_linked_accounts, revoke_linked_account,
     get_alerts, dispose_alert, get_open_alert_for_student,
     write_audit, get_audit_log, get_all_audit_log,
+    health_check,
     create_note, get_notes,
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
@@ -144,6 +145,14 @@ async def _consent_maintenance_loop() -> None:
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": "2.0.0"}
+
+
+@app.get("/api/v1/healthz")
+async def healthz():
+    """Liveness/readiness probe (Delivery Brief §12) — includes a DB check."""
+    db = health_check()
+    ok = db.get("db") == "ok"
+    return {"status": "ok" if ok else "degraded", "version": "2.0.0", "db": db}
 
 
 # ── Rate limiting ─────────────────────────────────────────────────────

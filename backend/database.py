@@ -21,6 +21,17 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
+def health_check() -> dict:
+    """Lightweight liveness probe: verify the DB is reachable and schema is present."""
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'").fetchone()
+        conn.close()
+        return {"db": "ok", "tables": row["n"] if row else 0}
+    except Exception as exc:
+        return {"db": "error", "error": str(exc)}
+
+
 def init_db():
     conn = get_db()
     conn.executescript("""
