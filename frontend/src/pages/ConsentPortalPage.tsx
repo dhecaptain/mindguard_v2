@@ -51,7 +51,7 @@ export default function ConsentPortalPage({ token }: { token: string }) {
     load()
   }, [token])
 
-  const submit = async (action: 'accept' | 'decline') => {
+  const submit = async (action: 'accept' | 'decline' | 'revoke') => {
     if (action === 'accept' && !signatureName.trim()) {
       setMessage('Please enter your name before accepting.')
       return
@@ -67,7 +67,11 @@ export default function ConsentPortalPage({ token }: { token: string }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.detail || `Could not ${action} consent.`)
       setConsent((prev) => prev ? { ...prev, status: data.status } : prev)
-      setMessage(action === 'accept' ? 'Consent accepted. Thank you.' : 'Consent declined.')
+      setMessage(
+        action === 'accept' ? 'Consent accepted. Thank you.'
+          : action === 'decline' ? 'Consent declined.'
+          : 'Consent withdrawn. Analysis of this data has been stopped.'
+      )
       setStatus('done')
     } catch (err: any) {
       setMessage(err.message || `Could not ${action} consent.`)
@@ -125,9 +129,25 @@ export default function ConsentPortalPage({ token }: { token: string }) {
               </div>
 
               {consent.status === 'ACCEPTED' || consent.status === 'DECLINED' || status === 'done' ? (
-                <div className="rounded-[10px] bg-[#ecfdf5] text-[#065f46] px-[16px] py-[14px] font-semibold">
-                  {message || `This request is already ${consent.status.toLowerCase()}.`}
-                </div>
+                <>
+                  <div className="rounded-[10px] bg-[#ecfdf5] text-[#065f46] px-[16px] py-[14px] font-semibold">
+                    {message || `This request is already ${consent.status.toLowerCase()}.`}
+                  </div>
+                  {consent.status === 'ACCEPTED' && status !== 'submitting' && (
+                    <div className="rounded-[10px] bg-white border border-[#fecaca] px-[16px] py-[14px]">
+                      <p className="text-[0.84rem] text-[#6b7280] mb-[10px]">
+                        You can withdraw your consent at any time. Withdrawing stops
+                        analysis of this data immediately.
+                      </p>
+                      <button
+                        onClick={() => submit('revoke')}
+                        className="rounded-[8px] bg-white text-[#991b1b] border border-[#fecaca] px-[16px] py-[9px] font-bold hover:bg-[#fef2f2]"
+                      >
+                        Withdraw consent
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <div>
