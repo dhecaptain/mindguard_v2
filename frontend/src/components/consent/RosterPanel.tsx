@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  commitRoster,
   getInstitutions,
   getRosterStudents,
   runConsentMaintenance,
   uploadRoster,
 } from '../../api/admin'
-import type { Institution, RosterStudent, RosterUploadSummary } from '../../types'
+import type { Institution, RosterDispatchSummary, RosterStudent, RosterUploadSummary } from '../../types'
 
 const CONSENT_STYLE: Record<string, string> = {
   ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
@@ -25,6 +26,8 @@ export default function RosterPanel() {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [summary, setSummary] = useState<RosterUploadSummary | null>(null)
+  const [dispatch, setDispatch] = useState<RosterDispatchSummary | null>(null)
+  const [sendOnUpload, setSendOnUpload] = useState(false)
   const [maintaining, setMaintaining] = useState(false)
   const [maintenanceMsg, setMaintenanceMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -59,9 +62,16 @@ export default function RosterPanel() {
     if (!file) return
     setUploading(true)
     setSummary(null)
+    setDispatch(null)
     setError(null)
     try {
-      setSummary(await uploadRoster(file, institutionId))
+      if (sendOnUpload) {
+        const result = await commitRoster(file, institutionId)
+        setSummary(result.roster)
+        setDispatch(result.dispatch)
+      } else {
+        setSummary(await uploadRoster(file, institutionId))
+      }
       await loadStudents()
       setFile(null)
       if (fileRef.current) fileRef.current.value = ''
@@ -136,7 +146,7 @@ export default function RosterPanel() {
               ) : (
                 <i className="ti ti-cloud-upload text-[14px]" />
               )}
-              {uploading ? 'Uploading...' : 'Upload'}
+              {uploading ? 'Uploading...' : sendOnUpload ? 'Upload & send consents' : 'Upload'}
             </button>
             <button
               onClick={handleMaintenance}
@@ -146,6 +156,20 @@ export default function RosterPanel() {
               {maintaining ? 'Running...' : 'Run maintenance'}
             </button>
           </div>
+        </div>
+
+        <div className="mt-[12px]">
+          <label className="flex items-center gap-[8px] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={sendOnUpload}
+              onChange={(e) => setSendOnUpload(e.target.checked)}
+              className="w-[15px] h-[15px] accent-[#0F766E] cursor-pointer"
+            />
+            <span className="text-[0.8rem] text-[#374151]">
+              Send consent requests immediately (one-action upload + dispatch, Delivery Brief §2.5)
+            </span>
+          </label>
         </div>
 
         {summary && (
@@ -160,6 +184,28 @@ export default function RosterPanel() {
               <div className="mt-[6px] max-h-[120px] overflow-y-auto text-[0.76rem] text-[#991b1b]">
                 {summary.errors.slice(0, 10).map((e, i) => (
                   <div key={i}>Row: {e.row.student_id || JSON.stringify(e.row)} — {e.error}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {dispatch && (
+          <div className="mt-[10px] rounded-[10px] bg-[#eff6ff] border border-[#bfdbfe] px-[14px] py-[10px] text-[0.82rem] text-[#1e40af]">
+            <div className="font-bold mb-[2px]">Consent dispatch</div>
+            <div>
+              {dispatch.dispatched} request(s) dispatched · {dispatch.email_sent} email(s) sent ·{' '}
+              {dispatch.courtesy_sent} courtesy copy/copies
+              {dispatch.email_failed ? ` · ${dispatch.email_failed} email(s) failed` : ''}
+            </div>
+            <div className="mt-[2px] text-[0.76rem] text-[#64748b]">
+              {dispatch.skipped_live} already consented · {dispatch.skipped_no_parent} minor(s) without parent email
+              {dispatch.users_created ? ` · ${dispatch.users_created} account(s) created` : ''}
+            </div>
+            {dispatch.routing_errors.length > 0 && (
+              <div className="mt-[6px] max-h-[120px] overflow-y-auto text-[0.76rem] text-[#991b1b]">
+                {dispatch.routing_errors.slice(0, 10).map((e, i) => (
+                  <div key={i}>{e.student_id} — {e.reason}</div>
                 ))}
               </div>
             )}

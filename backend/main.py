@@ -61,6 +61,7 @@ from backend.database import (
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
     get_institution_by_id, list_institutions, list_students,
+    get_student_by_id,
     create_demo_request, get_demo_request, list_demo_requests, update_demo_request,
     # groups
     create_group, get_group_by_id, update_group, delete_group,
@@ -75,6 +76,7 @@ from backend.services.consent_service import (
     dispatch_consent, remind_consent, record_view, accept_consent, decline_consent, revoke_consent,
     verify_consent_token, remaining_views,
     process_consent_reminders, process_expired_consents,
+    dispatch_consents_for_students,
 )
 from backend.services.consent_gate import require_consent_for_analysis
 from backend.services.crypto import decrypt_pii
@@ -2110,6 +2112,47 @@ async def v1_admin_roster_upload(
                  "errors": len(summary["errors"]), "total": summary["total"]},
     )
     return summary
+
+
+@app.post("/api/v1/admin/roster/commit")
+async def v1_admin_roster_commit(
+    institution_id: str,
+    file: UploadFile = File(...),
+    request: Request = None,
+    user: dict = Depends(require_auth),
+):
+    """Roster upload + consent dispatch in one action (Delivery Brief §2.5).
+
+    Upserts the CSV rows, then creates and dispatches a signed consent request
+    for every student that lacks a live consent — routed per §2.4 (adult ->
+    student; minor -> parent, plus an informational courtesy copy to the student).
+    """
+    require_permission(user, PERM_ROSTER_UPLOAD)
+    inst = get_institution_by_id(institution_id)
+    if not inst:
+        raise HTTPException(404, "Institution not found")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Uploaded file is empty")
+    try:
+        minor_age = int(inst.get("minor_age_threshold") or 18)
+    except (TypeError, ValueError):
+        minor_age = 18
+    summary = upsert_roster(institution_id, raw, user["id"], minor_age_threshold=minor_age)
+    student_ids = summary.get("student_ids") or []
+    students = [s for s in (get_student_by_id(i) for i in student_ids) if s]
+    dispatch = dispatch_consents_for_students(
+        students, user["id"], ip=_client_ip(request)
+    )
+    write_audit(
+        user["id"], user["role_type"], "ROSTER_COMMIT", "institution", institution_id,
+        payload={"created": summary["created"], "updated": summary["updated"],
+                 "errors": len(summary["errors"]), "total": summary["total"],
+                 "consents_dispatched": dispatch["dispatched"],
+                 "consents_failed": dispatch["email_failed"],
+                 "skipped_no_parent": dispatch["skipped_no_parent"]},
+    )
+    return {"roster": summary, "dispatch": dispatch}
 
 
 @app.get("/api/v1/admin/students")

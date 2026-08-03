@@ -182,6 +182,25 @@ export interface RosterUploadSummary {
   errors: Array<{ row: Record<string, string>; error: string }>
   parse_error?: string | null
   skipped_minor_by_default?: number
+  student_ids?: string[]
+}
+
+export interface RosterDispatchSummary {
+  checked: number
+  created: number
+  dispatched: number
+  email_sent: number
+  email_failed: number
+  courtesy_sent: number
+  skipped_live: number
+  skipped_no_parent: number
+  users_created?: number
+  routing_errors: Array<{ student_id: string; reason: string }>
+}
+
+export interface RosterCommitResult {
+  roster: RosterUploadSummary
+  dispatch: RosterDispatchSummary
 }
 
 // ─── Demo request pipeline (Delivery Brief §6) ────────────────────────────────

@@ -115,6 +115,7 @@ def upsert_roster(
         "errors": [],
         "parse_error": parse_error,
         "skipped_minor_by_default": 0,
+        "student_ids": [],
     }
     if parse_error or not rows:
         return summary
@@ -170,9 +171,11 @@ def _upsert_one(institution_id, row, created_by, minor_age_threshold, summary) -
         if existing:
             database.update_student(existing["id"], **payload)
             summary["updated"] += 1
+            summary["student_ids"].append(existing["id"])
         else:
-            database.create_student(**payload)
+            created = database.create_student(**payload)
             summary["created"] += 1
+            summary["student_ids"].append(created["id"])
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("roster upsert failed for student_id=%s", student_id)
         return f"database error: {exc}"

@@ -4,6 +4,7 @@ import type {
   DemoRequest,
   DemoRequestStatus,
   Institution,
+  RosterCommitResult,
   RosterStudent,
   RosterUploadSummary,
 } from '../types'
@@ -32,6 +33,16 @@ export async function uploadRoster(
   const form = new FormData()
   form.append('file', file)
   const { data } = await api.post(`/v1/admin/roster/upload?institution_id=${institutionId}`, form)
+  return data
+}
+
+export async function commitRoster(
+  file: File,
+  institutionId: string,
+): Promise<RosterCommitResult> {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await api.post(`/v1/admin/roster/commit?institution_id=${institutionId}`, form)
   return data
 }
 
