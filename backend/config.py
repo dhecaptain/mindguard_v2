@@ -33,6 +33,8 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "")
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
+WEBHOOK_TOLERANCE_SECONDS = int(os.getenv("WEBHOOK_TOLERANCE_SECONDS", "300"))
 EMAIL_FROM = os.getenv("EMAIL_FROM", "MindGuard <noreply@mindguard.ai>")
 DEMO_NOTIFY_EMAIL = os.getenv("DEMO_NOTIFY_EMAIL", "")
 

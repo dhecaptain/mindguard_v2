@@ -22,6 +22,18 @@ const STATUS_STYLE: Record<ConsentStatus, string> = {
   RENEWAL_DUE: 'bg-[#fff7ed] text-[#9a3412]',
 }
 
+const DELIVERY_STYLE: Record<string, string> = {
+  delivered: 'bg-[#d1fae5] text-[#065f46]',
+  bounced: 'bg-[#fee2e2] text-[#991b1b]',
+  complained: 'bg-[#fef3c7] text-[#92400e]',
+}
+
+const DELIVERY_LABEL: Record<string, string> = {
+  delivered: 'Delivered',
+  bounced: 'Bounced',
+  complained: 'Complaint',
+}
+
 const FILTER_TABS: Array<{ key: string; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'PENDING', label: 'Pending' },
@@ -569,6 +581,7 @@ export default function ConsentTrackerPage() {
                   <th className="text-left py-[10px] px-[20px]">Recipient</th>
                   <th className="text-left py-[10px] px-[20px]">Mode</th>
                   <th className="text-left py-[10px] px-[20px]">Status</th>
+                  <th className="text-left py-[10px] px-[20px]">Delivery</th>
                   <th className="text-left py-[10px] px-[20px]">Dispatched</th>
                   <th className="text-left py-[10px] px-[20px]">Actions</th>
                 </tr>
@@ -600,6 +613,18 @@ export default function ConsentTrackerPage() {
                         <span className={`inline-block px-[8px] py-[2px] rounded-full text-[0.7rem] font-semibold ${STATUS_STYLE[consent.status]}`}>
                           {consent.status.replace(/_/g, ' ')}
                         </span>
+                      </td>
+                      <td className="py-[12px] px-[20px]">
+                        {consent.delivery_status ? (
+                          <span
+                            className={`inline-block px-[8px] py-[2px] rounded-full text-[0.7rem] font-semibold ${DELIVERY_STYLE[consent.delivery_status] || 'bg-[#f1f5f9] text-[#6b7280]'}`}
+                            title={consent.last_delivery_event_at ? `Reported ${formatDate(consent.last_delivery_event_at)}` : undefined}
+                          >
+                            {DELIVERY_LABEL[consent.delivery_status] || consent.delivery_status}
+                          </span>
+                        ) : (
+                          <span className="text-[#d1d5db]">—</span>
+                        )}
                       </td>
                       <td className="py-[12px] px-[20px] text-[#6b7280]">
                         {formatDate(consent.dispatched_at)}

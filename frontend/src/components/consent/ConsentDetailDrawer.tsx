@@ -83,6 +83,23 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
     )
   }
 
+  const DELIVERY_BADGE: Record<string, { style: string; label: string }> = {
+    delivered: { style: 'bg-[#d1fae5] text-[#065f46]', label: 'Delivered' },
+    bounced: { style: 'bg-[#fee2e2] text-[#991b1b]', label: 'Bounced' },
+    complained: { style: 'bg-[#fef3c7] text-[#92400e]', label: 'Complaint' },
+  }
+
+  const deliveryBadge = (d?: string) => {
+    if (!d) return null
+    const cfg = DELIVERY_BADGE[d]
+    if (!cfg) return null
+    return (
+      <span className={`inline-block px-[8px] py-[2px] rounded-full text-[0.7rem] font-semibold ${cfg.style}`}>
+        {cfg.label}
+      </span>
+    )
+  }
+
   const c = detail?.consent
 
   return (
@@ -121,6 +138,7 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
                   {c.student_name || c.student_id}
                 </span>
                 {statusBadge(c.status)}
+                {deliveryBadge(c.delivery_status)}
               </div>
               <div className="grid grid-cols-2 gap-[8px] text-[0.8rem]">
                 <div>
@@ -157,6 +175,15 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
                     <div className="text-[#374151]">{v}</div>
                   </div>
                 ))}
+                <div>
+                  <div className="text-[0.68rem] uppercase tracking-wider text-[#9ca3af] font-semibold">Delivery</div>
+                  <div className="text-[#374151]">
+                    {c.delivery_status
+                      ? (DELIVERY_BADGE[c.delivery_status]?.label ?? c.delivery_status)
+                      : '—'}
+                    {c.last_delivery_event_at ? ` · ${fmt(c.last_delivery_event_at)}` : ''}
+                  </div>
+                </div>
               </div>
             </div>
 

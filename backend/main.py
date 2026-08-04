@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import SUPABASE_URL, SUPABASE_ANON_KEY
+from backend.config import SUPABASE_URL, SUPABASE_ANON_KEY, RESEND_WEBHOOK_SECRET, WEBHOOK_TOLERANCE_SECONDS
 from backend.models.schemas import (
     TextAnalysisRequest, TextAnalysisResponse,
     PlatformRequest, LoginRequest, RegisterRequest, UserResponse,
@@ -37,6 +37,7 @@ from backend.models.schemas import (
     DemoRequestCreate, DemoRequestUpdate,
 )
 from backend.services.email_sender import send_html_email
+from backend.services.webhook_service import handle_webhook
 from backend.services.email_templates import (
     demo_request_confirmation, demo_request_notification,
 )
@@ -2356,6 +2357,30 @@ async def v1_admin_audit_log(
     limit = max(1, min(limit, 1000))
     entries = get_all_audit_log(limit=limit, action=action)
     return {"entries": entries, "total": len(entries)}
+
+
+# ── ESP webhooks (Delivery Brief §6/§9.4) ─────────────────────────────
+
+@app.post("/webhooks/email/resend")
+async def v1_resend_webhook(request: Request):
+    """Resend (Svix-format) webhook: signature-verified, idempotent delivery events.
+
+    Records bounces/complaints/deliveries into ``email_events`` so the consent
+    tracker and demo-request panel can surface the latest delivery outcome.
+    """
+    raw = (await request.body()).decode("utf-8", errors="replace")
+    try:
+        summary = handle_webhook(
+            raw,
+            dict(request.headers),
+            RESEND_WEBHOOK_SECRET,
+            WEBHOOK_TOLERANCE_SECONDS,
+        )
+    except ValueError:
+        raise HTTPException(401, "Invalid webhook signature")
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Invalid JSON body")
+    return summary
 
 
 # ── Rolling risk trigger ──────────────────────────────────────────────

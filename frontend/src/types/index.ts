@@ -153,6 +153,8 @@ export interface Consent {
   email_sent?: boolean
   email_error?: string
   consent_url?: string
+  delivery_status?: 'delivered' | 'bounced' | 'complained'
+  last_delivery_event_at?: string
 }
 
 export interface ConsentListResponse {

@@ -891,6 +891,22 @@ def query_consents(
         where.append("c.created_at <= ?")
         params.append(f"{str(date_to)}T23:59:59.999999")
     where_sql = " AND ".join(where)
+    # Latest delivery outcome for the consent's own recipient email
+    # (only email_events rows carrying a real delivery outcome).
+    delivery_subquery = (
+        "SELECT e.event FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
+    delivery_at_subquery = (
+        "SELECT e.created_at FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
 
     conn = get_db()
     total = conn.execute(
@@ -900,7 +916,9 @@ def query_consents(
     limit = max(1, min(int(limit), 1000))
     offset = max(0, int(offset))
     rows = conn.execute(
-        f"SELECT c.*, u.name as student_name, u.email as student_email "
+        f"SELECT c.*, u.name as student_name, u.email as student_email, "
+        f"({delivery_subquery}) AS delivery_status, "
+        f"({delivery_at_subquery}) AS last_delivery_event_at "
         f"FROM consents c JOIN users u ON c.student_id = u.id "
         f"WHERE {where_sql} ORDER BY c.created_at DESC LIMIT ? OFFSET ?",
         params + [limit, offset],
@@ -911,9 +929,25 @@ def query_consents(
 
 def get_consent_with_student(consent_id: str) -> dict | None:
     """Single consent joined with the student's user name/email."""
+    delivery_subquery = (
+        "SELECT e.event FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
+    delivery_at_subquery = (
+        "SELECT e.created_at FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
     conn = get_db()
     row = conn.execute(
-        "SELECT c.*, u.name as student_name, u.email as student_email "
+        "SELECT c.*, u.name as student_name, u.email as student_email, "
+        f"({delivery_subquery}) AS delivery_status, "
+        f"({delivery_at_subquery}) AS last_delivery_event_at "
         "FROM consents c JOIN users u ON c.student_id = u.id WHERE c.id = ?",
         (consent_id,),
     ).fetchone()
@@ -1801,15 +1835,37 @@ def get_demo_request(demo_request_id: str) -> dict | None:
 
 
 def list_demo_requests(status: str | None = None, limit: int = 100, offset: int = 0) -> list:
+    delivery_subquery = (
+        "SELECT e.event FROM email_events e "
+        "WHERE e.related_type = 'demo_request' AND e.related_id = d.id "
+        "AND e.recipient_email = d.work_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
+    delivery_at_subquery = (
+        "SELECT e.created_at FROM email_events e "
+        "WHERE e.related_type = 'demo_request' AND e.related_id = d.id "
+        "AND e.recipient_email = d.work_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
     conn = get_db()
     if status:
         rows = conn.execute(
-            "SELECT * FROM demo_requests WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT d.*, "
+            f"({delivery_subquery}) AS delivery_status, "
+            f"({delivery_at_subquery}) AS last_delivery_event_at "
+            "FROM demo_requests d WHERE d.status = ? "
+            "ORDER BY d.created_at DESC LIMIT ? OFFSET ?",
             (status, limit, offset),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM demo_requests ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT d.*, "
+            f"({delivery_subquery}) AS delivery_status, "
+            f"({delivery_at_subquery}) AS last_delivery_event_at "
+            "FROM demo_requests d "
+            "ORDER BY d.created_at DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
     conn.close()
@@ -1856,6 +1912,21 @@ def create_email_event(
     conn.commit()
     conn.close()
     return eid
+
+
+def get_email_events_by_esp_message_id(esp_message_id: str, limit: int = 50) -> list:
+    """email_events rows for a given ESP message id (the ESP's ``email_id``).
+
+    Used by the ESP webhook handler to correlate a bounce/complaint/delivery
+    event back to the original send record. Ordered newest first.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM email_events WHERE esp_message_id = ? ORDER BY created_at DESC LIMIT ?",
+        (esp_message_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_email_events(related_type: str | None = None, related_id: str | None = None, limit: int = 200) -> list:
