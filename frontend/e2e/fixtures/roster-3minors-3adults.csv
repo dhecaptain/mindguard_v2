@@ -1,0 +1,7 @@
+student_id,first_name,last_name,email,date_of_birth,grade_level,parent_email
+M-101,Mina,Haddad,minor1@e2e.students.org,2012-06-15,7,parent1@e2e.parents.org
+M-102,Priya,Nair,minor2@e2e.students.org,2013-02-20,6,parent2@e2e.parents.org
+M-103,Alex,Morgan,minor3@e2e.students.org,2012-11-05,7,parent3@e2e.parents.org
+A-201,Chris,Adeyemi,adult1@e2e.students.org,2001-03-10,12,
+A-202,Sam,Kowalski,adult2@e2e.students.org,2000-07-22,13,
+A-203,Jamie,Okafor,adult3@e2e.students.org,2002-09-14,12,

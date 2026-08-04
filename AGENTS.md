@@ -1,5 +1,19 @@
 # Setup Guide
 
+## Backend environment (`.env`)
+
+The backend loads a `.env` file from the current working directory (via
+`python-dotenv` in `backend/config.py` and `backend/auth.py`). Run uvicorn from
+the repo root so it picks up the root `.env`:
+
+```bash
+cp .env.example .env
+# fill in JWT_SECRET and ENCRYPTION_KEY (generate with python -c "import secrets; print(secrets.token_urlsafe(32))")
+```
+
+`JWT_SECRET` is required at startup (boot fails without it). The file is
+gitignored.
+
 ## Google OAuth via Supabase
 
 ### Prerequisites
@@ -57,3 +71,28 @@ User clicks "Sign in with Google"
     6. Frontend stores token in localStorage['mg_token']
     7. User is logged in
 ```
+
+## Testing
+
+### Backend unit tests (133)
+
+```bash
+source .venv/bin/activate
+cd backend
+PYTHONPATH=..:. python3 -m pytest -q
+```
+
+### End-to-end (Playwright)
+
+```bash
+cd frontend && npm run test:e2e
+```
+
+The suite starts its own servers (backend on 8000, vite on 5188, marketing on
+3000), seeds a throwaway SQLite DB in `frontend/.e2e-db`, and runs fully
+offline (email delivery fails by design and is asserted). 4 tests cover the
+consent workflow (roster upload → dispatch → accept/decline → consent-gated
+analysis) and the marketing demo-request form.
+
+CI (`.github/workflows/ci.yml`) runs both suites on every push/PR. Note the
+backend must be started from the repo root so the root `.env` is picked up.

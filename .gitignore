@@ -10,6 +10,8 @@ mindguard_onnx/
 *.csv
 *.txt
 !**/requirements.txt
+!backend/requirements-test.txt
+!frontend/e2e/fixtures/*.csv
 training_history.json
 mindguard_unified_report*.txt
 
