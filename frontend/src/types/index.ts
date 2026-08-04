@@ -149,9 +149,120 @@ export interface Consent {
   expires_at?: string
   created_at: string
   student_name?: string  // joined from users
+  student_email?: string  // joined from users
   email_sent?: boolean
   email_error?: string
   consent_url?: string
+}
+
+export interface ConsentListResponse {
+  consents: Consent[]
+  total: number
+}
+
+export interface ConsentEvent {
+  id: string
+  consent_id: string
+  event_type: string
+  actor_type: string
+  actor_id?: string
+  metadata_json?: string
+  created_at: string
+}
+
+export interface ConsentAuditEntry {
+  id: string
+  actor_id?: string
+  actor_role?: string
+  action: string
+  target_type?: string
+  target_id?: string
+  payload_json?: string
+  ip?: string
+  occurred_at: string
+}
+
+export interface ConsentDetail {
+  consent: Consent
+  events: ConsentEvent[]
+  audit_log: ConsentAuditEntry[]
+}
+
+// ─── Roster & School Admin (Delivery Brief §5) ────────────────────────────────
+
+export interface RosterStudent {
+  id: string
+  student_id_hash: string
+  name: string
+  email: string
+  is_minor: boolean
+  grade_level?: string
+  consent_status?: string | null
+}
+
+export interface Institution {
+  id: string
+  name: string
+  type?: string
+  minor_age_threshold?: number
+  consent_reminder_days?: string
+  consent_expiry_days?: number
+}
+
+export interface RosterUploadSummary {
+  total: number
+  created: number
+  updated: number
+  errors: Array<{ row: Record<string, string>; error: string }>
+  parse_error?: string | null
+  student_ids?: string[]
+}
+
+export interface RosterDispatchSummary {
+  checked: number
+  created: number
+  dispatched: number
+  email_sent: number
+  email_failed: number
+  courtesy_sent: number
+  skipped_live: number
+  skipped_no_parent: number
+  users_created?: number
+  routing_errors: Array<{ student_id: string; reason: string }>
+}
+
+export interface RosterCommitResult {
+  roster: RosterUploadSummary
+  dispatch: RosterDispatchSummary
+}
+
+// ─── Demo request pipeline (Delivery Brief §6) ────────────────────────────────
+
+export type DemoRequestStatus =
+  | 'new'
+  | 'contacted'
+  | 'qualified'
+  | 'demo_scheduled'
+  | 'closed_won'
+  | 'closed_lost'
+
+export interface DemoRequest {
+  id: string
+  full_name: string
+  work_email: string
+  organisation: string
+  organisation_type: string
+  role_title?: string | null
+  country?: string | null
+  student_count_range?: string | null
+  message?: string | null
+  heard_about_us?: string | null
+  status: DemoRequestStatus
+  assigned_to?: string | null
+  notes?: string | null
+  consent_to_contact?: number
+  created_at: string
+  updated_at: string
 }
 
 export interface LinkedAccount {

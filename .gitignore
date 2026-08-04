@@ -50,6 +50,9 @@ mindguard.db
 *.docx
 mindguard_dashboard_preview.html
 
+# Delivery brief — never commit
+MindGuard_Development_Delivery_Brief.docx
+
 # IDE
 .cursor/
 

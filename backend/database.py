@@ -21,6 +21,17 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
+def health_check() -> dict:
+    """Lightweight liveness probe: verify the DB is reachable and schema is present."""
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'").fetchone()
+        conn.close()
+        return {"db": "ok", "tables": row["n"] if row else 0}
+    except Exception as exc:
+        return {"db": "error", "error": str(exc)}
+
+
 def init_db():
     conn = get_db()
     conn.executescript("""
@@ -218,6 +229,81 @@ def init_db():
             created_at TEXT NOT NULL,
             UNIQUE(user_id, type)
         );
+
+        -- ── Consent & roster data model (Delivery Brief §3) ──────────────
+        -- All new tables use TEXT UUID primary keys and monotonic created_at
+        -- (Brief §11) without touching existing integer-keyed tables.
+
+        CREATE TABLE IF NOT EXISTS students (
+            id TEXT PRIMARY KEY,
+            institution_id TEXT REFERENCES institutions(id),
+            student_id_hash TEXT NOT NULL UNIQUE,
+            first_name_encrypted TEXT NOT NULL,
+            email_encrypted TEXT NOT NULL,
+            date_of_birth_encrypted TEXT NOT NULL,
+            is_minor INTEGER NOT NULL DEFAULT 0,
+            parent_email_encrypted TEXT,
+            parent_first_name_encrypted TEXT,
+            grade_level TEXT,
+            current_consent_id TEXT REFERENCES consents(id),
+            created_by TEXT REFERENCES users(id),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS consent_templates (
+            id TEXT PRIMARY KEY,
+            institution_id TEXT REFERENCES institutions(id),
+            version TEXT NOT NULL DEFAULT '1.0.0',
+            language TEXT NOT NULL DEFAULT 'en',
+            subject_email_html TEXT,
+            parent_email_html TEXT,
+            consent_page_html TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS consent_events (
+            id TEXT PRIMARY KEY,
+            consent_id TEXT NOT NULL REFERENCES consents(id),
+            event_type TEXT NOT NULL,
+            actor_type TEXT NOT NULL DEFAULT 'system',
+            actor_id TEXT,
+            metadata_json TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS demo_requests (
+            id TEXT PRIMARY KEY,
+            full_name TEXT NOT NULL,
+            work_email TEXT NOT NULL,
+            organisation TEXT NOT NULL,
+            role_title TEXT,
+            organisation_type TEXT NOT NULL DEFAULT 'other',
+            country TEXT,
+            student_count_range TEXT,
+            message TEXT,
+            heard_about_us TEXT,
+            status TEXT NOT NULL DEFAULT 'new',
+            assigned_to TEXT REFERENCES users(id),
+            notes TEXT,
+            consent_to_contact INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS email_events (
+            id TEXT PRIMARY KEY,
+            related_type TEXT NOT NULL,
+            related_id TEXT,
+            event TEXT NOT NULL,
+            esp_message_id TEXT,
+            recipient_email TEXT,
+            metadata_json TEXT,
+            created_at TEXT NOT NULL
+        );
     """)
     # Migrations for existing DBs
     for migration in [
@@ -226,6 +312,19 @@ def init_db():
         "ALTER TABLE users ADD COLUMN parent_email TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN referred_by TEXT DEFAULT NULL",
+        # Consent & roster extensions (additive, backwards compatible)
+        "ALTER TABLE institutions ADD COLUMN minor_age_threshold INTEGER DEFAULT 18",
+        "ALTER TABLE institutions ADD COLUMN consent_template_id TEXT DEFAULT NULL",
+        "ALTER TABLE institutions ADD COLUMN consent_reminder_days TEXT DEFAULT '[3,7]'",
+        "ALTER TABLE institutions ADD COLUMN consent_expiry_days INTEGER DEFAULT 30",
+        "ALTER TABLE consents ADD COLUMN signed_token_hash TEXT DEFAULT NULL",
+        "ALTER TABLE consents ADD COLUMN response_ip TEXT DEFAULT NULL",
+        "ALTER TABLE consents ADD COLUMN response_user_agent TEXT DEFAULT NULL",
+        "ALTER TABLE consents ADD COLUMN reminders_sent INTEGER DEFAULT 0",
+        "ALTER TABLE consents ADD COLUMN template_version TEXT DEFAULT '1.0.0'",
+        "ALTER TABLE consents ADD COLUMN notes TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN permissions_json TEXT DEFAULT '[]'",
+        "ALTER TABLE demo_requests ADD COLUMN consent_to_contact INTEGER DEFAULT 1",
     ]:
         try:
             conn.execute(migration)
@@ -660,6 +759,16 @@ def get_institution_by_id(inst_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def list_institutions(limit: int = 500) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM institutions ORDER BY name COLLATE NOCASE ASC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ── Consent functions ─────────────────────────────────────────────────
 
 def create_consent(
@@ -716,6 +825,8 @@ def update_consent_status(consent_id: str, status: str, **kwargs) -> dict | None
         "magic_token", "magic_token_expires_at", "signature_name", "signature_ip",
         "dispatched_at", "viewed_at", "accepted_at", "declined_at", "revoked_at",
         "expires_at", "platforms_json",
+        "signed_token_hash", "reminders_sent", "response_ip", "response_user_agent",
+        "template_version", "notes",
     }
     updates = ["status = ?", "updated_at = ?"]
     params = [status, now]
@@ -744,11 +855,100 @@ def get_consents_by_counsellor(counsellor_id: str) -> list:
     return [dict(r) for r in rows]
 
 
+def query_consents(
+    counsellor_id: str,
+    status: str | None = None,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list, int]:
+    """Paginated consent list for a counsellor with optional filters.
+
+    ``search`` matches (case-insensitively) against student name, student
+    email, recipient email, and the student/consent ids. ``date_from`` /
+    ``date_to`` are ``YYYY-MM-DD`` bounds on ``created_at`` (UTC, inclusive).
+    Returns (rows, total) where rows is the requested page.
+    """
+    where = ["c.counsellor_id = ?"]
+    params: list = [counsellor_id]
+    if status:
+        where.append("c.status = ?")
+        params.append(status.upper())
+    if search:
+        term = f"%{search.strip()}%"
+        where.append(
+            "(LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ? OR "
+            "LOWER(c.recipient_email) LIKE ? OR LOWER(c.student_id) LIKE ? OR "
+            "LOWER(c.id) LIKE ?)"
+        )
+        params += [term, term, term, term, term]
+    if date_from:
+        where.append("c.created_at >= ?")
+        params.append(str(date_from))
+    if date_to:
+        where.append("c.created_at <= ?")
+        params.append(f"{str(date_to)}T23:59:59.999999")
+    where_sql = " AND ".join(where)
+
+    conn = get_db()
+    total = conn.execute(
+        f"SELECT COUNT(*) FROM consents c JOIN users u ON c.student_id = u.id WHERE {where_sql}",
+        params,
+    ).fetchone()[0]
+    limit = max(1, min(int(limit), 1000))
+    offset = max(0, int(offset))
+    rows = conn.execute(
+        f"SELECT c.*, u.name as student_name, u.email as student_email "
+        f"FROM consents c JOIN users u ON c.student_id = u.id "
+        f"WHERE {where_sql} ORDER BY c.created_at DESC LIMIT ? OFFSET ?",
+        params + [limit, offset],
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows], total
+
+
+def get_consent_with_student(consent_id: str) -> dict | None:
+    """Single consent joined with the student's user name/email."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT c.*, u.name as student_name, u.email as student_email "
+        "FROM consents c JOIN users u ON c.student_id = u.id WHERE c.id = ?",
+        (consent_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_audit_log_for_target(target_type: str, target_id: str, limit: int = 200) -> list:
+    """Immutable audit entries for a single target (e.g. a consent), newest first."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM audit_log WHERE target_type = ? AND target_id = ? "
+        "ORDER BY occurred_at DESC LIMIT ?",
+        (target_type, target_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_consents_by_student(student_id: str) -> list:
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM consents WHERE student_id = ? ORDER BY created_at DESC",
         (student_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_consents(limit: int = 5000) -> list:
+    """All consents, newest first (used by the reminder/expiry scheduler)."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM consents ORDER BY created_at DESC LIMIT ?",
+        (limit,),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -943,6 +1143,23 @@ def get_audit_log(counsellor_id: str, limit: int = 100) -> list:
     """
     params = [counsellor_id] + student_ids + [limit]
     rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_audit_log(limit: int = 100, action: str | None = None) -> list:
+    """Return the full audit trail (admin / compliance view), newest first."""
+    conn = get_db()
+    if action:
+        rows = conn.execute(
+            "SELECT * FROM audit_log WHERE action = ? ORDER BY occurred_at DESC LIMIT ?",
+            (action, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM audit_log ORDER BY occurred_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -1297,3 +1514,366 @@ def should_notify(user_id: str, ntype: str, group_id: str | None = None) -> bool
         if group_id in muted:
             return False
     return True
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Consent & roster data model (Delivery Brief §3) — M1
+# ═════════════════════════════════════════════════════════════════════
+
+# ── Students ─────────────────────────────────────────────────────────
+
+def create_student(
+    institution_id: str,
+    student_id_hash: str,
+    first_name_encrypted: str,
+    email_encrypted: str,
+    date_of_birth_encrypted: str,
+    is_minor: bool,
+    created_by: str,
+    parent_email_encrypted: str | None = None,
+    parent_first_name_encrypted: str | None = None,
+    grade_level: str | None = None,
+) -> dict:
+    sid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        """INSERT INTO students (
+            id, institution_id, student_id_hash, first_name_encrypted,
+            email_encrypted, date_of_birth_encrypted, is_minor,
+            parent_email_encrypted, parent_first_name_encrypted, grade_level,
+            created_by, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            sid, institution_id, student_id_hash, first_name_encrypted,
+            email_encrypted, date_of_birth_encrypted, 1 if is_minor else 0,
+            parent_email_encrypted, parent_first_name_encrypted, grade_level,
+            created_by, now, now,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": sid}
+
+
+def get_student_by_id(student_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM students WHERE id = ? AND deleted_at IS NULL",
+        (student_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_student_by_student_id_hash(student_id_hash: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM students WHERE student_id_hash = ? AND deleted_at IS NULL",
+        (student_id_hash,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_students(institution_id: str | None = None, limit: int = 200, offset: int = 0) -> list:
+    conn = get_db()
+    if institution_id:
+        rows = conn.execute(
+            "SELECT * FROM students WHERE institution_id = ? AND deleted_at IS NULL "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (institution_id, limit, offset),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM students WHERE deleted_at IS NULL "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_student(student_id: str, **kwargs) -> dict | None:
+    """Update allowed student fields. Values are already encrypted/hashed by the caller."""
+    allowed_fields = {
+        "institution_id", "student_id_hash", "first_name_encrypted",
+        "email_encrypted", "date_of_birth_encrypted", "is_minor",
+        "parent_email_encrypted", "parent_first_name_encrypted", "grade_level",
+        "current_consent_id", "deleted_at",
+    }
+    updates = ["updated_at = ?"]
+    params = [datetime.now(timezone.utc).isoformat()]
+    for field, value in kwargs.items():
+        if field in allowed_fields:
+            updates.append(f"{field} = ?")
+            params.append(value)
+    if len(updates) == 1:
+        return get_student_by_id(student_id)
+    params.append(student_id)
+    conn = get_db()
+    conn.execute(f"UPDATE students SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return get_student_by_id(student_id)
+
+
+def soft_delete_student(student_id: str) -> bool:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE students SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+        (now, now, student_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def set_student_current_consent(student_id: str, consent_id: str | None) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE students SET current_consent_id = ?, updated_at = ? WHERE id = ?",
+        (consent_id, datetime.now(timezone.utc).isoformat(), student_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+# ── Consent templates ────────────────────────────────────────────────
+
+def create_consent_template(
+    version: str,
+    language: str,
+    institution_id: str | None = None,
+    subject_email_html: str | None = None,
+    parent_email_html: str | None = None,
+    consent_page_html: str | None = None,
+) -> dict:
+    tid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        """INSERT INTO consent_templates (
+            id, institution_id, version, language, subject_email_html,
+            parent_email_html, consent_page_html, is_active, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (
+            tid, institution_id, version, language, subject_email_html,
+            parent_email_html, consent_page_html, 1, now, now,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": tid}
+
+
+def get_consent_template(template_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM consent_templates WHERE id = ?",
+        (template_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_active_consent_template(institution_id: str | None = None) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM consent_templates WHERE is_active = 1 "
+        "AND (institution_id = ? OR institution_id IS NULL) ORDER BY created_at DESC LIMIT 1",
+        (institution_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_consent_templates(institution_id: str | None = None) -> list:
+    conn = get_db()
+    if institution_id:
+        rows = conn.execute(
+            "SELECT * FROM consent_templates WHERE institution_id = ? ORDER BY created_at DESC",
+            (institution_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM consent_templates ORDER BY created_at DESC",
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def set_consent_template_active(template_id: str, is_active: bool) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE consent_templates SET is_active = ?, updated_at = ? WHERE id = ?",
+        (1 if is_active else 0, datetime.now(timezone.utc).isoformat(), template_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+# ── Consent events (append-only audit trail) ─────────────────────────
+
+def create_consent_event(
+    consent_id: str,
+    event_type: str,
+    actor_type: str = "system",
+    actor_id: str | None = None,
+    metadata: dict | None = None,
+) -> str:
+    eid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO consent_events (id, consent_id, event_type, actor_type, actor_id, metadata_json, created_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (eid, consent_id, event_type, actor_type, actor_id,
+         json.dumps(metadata) if metadata else None, now),
+    )
+    conn.commit()
+    conn.close()
+    return eid
+
+
+def get_consent_events(consent_id: str, limit: int = 200) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM consent_events WHERE consent_id = ? ORDER BY created_at ASC LIMIT ?",
+        (consent_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── Demo requests ────────────────────────────────────────────────────
+
+DEMO_REQUEST_STATUSES = {"new", "contacted", "qualified", "demo_scheduled", "closed_won", "closed_lost"}
+
+
+def create_demo_request(
+    full_name: str,
+    work_email: str,
+    organisation: str,
+    organisation_type: str = "other",
+    role_title: str | None = None,
+    country: str | None = None,
+    student_count_range: str | None = None,
+    message: str | None = None,
+    heard_about_us: str | None = None,
+    consent_to_contact: bool = True,
+) -> dict:
+    rid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        """INSERT INTO demo_requests (
+            id, full_name, work_email, organisation, organisation_type,
+            role_title, country, student_count_range, message, heard_about_us,
+            status, consent_to_contact, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            rid, full_name, work_email, organisation, organisation_type,
+            role_title, country, student_count_range, message, heard_about_us,
+            "new", 1 if consent_to_contact else 0, now, now,
+        ),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM demo_requests WHERE id = ?", (rid,)).fetchone()
+    conn.close()
+    return dict(row) if row else {"id": rid}
+
+
+def get_demo_request(demo_request_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM demo_requests WHERE id = ?",
+        (demo_request_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_demo_requests(status: str | None = None, limit: int = 100, offset: int = 0) -> list:
+    conn = get_db()
+    if status:
+        rows = conn.execute(
+            "SELECT * FROM demo_requests WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (status, limit, offset),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM demo_requests ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_demo_request(demo_request_id: str, **kwargs) -> dict | None:
+    allowed_fields = {"status", "assigned_to", "notes"}
+    updates = ["updated_at = ?"]
+    params = [datetime.now(timezone.utc).isoformat()]
+    for field, value in kwargs.items():
+        if field in allowed_fields:
+            updates.append(f"{field} = ?")
+            params.append(value)
+    if len(updates) == 1:
+        return get_demo_request(demo_request_id)
+    params.append(demo_request_id)
+    conn = get_db()
+    conn.execute(f"UPDATE demo_requests SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return get_demo_request(demo_request_id)
+
+
+# ── Email events (deliverability tracking) ───────────────────────────
+
+def create_email_event(
+    related_type: str,
+    related_id: str | None,
+    event: str,
+    esp_message_id: str | None = None,
+    recipient_email: str | None = None,
+    metadata: dict | None = None,
+) -> str:
+    eid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO email_events (id, related_type, related_id, event, esp_message_id, recipient_email, metadata_json, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (eid, related_type, related_id, event, esp_message_id, recipient_email,
+         json.dumps(metadata) if metadata else None, now),
+    )
+    conn.commit()
+    conn.close()
+    return eid
+
+
+def get_email_events(related_type: str | None = None, related_id: str | None = None, limit: int = 200) -> list:
+    conn = get_db()
+    if related_type and related_id:
+        rows = conn.execute(
+            "SELECT * FROM email_events WHERE related_type = ? AND related_id = ? ORDER BY created_at DESC LIMIT ?",
+            (related_type, related_id, limit),
+        ).fetchall()
+    elif related_type:
+        rows = conn.execute(
+            "SELECT * FROM email_events WHERE related_type = ? ORDER BY created_at DESC LIMIT ?",
+            (related_type, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM email_events ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

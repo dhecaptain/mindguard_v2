@@ -11,6 +11,19 @@ app_port: 7860
 
 > AI-powered clinical decision-support tool for early detection of suicidal ideation in digital text, built on Mental-RoBERTa and Streamlit.
 
+## Modern stack & consent rollout
+
+> This repo now contains the **FastAPI + React** product alongside the legacy Streamlit prototype described below.
+
+- **Backend** — `backend/` (FastAPI, SQLite, consent-first workflow)
+- **Frontend** — `frontend/` (React + Vite SPA)
+- **Marketing site** — `marketing/` (Next.js 14 + Tailwind)
+- **Operations** — see [`RUNBOOK.md`](./RUNBOOK.md) for setup, environment variables, verification, and go-live steps.
+
+Milestones shipped: consent & roster data model → email infrastructure (Resend/SMTP) → RBAC permissions + roster upload + consent gate → consent tracker UI → demo request pipeline → terms/audit hooks + admin panels → marketing site → hardening & docs.
+
+---
+
 ## Table of Contents
 
 - [Overview](#overview)

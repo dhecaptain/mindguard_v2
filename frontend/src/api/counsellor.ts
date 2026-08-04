@@ -1,6 +1,6 @@
 import api from './client'
 import type {
-  Consent, LinkedAccount, Alert, AlertDisposition,
+  Consent, ConsentListResponse, ConsentDetail, LinkedAccount, Alert, AlertDisposition,
   AuditEvent, Note, TimelineEntry,
   Group, GroupDetail, GroupMessage,
   ConversationsResponse, NotificationPreference,
@@ -132,12 +132,32 @@ export async function getDashboard(): Promise<DashboardData> {
 
 // ─── Consents ─────────────────────────────────────────────────────────────────
 
-export async function getConsents(status?: string): Promise<Consent[]> {
-  const { data } = await api.get('/v1/consents', { params: status ? { status } : undefined })
-  return data.consents ?? data
+export async function getConsents(params?: {
+  status?: string
+  search?: string
+  dateFrom?: string
+  dateTo?: string
+  limit?: number
+  offset?: number
+}): Promise<ConsentListResponse> {
+  const { data } = await api.get('/v1/consents', { params })
+  return { consents: data.consents ?? data, total: data.total ?? data.length ?? 0 }
 }
 
-export async function getConsent(id: string): Promise<Consent> {
+export async function exportConsents(params?: {
+  status?: string
+  search?: string
+  dateFrom?: string
+  dateTo?: string
+}): Promise<Blob> {
+  const { data } = await api.get('/v1/consents/export', {
+    params,
+    responseType: 'blob',
+  })
+  return data
+}
+
+export async function getConsentDetail(id: string): Promise<ConsentDetail> {
   const { data } = await api.get(`/v1/consents/${id}`)
   return data
 }

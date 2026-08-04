@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { getConsents, createConsent, dispatchConsent, cancelConsent, remindConsent } from '../api/counsellor'
+import { getConsents, createConsent, dispatchConsent, cancelConsent, remindConsent, exportConsents } from '../api/counsellor'
 import { getStudents } from '../api/counsellor'
+import RosterPanel from '../components/consent/RosterPanel'
+import ConsentDetailDrawer from '../components/consent/ConsentDetailDrawer'
 import type { Consent, ConsentStatus } from '../types'
 import type { StudentDTO } from '../api/counsellor'
 
@@ -23,10 +25,14 @@ const STATUS_STYLE: Record<ConsentStatus, string> = {
 const FILTER_TABS: Array<{ key: string; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'PENDING', label: 'Pending' },
+  { key: 'VIEWED', label: 'Viewed' },
   { key: 'ACCEPTED', label: 'Accepted' },
   { key: 'DECLINED', label: 'Declined' },
   { key: 'EXPIRED', label: 'Expired' },
+  { key: 'REVOKED', label: 'Revoked' },
 ]
+
+const PAGE_SIZE = 50
 
 const PLATFORMS = ['Reddit', 'Bluesky', 'Mastodon', 'YouTube']
 
@@ -216,6 +222,7 @@ function NewConsentModal({ students, onClose, onCreated }: NewConsentModalProps)
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ConsentTrackerPage() {
+  const [tab, setTab] = useState<'consents' | 'roster'>('consents')
   const [filterTab, setFilterTab] = useState('all')
   const [consents, setConsents] = useState<Consent[]>([])
   const [students, setStudents] = useState<StudentDTO[]>([])
@@ -224,13 +231,38 @@ export default function ConsentTrackerPage() {
   const [showModal, setShowModal] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [dispatchNotice, setDispatchNotice] = useState<Consent | null>(null)
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [detailConsentId, setDetailConsentId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(0) }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
-      const [consentData, studentData] = await Promise.all([getConsents(), getStudents()])
-      setConsents(consentData)
+      const [consentData, studentData] = await Promise.all([
+        getConsents({
+          ...(filterTab !== 'all' ? { status: filterTab } : {}),
+          ...(search ? { search } : {}),
+          ...(dateFrom ? { dateFrom } : {}),
+          ...(dateTo ? { dateTo } : {}),
+          limit: PAGE_SIZE,
+          offset: page * PAGE_SIZE,
+        }),
+        getStudents(),
+      ])
+      setConsents(consentData.consents)
+      setTotal(consentData.total)
       setStudents(studentData)
     } catch (e: any) {
       setError(e.message)
@@ -239,7 +271,7 @@ export default function ConsentTrackerPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [filterTab, search, dateFrom, dateTo, page])
 
   const handleAction = async (action: () => Promise<any>, id: string) => {
     setActionLoading(id)
@@ -256,9 +288,83 @@ export default function ConsentTrackerPage() {
     }
   }
 
-  const filtered = filterTab === 'all'
-    ? consents
-    : consents.filter((c) => c.status === filterTab)
+  const handleExport = async () => {
+    setError(null)
+    try {
+      const blob = await exportConsents({
+        ...(filterTab !== 'all' ? { status: filterTab } : {}),
+        ...(search ? { search } : {}),
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {}),
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `mindguard-consents-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectPage = () => {
+    const allSelected = consents.length > 0 && consents.every((c) => selected.has(c.id))
+    setSelected(allSelected ? new Set() : new Set(consents.map((c) => c.id)))
+  }
+
+  const handleBulkAction = async (action: 'resend' | 'cancel') => {
+    const ids = [...selected]
+    if (ids.length === 0) return
+    setActionLoading('bulk')
+    setBulkNotice(null)
+    let ok = 0
+    let failed = 0
+    try {
+      for (const id of ids) {
+        const consent = consents.find((c) => c.id === id)
+        if (!consent) continue
+        try {
+          if (action === 'resend') {
+            if (consent.status === 'DRAFT') await dispatchConsent(id)
+            else await remindConsent(id)
+          } else {
+            await cancelConsent(id)
+          }
+          ok += 1
+        } catch {
+          failed += 1
+        }
+      }
+      setBulkNotice(`${action === 'resend' ? 'Resent' : 'Cancelled'} ${ok} consent(s)${failed ? `, ${failed} failed` : ''}.`)
+      setSelected(new Set())
+      await load()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const canBulkResend = selected.size > 0 && [...selected].some((id) => {
+    const c = consents.find((x) => x.id === id)
+    return c && c.status !== 'ACCEPTED' && c.status !== 'REVOKED'
+  })
+  const canBulkCancel = selected.size > 0 && [...selected].some((id) => {
+    const c = consents.find((x) => x.id === id)
+    return c && c.status === 'PENDING'
+  })
+
+  const filtered = consents
 
   return (
     <div className="flex flex-col gap-[16px]">
@@ -266,34 +372,123 @@ export default function ConsentTrackerPage() {
         <div>
           <h2 className="text-[1.3rem] font-bold text-[#1f2937]">Consent Tracker</h2>
           <p className="text-[0.82rem] text-[#6b7280] mt-[2px]">
-            Manage data-sharing consents for your students
+            Manage data-sharing consents and the student roster
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-[6px] px-[14px] py-[8px] bg-[#0F766E] text-white rounded-[8px] text-[0.82rem] font-semibold cursor-pointer hover:bg-[#0d5c56] transition-colors"
-        >
-          <i className="ti ti-plus text-[14px]" />
-          New Consent
-        </button>
+        {tab === 'consents' && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-[6px] px-[14px] py-[8px] bg-[#0F766E] text-white rounded-[8px] text-[0.82rem] font-semibold cursor-pointer hover:bg-[#0d5c56] transition-colors"
+          >
+            <i className="ti ti-plus text-[14px]" />
+            New Consent
+          </button>
+        )}
       </div>
 
-      {/* Filter tabs */}
+      {/* Consents / Roster tabs */}
       <div className="flex items-center gap-[2px] bg-[#f1f5f9] rounded-[8px] p-[4px] w-fit">
-        {FILTER_TABS.map((t) => (
+        {(['consents', 'roster'] as const).map((t) => (
           <button
-            key={t.key}
-            onClick={() => setFilterTab(t.key)}
-            className={`px-[12px] py-[5px] rounded-[6px] text-[0.8rem] font-semibold cursor-pointer transition-colors border-none ${
-              filterTab === t.key
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-[14px] py-[6px] rounded-[6px] text-[0.82rem] font-semibold cursor-pointer transition-colors border-none capitalize ${
+              tab === t
                 ? 'bg-white text-[#1f2937] shadow-sm'
                 : 'bg-transparent text-[#6b7280] hover:text-[#374151]'
             }`}
           >
-            {t.label}
+            {t === 'consents' ? 'Consents' : 'Roster'}
           </button>
         ))}
       </div>
+
+      {tab === 'roster' && <RosterPanel />}
+
+      {tab === 'consents' && (<>
+      {/* Filter tabs + search + export */}
+      <div className="flex flex-wrap items-center gap-[10px]">
+        <div className="flex items-center gap-[2px] bg-[#f1f5f9] rounded-[8px] p-[4px] w-fit">
+          {FILTER_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => { setFilterTab(t.key); setPage(0) }}
+              className={`px-[12px] py-[5px] rounded-[6px] text-[0.8rem] font-semibold cursor-pointer transition-colors border-none ${
+                filterTab === t.key
+                  ? 'bg-white text-[#1f2937] shadow-sm'
+                  : 'bg-transparent text-[#6b7280] hover:text-[#374151]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-[220px] max-w-[360px]">
+          <i className="ti ti-search absolute left-[10px] top-1/2 -translate-y-1/2 text-[14px] text-[#9ca3af]" />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by student name, email, or ID..."
+            className="w-full rounded-[8px] border border-[#e5e7eb] pl-[30px] pr-[10px] py-[7px] text-[0.8rem] text-[#1f2937] placeholder-[#9ca3af] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+          />
+        </div>
+        <div className="flex items-center gap-[6px]">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(0) }}
+            title="Created from"
+            className="rounded-[8px] border border-[#e5e7eb] px-[10px] py-[7px] text-[0.8rem] text-[#1f2937] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+          />
+          <span className="text-[0.78rem] text-[#9ca3af]">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setPage(0) }}
+            title="Created to"
+            className="rounded-[8px] border border-[#e5e7eb] px-[10px] py-[7px] text-[0.8rem] text-[#1f2937] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+          />
+        </div>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-[6px] px-[12px] py-[7px] border border-[#e5e7eb] bg-white text-[#374151] rounded-[8px] text-[0.8rem] font-semibold cursor-pointer hover:bg-[#f9fafb] transition-colors"
+        >
+          <i className="ti ti-download text-[14px]" />
+          Export CSV
+        </button>
+      </div>
+
+      {bulkNotice && (
+        <div className="rounded-[10px] bg-[#ecfdf5] border border-[#bbf7d0] px-[16px] py-[10px] text-[0.82rem] text-[#065f46]">
+          {bulkNotice}
+        </div>
+      )}
+
+      {selected.size > 0 && (
+        <div className="flex items-center gap-[10px] rounded-[10px] bg-[#f0fdfa] border border-[#99f6e4] px-[16px] py-[10px]">
+          <span className="text-[0.82rem] font-semibold text-[#134e4a]">{selected.size} selected</span>
+          <button
+            onClick={() => handleBulkAction('resend')}
+            disabled={!canBulkResend || actionLoading === 'bulk'}
+            className="px-[12px] py-[6px] bg-[#0F766E] text-white rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#0d5c56] transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'bulk' ? '...' : 'Resend selected'}
+          </button>
+          <button
+            onClick={() => handleBulkAction('cancel')}
+            disabled={!canBulkCancel || actionLoading === 'bulk'}
+            className="px-[12px] py-[6px] bg-[#fee2e2] text-[#991b1b] rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#fecaca] transition-colors disabled:opacity-50"
+          >
+            Cancel selected
+          </button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="px-[12px] py-[6px] text-[0.78rem] font-semibold text-[#6b7280] cursor-pointer hover:text-[#374151] bg-transparent border-none"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {dispatchNotice && (
         <div className={`rounded-[10px] border px-[16px] py-[12px] text-[0.84rem] ${
@@ -321,16 +516,25 @@ export default function ConsentTrackerPage() {
             <i className="ti ti-file-check text-[16px] text-[#6b7280]" />
             <span className="text-[0.9rem] font-bold text-[#1f2937]">Consents</span>
             {!loading && (
-              <span className="text-[0.78rem] text-[#9ca3af] ml-[4px]">({filtered.length})</span>
+              <span className="text-[0.78rem] text-[#9ca3af] ml-[4px]">({total})</span>
             )}
           </div>
-          <button
-            onClick={load}
-            className="flex items-center gap-[6px] px-[12px] py-[6px] bg-[#0F766E] text-white rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#115E59] transition-colors"
-          >
-            <i className="ti ti-refresh text-[14px]" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-[8px]">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-[6px] px-[12px] py-[6px] border border-[#e5e7eb] bg-white text-[#374151] rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#f9fafb] transition-colors"
+            >
+              <i className="ti ti-download text-[14px]" />
+              Export CSV
+            </button>
+            <button
+              onClick={load}
+              className="flex items-center gap-[6px] px-[12px] py-[6px] bg-[#0F766E] text-white rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#115E59] transition-colors"
+            >
+              <i className="ti ti-refresh text-[14px]" />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -353,6 +557,14 @@ export default function ConsentTrackerPage() {
             <table className="w-full text-[0.82rem]">
               <thead className="bg-[#f9fafb]">
                 <tr className="text-[#6b7280] font-semibold text-[0.72rem] uppercase tracking-wider">
+                  <th className="py-[10px] pl-[20px] pr-[4px] w-[36px]">
+                    <input
+                      type="checkbox"
+                      checked={consents.length > 0 && consents.every((c) => selected.has(c.id))}
+                      onChange={toggleSelectPage}
+                      className="w-[15px] h-[15px] accent-[#0F766E] cursor-pointer"
+                    />
+                  </th>
                   <th className="text-left py-[10px] px-[20px]">Student</th>
                   <th className="text-left py-[10px] px-[20px]">Recipient</th>
                   <th className="text-left py-[10px] px-[20px]">Mode</th>
@@ -365,7 +577,15 @@ export default function ConsentTrackerPage() {
                 {filtered.map((consent) => {
                   const isActing = actionLoading === consent.id
                   return (
-                    <tr key={consent.id} className="hover:bg-[#f8fafc] transition-colors">
+                    <tr key={consent.id} className={`hover:bg-[#f8fafc] transition-colors ${selected.has(consent.id) ? 'bg-[#f0fdfa]' : ''}`}>
+                      <td className="py-[12px] pl-[20px] pr-[4px] w-[36px]">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(consent.id)}
+                          onChange={() => toggleSelected(consent.id)}
+                          className="w-[15px] h-[15px] accent-[#0F766E] cursor-pointer"
+                        />
+                      </td>
                       <td className="py-[12px] px-[20px] font-medium text-[#1f2937]">
                         {consent.student_name || consent.student_id}
                       </td>
@@ -386,6 +606,13 @@ export default function ConsentTrackerPage() {
                       </td>
                       <td className="py-[12px] px-[20px]">
                         <div className="flex items-center gap-[6px]">
+                          <button
+                            onClick={() => setDetailConsentId(consent.id)}
+                            title="View audit trail"
+                            className="px-[10px] py-[4px] border border-[#e5e7eb] bg-white text-[#374151] rounded-[6px] text-[0.72rem] font-semibold cursor-pointer hover:bg-[#f9fafb] transition-colors"
+                          >
+                            <i className="ti ti-eye text-[13px]" />
+                          </button>
                           {consent.status === 'DRAFT' && (
                             <button
                               onClick={() => handleAction(() => dispatchConsent(consent.id), consent.id)}
@@ -436,6 +663,31 @@ export default function ConsentTrackerPage() {
             </table>
           </div>
         )}
+
+        {!loading && !error && total > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-[20px] py-[10px] border-t border-[#f1f5f9]">
+            <span className="text-[0.78rem] text-[#6b7280]">
+              Showing {(page * PAGE_SIZE) + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+            </span>
+            <div className="flex items-center gap-[6px]">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-[10px] py-[5px] border border-[#e5e7eb] bg-white text-[#374151] rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#f9fafb] transition-colors disabled:opacity-40"
+              >
+                <i className="ti ti-chevron-left text-[13px]" />
+              </button>
+              <span className="text-[0.78rem] text-[#6b7280]">{page + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(Math.ceil(total / PAGE_SIZE) - 1, p + 1))}
+                disabled={(page + 1) * PAGE_SIZE >= total}
+                className="px-[10px] py-[5px] border border-[#e5e7eb] bg-white text-[#374151] rounded-[7px] text-[0.78rem] font-semibold cursor-pointer hover:bg-[#f9fafb] transition-colors disabled:opacity-40"
+              >
+                <i className="ti ti-chevron-right text-[13px]" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showModal && (
@@ -448,6 +700,14 @@ export default function ConsentTrackerPage() {
           }}
         />
       )}
+
+      {detailConsentId && (
+        <ConsentDetailDrawer
+          consentId={detailConsentId}
+          onClose={() => setDetailConsentId(null)}
+        />
+      )}
+      </>)}
     </div>
   )
 }
