@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 const ORG_TYPES = [
   { value: 'k12', label: 'K-12 school / district' },
@@ -19,7 +20,19 @@ const labelCls = 'block text-xs font-bold text-[#374151] uppercase tracking-wide
 
 type Status = 'idle' | 'submitting' | 'done' | 'error'
 
+declare global {
+  interface Window {
+    grecaptcha?: {
+      ready: (cb: () => void) => void
+      execute: (siteKey: string, opts: { action: string }) => Promise<string>
+    }
+  }
+}
+
+const SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+
 export default function DemoForm() {
+  const router = useRouter()
   const [form, setForm] = useState({
     full_name: '',
     work_email: '',
@@ -30,11 +43,27 @@ export default function DemoForm() {
     student_count_range: '',
     message: '',
     heard_about_us: '',
+    website: '', // honeypot — humans never see or fill this
   })
   const [consentToContact, setConsentToContact] = useState(false)
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
+  const [recaptchaToken, setRecaptchaToken] = useState('')
+
+  useEffect(() => {
+    if (!SITE_KEY || window.grecaptcha) return
+    const s = document.createElement('script')
+    s.src = `https://www.google.com/recaptcha/api.js?render=${SITE_KEY}`
+    s.async = true
+    s.defer = true
+    s.onload = () => {
+      window.grecaptcha?.ready(() => {
+        window.grecaptcha?.execute(SITE_KEY, { action: 'demo_request' }).then(setRecaptchaToken).catch(() => {})
+      })
+    }
+    document.head.appendChild(s)
+  }, [])
 
   const set =
     (k: string) =>
@@ -46,6 +75,22 @@ export default function DemoForm() {
 
   const handleSubmit = async () => {
     if (!valid || status === 'submitting') return
+
+    // Honeypot filled ⇒ bot. Silently show success without submitting.
+    if (form.website) {
+      setStatus('done')
+      return
+    }
+
+    let token = recaptchaToken
+    if (SITE_KEY && !token) {
+      try {
+        token = await window.grecaptcha?.execute(SITE_KEY, { action: 'demo_request' }) ?? ''
+      } catch {
+        token = ''
+      }
+    }
+
     setStatus('submitting')
     setError(null)
     setWarning(null)
@@ -59,6 +104,7 @@ export default function DemoForm() {
           work_email: form.work_email.trim(),
           organisation: form.organisation.trim(),
           consent_to_contact: consentToContact,
+          recaptcha_token: token,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -69,6 +115,7 @@ export default function DemoForm() {
       }
       setWarning(data.warning || null)
       setStatus('done')
+      router.push('/thank-you')
     } catch {
       setError('Network error — please try again.')
       setStatus('error')
@@ -90,12 +137,32 @@ export default function DemoForm() {
             {warning}
           </p>
         )}
+        <button
+          onClick={() => router.push('/thank-you')}
+          className="mt-6 px-6 py-3 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition-colors"
+        >
+          Next steps
+        </button>
       </div>
     )
   }
 
   return (
     <div className="bg-white border border-[#eef2f6] rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-4">
+      {/* Honeypot (invisible to humans, irresistible to bots) */}
+      <div className="absolute left-[-9999px] top-[-9999px]" aria-hidden="true">
+        <label htmlFor="website">Leave this field blank</label>
+        <input
+          id="website"
+          name="website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          value={form.website}
+          onChange={set('website')}
+        />
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Full name *</label>
@@ -107,10 +174,15 @@ export default function DemoForm() {
         </div>
       </div>
 
+      <div>
+        <label className={labelCls}>Organisation *</label>
+        <input className={inputCls} value={form.organisation} onChange={set('organisation')} placeholder="Riverside High" />
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Organisation *</label>
-          <input className={inputCls} value={form.organisation} onChange={set('organisation')} placeholder="Riverside High" />
+          <label className={labelCls}>Role / title</label>
+          <input className={inputCls} value={form.role_title} onChange={set('role_title')} placeholder="Head of Pastoral Care" />
         </div>
         <div>
           <label className={labelCls}>Organisation type</label>
@@ -124,33 +196,18 @@ export default function DemoForm() {
 
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Role / title</label>
-          <input className={inputCls} value={form.role_title} onChange={set('role_title')} placeholder="Head of Pastoral Care" />
-        </div>
-        <div>
           <label className={labelCls}>Country</label>
           <input className={inputCls} value={form.country} onChange={set('country')} placeholder="UK" />
         </div>
-      </div>
-
-      <div>
-        <label className={labelCls}>Student population</label>
-        <select className={inputCls} value={form.student_count_range} onChange={set('student_count_range')}>
-          <option value="">Select a range...</option>
-          {COUNT_RANGES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className={labelCls}>How did you hear about us?</label>
-        <select className={inputCls} value={form.heard_about_us} onChange={set('heard_about_us')}>
-          <option value="">Select an option...</option>
-          {['Conference', 'Word of mouth', 'Online search', 'Social media', 'Newsletter', 'Other'].map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
-        </select>
+        <div>
+          <label className={labelCls}>Student population</label>
+          <select className={inputCls} value={form.student_count_range} onChange={set('student_count_range')}>
+            <option value="">Select a range...</option>
+            {COUNT_RANGES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div>
@@ -162,6 +219,16 @@ export default function DemoForm() {
           onChange={set('message')}
           placeholder="Tell us a little about what you're looking for..."
         />
+      </div>
+
+      <div>
+        <label className={labelCls}>How did you hear about us?</label>
+        <select className={inputCls} value={form.heard_about_us} onChange={set('heard_about_us')}>
+          <option value="">Select an option...</option>
+          {['Conference', 'Word of mouth', 'Online search', 'Social media', 'Newsletter', 'Other'].map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
       </div>
 
       <label className="flex items-start gap-2 text-sm text-[#4b5563] cursor-pointer">

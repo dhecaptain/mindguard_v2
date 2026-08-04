@@ -38,6 +38,9 @@ WEBHOOK_TOLERANCE_SECONDS = int(os.getenv("WEBHOOK_TOLERANCE_SECONDS", "300"))
 EMAIL_FROM = os.getenv("EMAIL_FROM", "MindGuard <noreply@mindguard.ai>")
 DEMO_NOTIFY_EMAIL = os.getenv("DEMO_NOTIFY_EMAIL", "")
 
+# reCAPTCHA v3 site verification (Request Demo form, Brief §5.5/§13.2).
+RECAPTCHA_SECRET = os.getenv("RECAPTCHA_SECRET", "")
+
 # Gate analysis behind accepted, non-expired, non-revoked consent.
 ENFORCE_CONSENT_ANALYSIS = os.getenv("ENFORCE_CONSENT_ANALYSIS", "true").strip().lower() == "true"
 

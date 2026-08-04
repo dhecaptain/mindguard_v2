@@ -83,7 +83,9 @@ from backend.services.consent_service import (
 )
 from backend.services.consent_gate import require_consent_for_analysis
 from backend.services.crypto import decrypt_pii
-from backend.services.demo_service import demo_email_context, work_email_warning
+from backend.services.demo_service import (
+    demo_email_context, work_email_warning, verify_recaptcha_token,
+)
 from backend.services.roster_service import upsert_roster
 from backend.permissions import (
     PERM_ANALYSIS_RUN, PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW,
@@ -2258,6 +2260,16 @@ async def v1_admin_run_consent_maintenance(user: dict = Depends(require_auth)):
 @app.post("/api/v1/demo-requests", status_code=201)
 async def v1_demo_request_create(data: DemoRequestCreate, request: Request):
     client_ip = _client_ip(request)
+
+    # Honeypot (Brief §5.5/§13.2): bots fill the hidden field — silently
+    # "succeed" without creating a row so scrapers can't learn the rule.
+    if data.website:
+        logger.info("demo-request honeypot tripped from %s", client_ip)
+        return {"id": "", "status": "new", "warning": None}
+
+    if not await verify_recaptcha_token(data.recaptcha_token):
+        raise HTTPException(400, "Unable to verify you're human. Please try again.")
+
     _check_rate_limit(f"demo:{client_ip}", max_requests=5, window=3600)
     if not data.consent_to_contact:
         raise HTTPException(400, "Consent to contact is required to submit a demo request")
