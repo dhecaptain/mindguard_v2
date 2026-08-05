@@ -19,6 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/requirements.txt
+# CPU-only torch first: the default PyPI wheel bundles CUDA (~2GB), which blows
+# the free-tier 10-minute build cap and the 4GB image limit. Inference here runs
+# on CPU, so the CPU wheel satisfies torch>=2.2.0 and is ~10x smaller.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
 RUN pip install --no-cache-dir gunicorn -r requirements.txt
 
 COPY backend/ /app/backend/
