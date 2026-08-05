@@ -47,6 +47,14 @@ Copy `.env.example` → `.env`. Key variables:
 | `CONSENT_REMINDER_DAYS` | Comma list of reminder days (default `3,7`) |
 | `MINDGUARD_DB_DIR` | Directory for `mindguard.db` (default: repo root) |
 | `LOG_LEVEL` | Root log level, e.g. `INFO`/`DEBUG` (default `INFO`) |
+| `SECRETS_FILE_DIR` | Optional dir of secret files named after each secret (12-factor) |
+| `<NAME>_FILE` | Optional single-file source for a secret, e.g. `JWT_SECRET_FILE` |
+| `MINDGUARD_CSP` | Set `false` to disable CSP/security headers (default `true`) |
+
+Secrets are resolved through `backend/secrets_manager.py` (`get_secret`): env
+vars, `<NAME>_FILE`, then `SECRETS_FILE_DIR`. Swapping to a secret manager
+(AWS Secrets Manager, vault) is registering a loader there — a config change,
+not a code change (Delivery Brief §11).
 
 Generate keys:
 
@@ -69,8 +77,9 @@ PYTHONPATH=backend uvicorn backend.main:app --reload --port 8000
 API: http://localhost:8000 · docs: http://localhost:8000/docs
 Health probe: http://localhost:8000/api/v1/healthz
 
-> The ML stack (`torch`) is required for full import of `backend.main`. If you
-> don't have it installed, you can still run the test suite (see §5).
+> The ML stack (`torch`/`transformers`) is imported lazily on first inference,
+> so `backend.main` imports in ~1s without it — the test suite and boot never
+> need torch. Install `backend/requirements.txt` only to actually run analysis.
 
 **Schema migrations.** The schema is versioned with Alembic
 (`backend/alembic/`, baseline `0001`). `init_db()` runs `alembic upgrade head`
@@ -87,6 +96,16 @@ correlation (`request_id`, `method`, `path`, `status_code`, `duration_ms`,
 `user_id`, `ip`). Every request emits one `http <METHOD> <path> -> <status>`
 access line. Set `LOG_LEVEL` to raise/lower verbosity; the root logger is
 configured by `backend/logging_setup.py` (no Alembic log config).
+
+**Security headers (Brief §8).** Every response gets
+`X-Content-Type-Options: nosniff`, `Referrer-Policy:
+strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and
+`Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()`.
+HTML documents (the SPA served at `/`) additionally get a Content-Security-Policy
+(no inline scripts, Google Fonts + Tabler CDN allowed, Supabase for OAuth,
+`blob:` for downloads); `/docs`, `/redoc` and `/openapi.json` are exempt so
+Swagger UI keeps working. Pinned by `tests/test_security_headers.py`. Toggle
+everything off with `MINDGUARD_CSP=false` if a proxy already sets these.
 
 ### Frontend
 
@@ -164,6 +183,16 @@ curl -X POST http://localhost:8000/api/v1/students/<id>/analyze \
   -d '{"text":"hello"}'
 ```
 
+### OpenAPI contract
+
+The generated spec is the migration contract between the current backend and
+the Phase 2 target (Brief §11). Pinned by `tests/test_openapi_contract.py`;
+regenerate the artifact with:
+
+```bash
+cd backend && PYTHONPATH=..:. python3 scripts/export_openapi.py  # → openapi.json
+```
+
 ### Health probe
 
 ```bash
@@ -171,28 +200,130 @@ curl http://localhost:8000/api/v1/healthz
 # {"status":"ok","version":"2.0.0","db":{"db":"ok","tables":N}}
 ```
 
+### Load contract (Brief §9.5)
+
+1000-row roster upload must preview and commit in under 5s. Pinned by
+`tests/test_load_roster.py`:
+
+```bash
+cd backend && PYTHONPATH=..:. python3 -m pytest tests/test_load_roster.py -q
+```
+
+For a wall-clock preview measurement, time the API from the admin UI
+(Roster → upload a generated 1000-row CSV → preview) and confirm the UI
+renders the preview in well under 5s.
+
+### Accessibility (Brief §9.6)
+
+The e2e suite runs axe-core scans (WCAG 2.0/2.1 A+AA) on the consent portal
+(pre- and post-action) and the marketing demo form, asserting zero violations:
+
+```bash
+cd frontend && npm run test:e2e
+```
+
+`@axe-core/playwright` is a devDependency (e2e only); no runtime bundle impact.
+
 ---
 
 ## 6. Deploying
 
-- **Backend** — Railway (`railway.toml`). Set `ENCRYPTION_KEY`, `JWT_SECRET`,
-  `RESEND_API_KEY`, `APP_BASE_URL`, `DEMO_NOTIFY_EMAIL` via the Railway
-  dashboard / secret manager. Never commit `.env`.
-- **Frontend** — built via `Dockerfile.frontend` or `npm run build`; `dist/` is
-  served by the backend's static file mount in production.
+- **Backend** — Railway (`railway.toml`). The Dockerfile builds the Vite
+  frontend and serves `dist/` from FastAPI, so one Railway service runs both.
+  Never commit `.env`.
+
+### Railway environment variables
+
+Set these in the Railway service dashboard (Variables):
+
+| Variable | Value |
+| --- | --- |
+| `MINDGUARD_DB_DIR` | **`/app/data`** — keeps `mindguard.db` + `.encryption_key` on the persistent volume |
+| `ENCRYPTION_KEY` | 64-hex secret — `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `JWT_SECRET` | rotate before launch — `secrets.token_hex(32)` |
+| `APP_BASE_URL` | `https://<your-app>.up.railway.app` (consent/demo email links) |
+| `EMAIL_FROM` | `MindGuard <noreply@mindguard.ai>` (must match the ESP sender domain) |
+| `DEMO_NOTIFY_EMAIL` | inbox for demo-request notifications |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Google OAuth (returned by `/api/config`) |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,https://<marketing-domain>` |
+| `MINDGUARD_CSP` | leave unset (`true`); set `false` only if a proxy sets CSP |
+| `HF_CACHE_DIR` | `/tmp/huggingface` (already set in Dockerfile) |
+| `LOG_LEVEL` | `INFO` |
+
+Email provider — one of:
+- **Resend** (preferred): `RESEND_API_KEY`.
+- **SMTP** fallback: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`.
+
+Verify delivery after configuring:
+
+```bash
+cd backend && PYTHONPATH=..:. python3 scripts/test_email.py you@example.com
+```
+
+### Memory: the ML model needs a paid plan
+
+The full-weight RoBERTa model plus `torch`/`transformers` needs ~2 GB RAM. The
+free tier caps services at **0.5 GB and 1 vCPU**, so first inference crashes the
+worker. On a paid plan set the service to **≥ 2 GB / 2 vCPU** (and a 512 MB swap
+if the platform allows it). During the free trial, analysis will still crash —
+use it only for the consent/demo/marketing flows, not inference.
+
+### Data persistence
+
+Attach a **volume** at `/app/data` and set `MINDGUARD_DB_DIR=/app/data` so the
+SQLite DB and the encryption key survive redeploys. Note: **on the free tier,
+volume data is deleted 30 days after the trial expires** — real data requires a
+paid plan (Hobby includes 5 GB volume storage).
+
+### Backups
+
+Nightly snapshot (keeps 7 by default; uploads to S3-compatible storage if
+`BACKUP_S3_BUCKET` is set):
+
+```bash
+cd backend && PYTHONPATH=..:. python3 scripts/backup_db.py /var/backups/mindguard
+```
+
+Restore — stop the app, replace the DB, restart:
+
+```bash
+gunzip -c mindguard-<stamp>.db.gz > mindguard.db   # into MINDGUARD_DB_DIR
+```
+
+Pinned by `tests/test_backup_script.py`.
+
+### Paid upgrade (Hobby, $5/mo) — steps
+
+1. Billing → Upgrade to **Hobby**.
+2. Service → Settings → Volume: add volume, mount path `/app/data` (5 GB included).
+3. Set `MINDGUARD_DB_DIR=/app/data` and redeploy (fresh DB reseeds demo users).
+4. Settings → Deploy → **disable Serverless** so inference isn't interrupted by
+   cold starts; set **RAM ≥ 2 GB / vCPU ≥ 2**.
+5. Custom domain: add e.g. `app.mindguard.ai` + TLS, then update `APP_BASE_URL`,
+   Supabase redirect URLs, Google OAuth authorized redirects/origins, and
+   `CORS_ORIGINS` to match.
+6. Keep the **marketing site** on free Serverless (low traffic) to save cost.
+
+### Other services
+
 - **Marketing** — deploy `marketing/` to Vercel; set `MINDGUARD_API_URL` to the
-  public backend URL.
+  public backend URL and add the Vercel origin to `CORS_ORIGINS`. Add the
+  reCAPTCHA v3 **site key** to the demo form and `RECAPTCHA_SECRET` to the
+  backend once enrolled.
 
 ---
 
 ## 7. Go-live checklist
 
+- [ ] Railway volume attached at `/app/data`, `MINDGUARD_DB_DIR=/app/data`
 - [ ] `ENCRYPTION_KEY` set to a real 64-hex secret (not the dev auto-key)
 - [ ] `JWT_SECRET` rotated
-- [ ] `RESEND_API_KEY` (or SMTP) configured and a test consent email received
+- [ ] `RESEND_API_KEY` (or SMTP) configured and `scripts/test_email.py` delivered
 - [ ] `DEMO_NOTIFY_EMAIL` set
 - [ ] `APP_BASE_URL` points at the public app
 - [ ] Google OAuth callback + redirect URLs verified
+- [ ] Service RAM ≥ 2 GB (analysis does not crash)
+- [ ] Nightly backup scheduled (cron/`railway cron` → `scripts/backup_db.py`)
 - [ ] `/api/v1/healthz` responds `ok`
 - [ ] Full backend test suite green
 - [ ] Roster upload → consent dispatch → accept → analysis verified end-to-end

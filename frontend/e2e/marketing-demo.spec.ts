@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { API_BASE, ADMIN, loginViaApi } from './helpers'
+import { API_BASE, ADMIN, expectNoAxeViolations, loginViaApi } from './helpers'
 
 const DEMO_EMAIL = 'e2e-demo-request@example.com'
 
@@ -9,6 +9,7 @@ test.describe('Marketing demo request (Delivery Brief §5.5)', () => {
     request,
   }) => {
     await page.goto('/demo')
+    await expectNoAxeViolations(page, 'demo request form')
 
     await page.getByPlaceholder('Jordan Blake').fill('E2E Test Person')
     await page.getByPlaceholder('jordan@yourschool.edu').fill(DEMO_EMAIL)

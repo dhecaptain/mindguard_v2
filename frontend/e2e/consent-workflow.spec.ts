@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { API_BASE, adminAuth, fetchConsents, loginAsAdmin } from './helpers'
+import { API_BASE, adminAuth, expectNoAxeViolations, fetchConsents, loginAsAdmin } from './helpers'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(__dirname, 'fixtures', 'roster-3minors-3adults.csv')
@@ -66,9 +66,11 @@ test.describe('Consent workflow (Delivery Brief §9.3)', () => {
     expect(parentRow?.magic_token).toBeTruthy()
 
     await page.goto(portalUrl(parentRow!.magic_token))
+    await expectNoAxeViolations(page, 'consent portal (pre-action)')
     await page.getByPlaceholder('Type your full name').fill('Rebecca Haddad')
     await page.getByRole('button', { name: 'Accept consent' }).click()
     await expect(page.getByText('Consent accepted. Thank you.')).toBeVisible()
+    await expectNoAxeViolations(page, 'consent portal (accepted)')
 
     const after = await fetchConsents(request, token)
     expect(after.find((r) => r.id === parentRow!.id)?.status).toBe('ACCEPTED')

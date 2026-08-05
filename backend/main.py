@@ -28,7 +28,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import SUPABASE_URL, SUPABASE_ANON_KEY, RESEND_WEBHOOK_SECRET, WEBHOOK_TOLERANCE_SECONDS
+from backend.config import (
+    SUPABASE_URL, SUPABASE_ANON_KEY, RESEND_WEBHOOK_SECRET, WEBHOOK_TOLERANCE_SECONDS,
+    REDDIT_CLIENT_SECRET, DEMO_NOTIFY_EMAIL,
+)
 from backend.models.schemas import (
     TextAnalysisRequest, TextAnalysisResponse,
     PlatformRequest, LoginRequest, RegisterRequest, UserResponse,
@@ -129,6 +132,59 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+# ── Security headers (Delivery Brief §8) ──────────────────────────────
+# CSP is applied only to HTML documents served by this app (the production SPA
+# mount) and never to API responses or the interactive docs, so /docs keeps its
+# inline Swagger assets while the SPA gets a strict, nonce-free policy. The
+# always-on headers apply to every response.
+_CSP_ENABLED = os.getenv("MINDGUARD_CSP", "true").strip().lower() != "false"
+
+_SECURITY_ALWAYS_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+}
+
+_CSP_POLICY = (
+    "default-src 'self' blob:; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+    "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co; "
+    "frame-src 'self' blob:; "
+    "object-src 'self' blob:; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+# Paths serving non-SPA HTML (interactive API docs) that rely on inline/CDN
+# scripts and must not receive the SPA CSP.
+_CSP_HTML_EXEMPT_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+def _build_security_headers(content_type: str, path: str) -> dict[str, str]:
+    headers = dict(_SECURITY_ALWAYS_HEADERS)
+    if (
+        _CSP_ENABLED
+        and (content_type or "").startswith("text/html")
+        and not path.startswith(_CSP_HTML_EXEMPT_PATHS)
+    ):
+        headers["Content-Security-Policy"] = _CSP_POLICY
+    return headers
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    headers = _build_security_headers(response.headers.get("content-type", ""), request.url.path)
+    for name, value in headers.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 @app.middleware("http")
@@ -735,7 +791,7 @@ def _fetch_reddit_rss_posts(username: str) -> list[dict]:
 async def analyze_reddit(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
     client_id = req.client_id or os.getenv("REDDIT_CLIENT_ID", "")
-    client_secret = req.client_secret or os.getenv("REDDIT_CLIENT_SECRET", "")
+    client_secret = req.client_secret or REDDIT_CLIENT_SECRET
     if not req.username.strip():
         raise HTTPException(400, "Reddit username is required.")
 
@@ -2358,7 +2414,7 @@ async def v1_demo_request_create(data: DemoRequestCreate, request: Request):
     if not ok:
         logger.warning("demo confirmation email failed for %s: %s", data.work_email, err)
 
-    notify_to = os.getenv("DEMO_NOTIFY_EMAIL", "").strip()
+    notify_to = DEMO_NOTIFY_EMAIL.strip()
     if notify_to:
         ok, err = send_html_email(
             notify_to,
@@ -2454,7 +2510,15 @@ async def v1_resend_webhook(request: Request):
 
 # ── Rolling risk trigger ──────────────────────────────────────────────
 
-@app.post("/api/v1/students/{student_id}/analyze")
+@app.post(
+    "/api/v1/students/{student_id}/analyze",
+    responses={
+        200: {"description": "Rolling risk computed and persisted"},
+        403: {"description": "Analysis is consent-gated: no active (accepted, non-expired) consent on record"},
+        404: {"description": "Student not found"},
+        503: {"description": "Analysis service temporarily unavailable"},
+    },
+)
 async def v1_student_analyze(
     student_id: str,
     data: dict,

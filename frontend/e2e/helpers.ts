@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
 export const API_BASE = 'http://127.0.0.1:8000'
@@ -64,4 +65,14 @@ export async function fetchConsents(
   const rows: ConsentRow[] = Array.isArray(body) ? body : body?.consents ?? []
   expect(rows.length).toBeGreaterThan(0)
   return rows
+}
+
+export async function expectNoAxeViolations(page: Page, tag: string): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  const summary = results.violations
+    .map((v) => `- ${v.id} (${v.impact}): ${v.help} — ${v.nodes.length} node(s)`)
+    .join('\n')
+  expect(results.violations, `${tag}: axe violations\n${summary}`).toEqual([])
 }
