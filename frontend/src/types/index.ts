@@ -215,7 +215,7 @@ export interface RosterUploadSummary {
   total: number
   created: number
   updated: number
-  errors: Array<{ row: Record<string, string>; error: string }>
+  errors: Array<{ row_number?: number; row: Record<string, string>; error: string }>
   parse_error?: string | null
   student_ids?: string[]
 }

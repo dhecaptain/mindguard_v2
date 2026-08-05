@@ -185,6 +185,31 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
                   </div>
                 </div>
               </div>
+              <div className="mt-[12px] pt-[12px] border-t border-[#f1f5f9]">
+                <div className="text-[0.68rem] uppercase tracking-wider text-[#9ca3af] font-semibold mb-[6px]">Delivery routing</div>
+                <div className="flex items-start gap-[8px] text-[0.8rem] text-[#374151]">
+                  <i className="ti ti-route text-[14px] text-[#0F766E] mt-[2px]" aria-hidden="true" />
+                  <div>
+                    {c.recipient_role === 'parent' ? (
+                      <>
+                        Request routed to the parent/guardian (
+                        <span className="font-semibold break-all">{c.recipient_email}</span>).
+                        {c.student_email && c.student_email !== c.recipient_email && (
+                          <div className="mt-[2px] text-[#6b7280]">
+                            A courtesy copy is also sent to the student (
+                            <span className="font-semibold break-all">{c.student_email}</span>).
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        Request routed directly to the student (
+                        <span className="font-semibold break-all">{c.recipient_email}</span>).
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="px-[20px] py-[14px]">

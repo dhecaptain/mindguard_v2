@@ -89,12 +89,12 @@ export default function ConsentPortalPage({ token }: { token: string }) {
 
         <div className="p-[26px]">
           {status === 'loading' ? (
-            <div className="flex items-center justify-center py-[52px] text-[#64748b]">
-              <div className="w-[24px] h-[24px] border-2 border-[#e5e7eb] border-t-[#0F766E] rounded-full animate-spin mr-[10px]" />
+            <div role="status" aria-live="polite" className="flex items-center justify-center py-[52px] text-[#64748b]">
+              <div className="w-[24px] h-[24px] border-2 border-[#e5e7eb] border-t-[#0F766E] rounded-full animate-spin mr-[10px]" aria-hidden="true" />
               Loading consent request...
             </div>
           ) : status === 'error' ? (
-            <div className="rounded-[10px] bg-[#fee2e2] text-[#991b1b] px-[16px] py-[14px]">{message}</div>
+            <div role="alert" className="rounded-[10px] bg-[#fee2e2] text-[#991b1b] px-[16px] py-[14px]">{message}</div>
           ) : consent ? (
             <div className="flex flex-col gap-[18px]">
               <div>
@@ -130,7 +130,7 @@ export default function ConsentPortalPage({ token }: { token: string }) {
 
               {consent.status === 'ACCEPTED' || consent.status === 'DECLINED' || status === 'done' ? (
                 <>
-                  <div className="rounded-[10px] bg-[#ecfdf5] text-[#065f46] px-[16px] py-[14px] font-semibold">
+                  <div role="status" aria-live="polite" className="rounded-[10px] bg-[#ecfdf5] text-[#065f46] px-[16px] py-[14px] font-semibold">
                     {message || `This request is already ${consent.status.toLowerCase()}.`}
                   </div>
                   {consent.status === 'ACCEPTED' && status !== 'submitting' && (
@@ -140,8 +140,9 @@ export default function ConsentPortalPage({ token }: { token: string }) {
                         analysis of this data immediately.
                       </p>
                       <button
+                        type="button"
                         onClick={() => submit('revoke')}
-                        className="rounded-[8px] bg-white text-[#991b1b] border border-[#fecaca] px-[16px] py-[9px] font-bold hover:bg-[#fef2f2]"
+                        className="rounded-[8px] bg-white text-[#991b1b] border border-[#fecaca] px-[16px] py-[9px] font-bold hover:bg-[#fef2f2] cursor-pointer"
                       >
                         Withdraw consent
                       </button>
@@ -151,31 +152,38 @@ export default function ConsentPortalPage({ token }: { token: string }) {
               ) : (
                 <>
                   <div>
-                    <label className="block text-[0.78rem] font-bold text-[#374151] mb-[6px]">Your name</label>
+                    <label htmlFor="signature-name" className="block text-[0.78rem] font-bold text-[#374151] mb-[6px]">Your name</label>
                     <input
+                      id="signature-name"
+                      name="signature-name"
+                      type="text"
                       value={signatureName}
                       onChange={(e) => setSignatureName(e.target.value)}
                       placeholder="Type your full name"
+                      autoComplete="name"
+                      required
                       className="w-full rounded-[8px] border border-[#d1d5db] px-[12px] py-[10px] text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
                     />
                   </div>
 
                   {message && (
-                    <div className="rounded-[8px] bg-[#fff7ed] text-[#9a3412] px-[12px] py-[10px] text-[0.84rem]">{message}</div>
+                    <div role="alert" className="rounded-[8px] bg-[#fff7ed] text-[#9a3412] px-[12px] py-[10px] text-[0.84rem]">{message}</div>
                   )}
 
                   <div className="flex flex-col sm:flex-row gap-[10px]">
                     <button
+                      type="button"
                       onClick={() => submit('accept')}
                       disabled={status === 'submitting'}
-                      className="flex-1 rounded-[8px] bg-[#0F766E] text-white px-[16px] py-[11px] font-bold hover:bg-[#115E59] disabled:opacity-60"
+                      className="flex-1 rounded-[8px] bg-[#0F766E] text-white px-[16px] py-[11px] font-bold hover:bg-[#115E59] disabled:opacity-60 cursor-pointer"
                     >
                       Accept consent
                     </button>
                     <button
+                      type="button"
                       onClick={() => submit('decline')}
                       disabled={status === 'submitting'}
-                      className="flex-1 rounded-[8px] bg-white text-[#991b1b] border border-[#fecaca] px-[16px] py-[11px] font-bold hover:bg-[#fef2f2] disabled:opacity-60"
+                      className="flex-1 rounded-[8px] bg-white text-[#991b1b] border border-[#fecaca] px-[16px] py-[11px] font-bold hover:bg-[#fef2f2] disabled:opacity-60 cursor-pointer"
                     >
                       Decline
                     </button>

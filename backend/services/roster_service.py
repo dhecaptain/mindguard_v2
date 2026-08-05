@@ -179,18 +179,18 @@ def upsert_roster(
         notes = _clean(row.get("notes"))
 
         if not student_id or not first_name or not email:
-            summary["errors"].append({"row": row, "error": "student_id, student_first_name, and student_email are required"})
+            summary["errors"].append({"row_number": idx, "row": row, "error": "student_id, student_first_name, and student_email are required"})
             continue
 
         dob_str = _clean(row.get("date_of_birth") or row.get("dob"))
         dob = _parse_date(dob_str)
         if dob is None and dob_str:
-            summary["errors"].append({"row": row, "error": f"unparseable date_of_birth: {dob_str!r}"})
+            summary["errors"].append({"row_number": idx, "row": row, "error": f"unparseable date_of_birth: {dob_str!r}"})
             continue
 
         # Check deduplication within the file
         if email in processed_emails:
-            summary["errors"].append({"row": row, "error": f"duplicate student_email within CSV: {email}"})
+            summary["errors"].append({"row_number": idx, "row": row, "error": f"duplicate student_email within CSV: {email}"})
             continue
         processed_emails.add(email)
 
@@ -205,7 +205,7 @@ def upsert_roster(
 
         if dob is None and is_minor_override is None:
             # Brief §2.3: "Missing DOB and no override — reject the row"
-            summary["errors"].append({"row": row, "error": "date_of_birth is required (no override provided)"})
+            summary["errors"].append({"row_number": idx, "row": row, "error": "date_of_birth is required (no override provided)"})
             continue
 
         minor = True
@@ -216,7 +216,7 @@ def upsert_roster(
 
         # Brief §2.4 routing rules: minor without parent_email is rejected at validation
         if minor and not parent_email:
-            summary["errors"].append({"row": row, "error": "parent_email is required for minor students"})
+            summary["errors"].append({"row_number": idx, "row": row, "error": "parent_email is required for minor students"})
             continue
 
         # Full name resolution
@@ -224,6 +224,7 @@ def upsert_roster(
 
         valid_rows_data.append({
             "row": row,
+            "row_number": idx,
             "student_id": student_id,
             "name": name,
             "email": email,
@@ -276,7 +277,7 @@ def upsert_roster(
                 summary["student_ids"].append(created["id"])
         except Exception as exc:  # pragma: no cover
             logger.exception("roster upsert failed for student_id=%s", item["student_id"])
-            summary["errors"].append({"row": item["row"], "error": f"database error: {exc}"})
+            summary["errors"].append({"row_number": item["row_number"], "row": item["row"], "error": f"database error: {exc}"})
 
     return summary
 
