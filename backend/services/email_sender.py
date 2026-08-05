@@ -4,14 +4,15 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from backend.database import create_email_event
+from backend.secrets_manager import get_secret
 
 
 def is_resend_configured() -> bool:
-    return bool(os.getenv("RESEND_API_KEY"))
+    return bool(get_secret("RESEND_API_KEY"))
 
 
 def is_smtp_configured() -> bool:
-    return bool(os.getenv("SMTP_USER")) and bool(os.getenv("SMTP_PASSWORD"))
+    return bool(get_secret("SMTP_USER")) and bool(get_secret("SMTP_PASSWORD"))
 
 
 def get_email_from() -> str:
@@ -24,8 +25,8 @@ def _send_smtp(to_email: str, subject: str, body_html: str) -> tuple[bool, str]:
 
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_user = get_secret("SMTP_USER")
+    smtp_password = get_secret("SMTP_PASSWORD")
 
     try:
         msg = MIMEMultipart("alternative")
@@ -49,7 +50,7 @@ def _send_resend(to_email: str, subject: str, body_html: str) -> tuple[bool, str
     """Send via Resend (Brief §9 email delivery). Returns (ok, error, esp_message_id)."""
     import httpx
 
-    api_key = os.getenv("RESEND_API_KEY", "")
+    api_key = get_secret("RESEND_API_KEY")
     if not api_key:
         return False, "Resend is not configured. Set RESEND_API_KEY in .env.", ""
 

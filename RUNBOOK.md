@@ -47,6 +47,13 @@ Copy `.env.example` → `.env`. Key variables:
 | `CONSENT_REMINDER_DAYS` | Comma list of reminder days (default `3,7`) |
 | `MINDGUARD_DB_DIR` | Directory for `mindguard.db` (default: repo root) |
 | `LOG_LEVEL` | Root log level, e.g. `INFO`/`DEBUG` (default `INFO`) |
+| `SECRETS_FILE_DIR` | Optional dir of secret files named after each secret (12-factor) |
+| `<NAME>_FILE` | Optional single-file source for a secret, e.g. `JWT_SECRET_FILE` |
+
+Secrets are resolved through `backend/secrets_manager.py` (`get_secret`): env
+vars, `<NAME>_FILE`, then `SECRETS_FILE_DIR`. Swapping to a secret manager
+(AWS Secrets Manager, vault) is registering a loader there — a config change,
+not a code change (Delivery Brief §11).
 
 Generate keys:
 
@@ -69,8 +76,9 @@ PYTHONPATH=backend uvicorn backend.main:app --reload --port 8000
 API: http://localhost:8000 · docs: http://localhost:8000/docs
 Health probe: http://localhost:8000/api/v1/healthz
 
-> The ML stack (`torch`) is required for full import of `backend.main`. If you
-> don't have it installed, you can still run the test suite (see §5).
+> The ML stack (`torch`/`transformers`) is imported lazily on first inference,
+> so `backend.main` imports in ~1s without it — the test suite and boot never
+> need torch. Install `backend/requirements.txt` only to actually run analysis.
 
 **Schema migrations.** The schema is versioned with Alembic
 (`backend/alembic/`, baseline `0001`). `init_db()` runs `alembic upgrade head`
@@ -162,6 +170,16 @@ cd marketing && npm run build
 curl -X POST http://localhost:8000/api/v1/students/<id>/analyze \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"text":"hello"}'
+```
+
+### OpenAPI contract
+
+The generated spec is the migration contract between the current backend and
+the Phase 2 target (Brief §11). Pinned by `tests/test_openapi_contract.py`;
+regenerate the artifact with:
+
+```bash
+cd backend && PYTHONPATH=..:. python3 scripts/export_openapi.py  # → openapi.json
 ```
 
 ### Health probe

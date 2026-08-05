@@ -2,10 +2,7 @@ import json
 import logging
 import os
 import threading
-import torch
 from pathlib import Path
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, RobertaConfig, RobertaForSequenceClassification
-from huggingface_hub import hf_hub_download
 
 from backend.config import HF_CACHE_DIR, HF_REPO_ID, HF_TOKEN, MAX_LENGTH, MODEL_LOCAL_DIR, TOKENIZER_DIR
 
@@ -22,6 +19,8 @@ _TOKENIZER_SUBFOLDER = os.getenv("HF_TOKENIZER_SUBFOLDER", "mindguard_tokenizer"
 
 def _build_model_from_trained_state():
     """Create the RoBERTa-base classifier architecture without downloading a gated base model."""
+    from transformers import RobertaConfig, RobertaForSequenceClassification
+
     config = RobertaConfig(
         vocab_size=50265,
         max_position_embeddings=514,
@@ -44,6 +43,10 @@ def load_model():
     with _load_lock:
         if _model is not None:
             return _model, _tokenizer, _config, _device
+
+        import torch
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        from huggingface_hub import hf_hub_download
 
         if torch.cuda.is_available():
             _device = torch.device("cuda")

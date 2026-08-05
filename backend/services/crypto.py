@@ -23,9 +23,11 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from backend.config import ENCRYPTION_KEY
+
 logger = logging.getLogger(__name__)
 
-_ENCRYPTION_KEY_HEX = os.getenv("ENCRYPTION_KEY", "")
+_ENCRYPTION_KEY_HEX = ENCRYPTION_KEY
 _KEY_FILE = Path(os.getenv("MINDGUARD_DB_DIR", str(Path(__file__).resolve().parent.parent.parent))) / ".encryption_key"
 
 _PII_PREFIX = "gcm1:"

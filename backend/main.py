@@ -28,7 +28,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import SUPABASE_URL, SUPABASE_ANON_KEY, RESEND_WEBHOOK_SECRET, WEBHOOK_TOLERANCE_SECONDS
+from backend.config import (
+    SUPABASE_URL, SUPABASE_ANON_KEY, RESEND_WEBHOOK_SECRET, WEBHOOK_TOLERANCE_SECONDS,
+    REDDIT_CLIENT_SECRET, DEMO_NOTIFY_EMAIL,
+)
 from backend.models.schemas import (
     TextAnalysisRequest, TextAnalysisResponse,
     PlatformRequest, LoginRequest, RegisterRequest, UserResponse,
@@ -735,7 +738,7 @@ def _fetch_reddit_rss_posts(username: str) -> list[dict]:
 async def analyze_reddit(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
     client_id = req.client_id or os.getenv("REDDIT_CLIENT_ID", "")
-    client_secret = req.client_secret or os.getenv("REDDIT_CLIENT_SECRET", "")
+    client_secret = req.client_secret or REDDIT_CLIENT_SECRET
     if not req.username.strip():
         raise HTTPException(400, "Reddit username is required.")
 
@@ -2358,7 +2361,7 @@ async def v1_demo_request_create(data: DemoRequestCreate, request: Request):
     if not ok:
         logger.warning("demo confirmation email failed for %s: %s", data.work_email, err)
 
-    notify_to = os.getenv("DEMO_NOTIFY_EMAIL", "").strip()
+    notify_to = DEMO_NOTIFY_EMAIL.strip()
     if notify_to:
         ok, err = send_html_email(
             notify_to,
@@ -2454,7 +2457,15 @@ async def v1_resend_webhook(request: Request):
 
 # ── Rolling risk trigger ──────────────────────────────────────────────
 
-@app.post("/api/v1/students/{student_id}/analyze")
+@app.post(
+    "/api/v1/students/{student_id}/analyze",
+    responses={
+        200: {"description": "Rolling risk computed and persisted"},
+        403: {"description": "Analysis is consent-gated: no active (accepted, non-expired) consent on record"},
+        404: {"description": "Student not found"},
+        503: {"description": "Analysis service temporarily unavailable"},
+    },
+)
 async def v1_student_analyze(
     student_id: str,
     data: dict,

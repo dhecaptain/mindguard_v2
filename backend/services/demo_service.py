@@ -6,6 +6,8 @@ ML stack (torch is not installed in CI/dev everywhere).
 
 import os
 
+from backend.secrets_manager import get_secret
+
 FREE_EMAIL_DOMAINS = {
     "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com",
     "outlook.com", "live.com", "icloud.com", "me.com", "aol.com", "proton.me",
@@ -14,7 +16,7 @@ FREE_EMAIL_DOMAINS = {
 
 
 def app_base_url() -> str:
-    return (os.getenv("APP_BASE_URL") or os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
+    return (get_secret("APP_BASE_URL") or os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
 
 
 def work_email_warning(email: str) -> str | None:
@@ -35,7 +37,7 @@ async def verify_recaptcha_token(token: str | None) -> bool:
     submission so local dev keeps working (the marketing deploy sets the env
     var; the backend refuses without a valid token once it is set).
     """
-    secret = os.getenv("RECAPTCHA_SECRET", "").strip()
+    secret = get_secret("RECAPTCHA_SECRET").strip()
     if not secret:
         return True
     if not token:

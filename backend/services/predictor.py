@@ -5,7 +5,6 @@ import logging
 import time
 
 import numpy as np
-import torch
 
 from backend.models.loader import load_model
 
@@ -13,6 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 def _predict_batch_sync(texts: list[str]) -> list[float]:
+    # torch/transformers are imported lazily so that importing the app does not
+    # pay the multi-second torch cold-start or spawn its OpenMP thread pool at
+    # boot (a known source of import-time stalls and deadlock flakes).
+    import torch
+
     model, tokenizer, config, device = load_model()
     max_length = int(config.get("max_length", 256))
     enc = tokenizer(

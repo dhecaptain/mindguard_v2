@@ -1,18 +1,16 @@
 import logging
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
 from fastapi import Header, HTTPException
-from dotenv import load_dotenv
 
-load_dotenv()
+from backend.config import JWT_SECRET
 
 logger = logging.getLogger(__name__)
 
-SECRET_KEY = os.getenv("JWT_SECRET")
+SECRET_KEY = JWT_SECRET
 if not SECRET_KEY:
     raise RuntimeError(
         "JWT_SECRET environment variable is required. "
