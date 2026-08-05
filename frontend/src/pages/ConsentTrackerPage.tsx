@@ -3,12 +3,23 @@ import { getConsents, createConsent, dispatchConsent, cancelConsent, remindConse
 import { getStudents } from '../api/counsellor'
 import RosterPanel from '../components/consent/RosterPanel'
 import ConsentDetailDrawer from '../components/consent/ConsentDetailDrawer'
+import BulkConsentUpload from '../components/consent/BulkConsentUpload'
 import type { Consent, ConsentStatus } from '../types'
 import type { StudentDTO } from '../api/counsellor'
 
 function formatDate(d?: string) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function expiryHint(c: Consent): { label: string; tone: string } | null {
+  if (c.status !== 'PENDING' && c.status !== 'VIEWED') return null
+  if (!c.expires_at) return null
+  const ms = new Date(c.expires_at).getTime() - Date.now()
+  if (ms <= 0) return { label: 'expired', tone: 'text-[#ef4444] font-semibold' }
+  const days = Math.ceil(ms / 86400000)
+  if (days <= 2) return { label: `expires in ${days}d`, tone: 'text-[#d97706] font-semibold' }
+  return { label: `expires in ${days}d`, tone: 'text-[#9ca3af]' }
 }
 
 const STATUS_STYLE: Record<ConsentStatus, string> = {
@@ -20,6 +31,18 @@ const STATUS_STYLE: Record<ConsentStatus, string> = {
   EXPIRED: 'bg-[#f1f5f9] text-[#6b7280]',
   REVOKED: 'bg-[#fee2e2] text-[#991b1b]',
   RENEWAL_DUE: 'bg-[#fff7ed] text-[#9a3412]',
+}
+
+const DELIVERY_STYLE: Record<string, string> = {
+  delivered: 'bg-[#d1fae5] text-[#065f46]',
+  bounced: 'bg-[#fee2e2] text-[#991b1b]',
+  complained: 'bg-[#fef3c7] text-[#92400e]',
+}
+
+const DELIVERY_LABEL: Record<string, string> = {
+  delivered: 'Delivered',
+  bounced: 'Bounced',
+  complained: 'Complaint',
 }
 
 const FILTER_TABS: Array<{ key: string; label: string }> = [
@@ -42,9 +65,11 @@ interface NewConsentModalProps {
   students: StudentDTO[]
   onClose: () => void
   onCreated: (consent: Consent) => void
+  onDispatched?: () => void
 }
 
-function NewConsentModal({ students, onClose, onCreated }: NewConsentModalProps) {
+function NewConsentModal({ students, onClose, onCreated, onDispatched }: NewConsentModalProps) {
+  const [tab, setTab] = useState<'single' | 'bulk'>('single')
   const [studentId, setStudentId] = useState('')
   const [recipientEmail, setRecipientEmail] = useState('')
   const [recipientRole, setRecipientRole] = useState<'student' | 'parent'>('student')
@@ -91,7 +116,32 @@ function NewConsentModal({ students, onClose, onCreated }: NewConsentModalProps)
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex px-[20px] pt-[12px] pb-0 gap-[4px]">
+          {(
+            [
+              { key: 'single', label: 'Single Student', icon: 'ti ti-user-plus' },
+              { key: 'bulk', label: 'Bulk Upload', icon: 'ti ti-cloud-upload' },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-[6px] px-[12px] py-[7px] rounded-t-[8px] text-[0.8rem] font-semibold cursor-pointer border border-b-0 transition-colors ${
+                tab === t.key
+                  ? 'bg-[#f0fdfa] text-[#0F766E] border-[#e5e7eb]'
+                  : 'bg-white text-[#6b7280] border-transparent hover:bg-[#f9fafb]'
+              }`}
+            >
+              <i className={`${t.icon} text-[13px]`} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-col gap-[14px] p-[20px]">
+          {tab === 'single' && (
+            <>
           {/* Student */}
           <div>
             <label className="block text-[0.78rem] font-semibold text-[#374151] mb-[4px]">Student *</label>
@@ -213,6 +263,17 @@ function NewConsentModal({ students, onClose, onCreated }: NewConsentModalProps)
               Cancel
             </button>
           </div>
+            </>
+          )}
+
+          {tab === 'bulk' && (
+            <BulkConsentUpload
+              onDispatched={() => {
+                onDispatched?.()
+                onClose()
+              }}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -569,7 +630,9 @@ export default function ConsentTrackerPage() {
                   <th className="text-left py-[10px] px-[20px]">Recipient</th>
                   <th className="text-left py-[10px] px-[20px]">Mode</th>
                   <th className="text-left py-[10px] px-[20px]">Status</th>
+                  <th className="text-left py-[10px] px-[20px]">Delivery</th>
                   <th className="text-left py-[10px] px-[20px]">Dispatched</th>
+                  <th className="text-left py-[10px] px-[20px]">Expires</th>
                   <th className="text-left py-[10px] px-[20px]">Actions</th>
                 </tr>
               </thead>
@@ -601,8 +664,33 @@ export default function ConsentTrackerPage() {
                           {consent.status.replace(/_/g, ' ')}
                         </span>
                       </td>
+                      <td className="py-[12px] px-[20px]">
+                        {consent.delivery_status ? (
+                          <span
+                            className={`inline-block px-[8px] py-[2px] rounded-full text-[0.7rem] font-semibold ${DELIVERY_STYLE[consent.delivery_status] || 'bg-[#f1f5f9] text-[#6b7280]'}`}
+                            title={consent.last_delivery_event_at ? `Reported ${formatDate(consent.last_delivery_event_at)}` : undefined}
+                          >
+                            {DELIVERY_LABEL[consent.delivery_status] || consent.delivery_status}
+                          </span>
+                        ) : (
+                          <span className="text-[#d1d5db]">—</span>
+                        )}
+                      </td>
                       <td className="py-[12px] px-[20px] text-[#6b7280]">
                         {formatDate(consent.dispatched_at)}
+                      </td>
+                      <td className="py-[12px] px-[20px]">
+                        {consent.expires_at ? (
+                          <div className="text-[#374151]">{formatDate(consent.expires_at)}</div>
+                        ) : (
+                          <span className="text-[#d1d5db]">—</span>
+                        )}
+                        {(() => {
+                          const hint = expiryHint(consent)
+                          return hint ? (
+                            <div className={`text-[0.7rem] mt-[2px] ${hint.tone}`}>{hint.label}</div>
+                          ) : null
+                        })()}
                       </td>
                       <td className="py-[12px] px-[20px]">
                         <div className="flex items-center gap-[6px]">
@@ -698,6 +786,7 @@ export default function ConsentTrackerPage() {
             setDispatchNotice(consent)
             load()
           }}
+          onDispatched={() => load()}
         />
       )}
 

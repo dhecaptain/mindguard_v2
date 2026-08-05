@@ -153,6 +153,8 @@ export interface Consent {
   email_sent?: boolean
   email_error?: string
   consent_url?: string
+  delivery_status?: 'delivered' | 'bounced' | 'complained'
+  last_delivery_event_at?: string
 }
 
 export interface ConsentListResponse {
@@ -213,7 +215,7 @@ export interface RosterUploadSummary {
   total: number
   created: number
   updated: number
-  errors: Array<{ row: Record<string, string>; error: string }>
+  errors: Array<{ row_number?: number; row: Record<string, string>; error: string }>
   parse_error?: string | null
   student_ids?: string[]
 }

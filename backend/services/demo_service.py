@@ -28,6 +28,31 @@ def work_email_warning(email: str) -> str | None:
     return None
 
 
+async def verify_recaptcha_token(token: str | None) -> bool:
+    """Verify a reCAPTCHA v3 token against Google's siteverify endpoint.
+
+    When ``RECAPTCHA_SECRET`` is unset the site is not enrolled — accept the
+    submission so local dev keeps working (the marketing deploy sets the env
+    var; the backend refuses without a valid token once it is set).
+    """
+    secret = os.getenv("RECAPTCHA_SECRET", "").strip()
+    if not secret:
+        return True
+    if not token:
+        return False
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://www.google.com/recaptcha/api/siteverify",
+                data={"secret": secret, "response": token},
+            )
+        return bool(resp.json().get("success"))
+    except Exception:
+        return False
+
+
 def demo_email_context(demo: dict) -> dict:
     base = app_base_url()
     return {

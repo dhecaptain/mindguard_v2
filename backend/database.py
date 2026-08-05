@@ -14,6 +14,7 @@ DB_PATH = Path(os.getenv("MINDGUARD_DB_DIR", str(Path(__file__).resolve().parent
 
 
 def get_db() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -32,306 +33,31 @@ def health_check() -> dict:
         return {"db": "error", "error": str(exc)}
 
 
+def run_migrations(db_path: str | Path | None = None) -> None:
+    """Apply pending Alembic migrations to the database.
+
+    The schema is owned by versioned migrations under ``backend/alembic/``
+    (see migration ``0001_baseline``, an idempotent reconciliation of the
+    previously ad-hoc DDL). ``db_path`` defaults to the active ``DB_PATH`` so
+    the migration always targets the same SQLite file the app uses — including
+    under tests, where ``database.DB_PATH`` is patched per test.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    target = Path(db_path) if db_path is not None else DB_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    backend_dir = Path(__file__).resolve().parent
+    cfg = Config(str(backend_dir / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{target}")
+    command.upgrade(cfg, "head")
+
+
 def init_db():
-    conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            role_type TEXT NOT NULL DEFAULT 'student',
-            password_hash TEXT NOT NULL,
-            avatar_url TEXT DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'pending',
-            terms_accepted_at TEXT DEFAULT NULL,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS analyses (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL REFERENCES users(id),
-            platform TEXT NOT NULL DEFAULT 'text',
-            text TEXT,
-            prob REAL NOT NULL,
-            label TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS referrals (
-            id TEXT PRIMARY KEY,
-            counsellor_id TEXT NOT NULL REFERENCES users(id),
-            student_id TEXT NOT NULL REFERENCES users(id),
-            urgency TEXT NOT NULL DEFAULT 'medium',
-            status TEXT NOT NULL DEFAULT 'open',
-            notes TEXT DEFAULT '',
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS communications (
-            id TEXT PRIMARY KEY,
-            sender_id TEXT NOT NULL REFERENCES users(id),
-            receiver_id TEXT NOT NULL REFERENCES users(id),
-            message TEXT NOT NULL,
-            read INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS notifications (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL REFERENCES users(id),
-            title TEXT NOT NULL,
-            message TEXT NOT NULL,
-            type TEXT NOT NULL DEFAULT 'general',
-            read INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS institutions (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            type TEXT DEFAULT 'university',
-            created_at TEXT NOT NULL,
-            retention_days INTEGER DEFAULT 30,
-            alert_threshold REAL DEFAULT 0.65,
-            confidence_floor REAL DEFAULT 0.70
-        );
-
-        CREATE TABLE IF NOT EXISTS consents (
-            id TEXT PRIMARY KEY,
-            student_id TEXT NOT NULL REFERENCES users(id),
-            counsellor_id TEXT NOT NULL REFERENCES users(id),
-            recipient_email TEXT NOT NULL,
-            recipient_role TEXT NOT NULL DEFAULT 'student',
-            status TEXT NOT NULL DEFAULT 'DRAFT',
-            platforms_json TEXT DEFAULT '[]',
-            mode TEXT DEFAULT 'ON_DEMAND',
-            document_version TEXT DEFAULT 'v2.0',
-            magic_token TEXT,
-            magic_token_expires_at TEXT,
-            signature_name TEXT,
-            signature_ip TEXT,
-            dispatched_at TEXT,
-            viewed_at TEXT,
-            accepted_at TEXT,
-            declined_at TEXT,
-            revoked_at TEXT,
-            expires_at TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS linked_accounts (
-            id TEXT PRIMARY KEY,
-            student_id TEXT NOT NULL REFERENCES users(id),
-            consent_id TEXT REFERENCES consents(id),
-            platform TEXT NOT NULL,
-            mode TEXT DEFAULT 'handle',
-            handle TEXT,
-            status TEXT DEFAULT 'active',
-            last_synced_at TEXT,
-            last_error TEXT,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS alerts (
-            id TEXT PRIMARY KEY,
-            student_id TEXT NOT NULL REFERENCES users(id),
-            counsellor_id TEXT NOT NULL REFERENCES users(id),
-            fired_at TEXT NOT NULL,
-            risk_score REAL NOT NULL,
-            threshold_at_fire REAL NOT NULL,
-            platform TEXT,
-            status TEXT NOT NULL DEFAULT 'OPEN',
-            disposition TEXT,
-            disposition_reason TEXT,
-            disposition_note TEXT,
-            dispositioned_by TEXT,
-            dispositioned_at TEXT,
-            supersedes_id TEXT,
-            cooldown_until TEXT,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id TEXT PRIMARY KEY,
-            actor_id TEXT,
-            actor_role TEXT,
-            action TEXT NOT NULL,
-            target_type TEXT,
-            target_id TEXT,
-            payload_json TEXT,
-            ip TEXT,
-            occurred_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS notes (
-            id TEXT PRIMARY KEY,
-            student_id TEXT NOT NULL REFERENCES users(id),
-            author_id TEXT NOT NULL REFERENCES users(id),
-            body TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS rolling_risk (
-            id TEXT PRIMARY KEY,
-            student_id TEXT NOT NULL REFERENCES users(id),
-            computed_at TEXT NOT NULL,
-            score REAL NOT NULL,
-            window_days INTEGER DEFAULT 14,
-            top_platform TEXT,
-            n_posts INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS groups (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            avatar_url TEXT DEFAULT '',
-            created_by TEXT NOT NULL REFERENCES users(id),
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS group_members (
-            id TEXT PRIMARY KEY,
-            group_id TEXT NOT NULL REFERENCES groups(id),
-            user_id TEXT NOT NULL REFERENCES users(id),
-            role TEXT NOT NULL DEFAULT 'member',
-            joined_at TEXT NOT NULL,
-            UNIQUE(group_id, user_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS group_messages (
-            id TEXT PRIMARY KEY,
-            group_id TEXT NOT NULL REFERENCES groups(id),
-            sender_id TEXT NOT NULL REFERENCES users(id),
-            message TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS group_message_read (
-            id TEXT PRIMARY KEY,
-            message_id TEXT NOT NULL REFERENCES group_messages(id),
-            user_id TEXT NOT NULL REFERENCES users(id),
-            read_at TEXT NOT NULL,
-            UNIQUE(message_id, user_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS notification_preferences (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL REFERENCES users(id),
-            type TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            muted_groups TEXT DEFAULT '[]',
-            created_at TEXT NOT NULL,
-            UNIQUE(user_id, type)
-        );
-
-        -- ── Consent & roster data model (Delivery Brief §3) ──────────────
-        -- All new tables use TEXT UUID primary keys and monotonic created_at
-        -- (Brief §11) without touching existing integer-keyed tables.
-
-        CREATE TABLE IF NOT EXISTS students (
-            id TEXT PRIMARY KEY,
-            institution_id TEXT REFERENCES institutions(id),
-            student_id_hash TEXT NOT NULL UNIQUE,
-            first_name_encrypted TEXT NOT NULL,
-            email_encrypted TEXT NOT NULL,
-            date_of_birth_encrypted TEXT NOT NULL,
-            is_minor INTEGER NOT NULL DEFAULT 0,
-            parent_email_encrypted TEXT,
-            parent_first_name_encrypted TEXT,
-            grade_level TEXT,
-            current_consent_id TEXT REFERENCES consents(id),
-            created_by TEXT REFERENCES users(id),
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            deleted_at TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS consent_templates (
-            id TEXT PRIMARY KEY,
-            institution_id TEXT REFERENCES institutions(id),
-            version TEXT NOT NULL DEFAULT '1.0.0',
-            language TEXT NOT NULL DEFAULT 'en',
-            subject_email_html TEXT,
-            parent_email_html TEXT,
-            consent_page_html TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS consent_events (
-            id TEXT PRIMARY KEY,
-            consent_id TEXT NOT NULL REFERENCES consents(id),
-            event_type TEXT NOT NULL,
-            actor_type TEXT NOT NULL DEFAULT 'system',
-            actor_id TEXT,
-            metadata_json TEXT,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS demo_requests (
-            id TEXT PRIMARY KEY,
-            full_name TEXT NOT NULL,
-            work_email TEXT NOT NULL,
-            organisation TEXT NOT NULL,
-            role_title TEXT,
-            organisation_type TEXT NOT NULL DEFAULT 'other',
-            country TEXT,
-            student_count_range TEXT,
-            message TEXT,
-            heard_about_us TEXT,
-            status TEXT NOT NULL DEFAULT 'new',
-            assigned_to TEXT REFERENCES users(id),
-            notes TEXT,
-            consent_to_contact INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS email_events (
-            id TEXT PRIMARY KEY,
-            related_type TEXT NOT NULL,
-            related_id TEXT,
-            event TEXT NOT NULL,
-            esp_message_id TEXT,
-            recipient_email TEXT,
-            metadata_json TEXT,
-            created_at TEXT NOT NULL
-        );
-    """)
-    # Migrations for existing DBs
-    for migration in [
-        "ALTER TABLE users ADD COLUMN terms_accepted_at TEXT DEFAULT NULL",
-        "ALTER TABLE users ADD COLUMN dob TEXT DEFAULT NULL",
-        "ALTER TABLE users ADD COLUMN parent_email TEXT DEFAULT NULL",
-        "ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT NULL",
-        "ALTER TABLE users ADD COLUMN referred_by TEXT DEFAULT NULL",
-        # Consent & roster extensions (additive, backwards compatible)
-        "ALTER TABLE institutions ADD COLUMN minor_age_threshold INTEGER DEFAULT 18",
-        "ALTER TABLE institutions ADD COLUMN consent_template_id TEXT DEFAULT NULL",
-        "ALTER TABLE institutions ADD COLUMN consent_reminder_days TEXT DEFAULT '[3,7]'",
-        "ALTER TABLE institutions ADD COLUMN consent_expiry_days INTEGER DEFAULT 30",
-        "ALTER TABLE consents ADD COLUMN signed_token_hash TEXT DEFAULT NULL",
-        "ALTER TABLE consents ADD COLUMN response_ip TEXT DEFAULT NULL",
-        "ALTER TABLE consents ADD COLUMN response_user_agent TEXT DEFAULT NULL",
-        "ALTER TABLE consents ADD COLUMN reminders_sent INTEGER DEFAULT 0",
-        "ALTER TABLE consents ADD COLUMN template_version TEXT DEFAULT '1.0.0'",
-        "ALTER TABLE consents ADD COLUMN notes TEXT DEFAULT ''",
-        "ALTER TABLE users ADD COLUMN permissions_json TEXT DEFAULT '[]'",
-        "ALTER TABLE demo_requests ADD COLUMN consent_to_contact INTEGER DEFAULT 1",
-    ]:
-        try:
-            conn.execute(migration)
-            conn.commit()
-        except Exception:
-            pass
-    conn.close()
+    """Ensure the schema is current by running versioned migrations."""
+    run_migrations()
 
 
 def _make_referral_code() -> str:
@@ -891,6 +617,22 @@ def query_consents(
         where.append("c.created_at <= ?")
         params.append(f"{str(date_to)}T23:59:59.999999")
     where_sql = " AND ".join(where)
+    # Latest delivery outcome for the consent's own recipient email
+    # (only email_events rows carrying a real delivery outcome).
+    delivery_subquery = (
+        "SELECT e.event FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
+    delivery_at_subquery = (
+        "SELECT e.created_at FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
 
     conn = get_db()
     total = conn.execute(
@@ -900,7 +642,9 @@ def query_consents(
     limit = max(1, min(int(limit), 1000))
     offset = max(0, int(offset))
     rows = conn.execute(
-        f"SELECT c.*, u.name as student_name, u.email as student_email "
+        f"SELECT c.*, u.name as student_name, u.email as student_email, "
+        f"({delivery_subquery}) AS delivery_status, "
+        f"({delivery_at_subquery}) AS last_delivery_event_at "
         f"FROM consents c JOIN users u ON c.student_id = u.id "
         f"WHERE {where_sql} ORDER BY c.created_at DESC LIMIT ? OFFSET ?",
         params + [limit, offset],
@@ -911,9 +655,25 @@ def query_consents(
 
 def get_consent_with_student(consent_id: str) -> dict | None:
     """Single consent joined with the student's user name/email."""
+    delivery_subquery = (
+        "SELECT e.event FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
+    delivery_at_subquery = (
+        "SELECT e.created_at FROM email_events e "
+        "WHERE e.related_type = 'consent' AND e.related_id = c.id "
+        "AND e.recipient_email = c.recipient_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
     conn = get_db()
     row = conn.execute(
-        "SELECT c.*, u.name as student_name, u.email as student_email "
+        "SELECT c.*, u.name as student_name, u.email as student_email, "
+        f"({delivery_subquery}) AS delivery_status, "
+        f"({delivery_at_subquery}) AS last_delivery_event_at "
         "FROM consents c JOIN users u ON c.student_id = u.id WHERE c.id = ?",
         (consent_id,),
     ).fetchone()
@@ -1801,15 +1561,37 @@ def get_demo_request(demo_request_id: str) -> dict | None:
 
 
 def list_demo_requests(status: str | None = None, limit: int = 100, offset: int = 0) -> list:
+    delivery_subquery = (
+        "SELECT e.event FROM email_events e "
+        "WHERE e.related_type = 'demo_request' AND e.related_id = d.id "
+        "AND e.recipient_email = d.work_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
+    delivery_at_subquery = (
+        "SELECT e.created_at FROM email_events e "
+        "WHERE e.related_type = 'demo_request' AND e.related_id = d.id "
+        "AND e.recipient_email = d.work_email "
+        "AND e.event IN ('delivered','bounced','complained') "
+        "ORDER BY e.created_at DESC LIMIT 1"
+    )
     conn = get_db()
     if status:
         rows = conn.execute(
-            "SELECT * FROM demo_requests WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT d.*, "
+            f"({delivery_subquery}) AS delivery_status, "
+            f"({delivery_at_subquery}) AS last_delivery_event_at "
+            "FROM demo_requests d WHERE d.status = ? "
+            "ORDER BY d.created_at DESC LIMIT ? OFFSET ?",
             (status, limit, offset),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM demo_requests ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT d.*, "
+            f"({delivery_subquery}) AS delivery_status, "
+            f"({delivery_at_subquery}) AS last_delivery_event_at "
+            "FROM demo_requests d "
+            "ORDER BY d.created_at DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
     conn.close()
@@ -1856,6 +1638,21 @@ def create_email_event(
     conn.commit()
     conn.close()
     return eid
+
+
+def get_email_events_by_esp_message_id(esp_message_id: str, limit: int = 50) -> list:
+    """email_events rows for a given ESP message id (the ESP's ``email_id``).
+
+    Used by the ESP webhook handler to correlate a bounce/complaint/delivery
+    event back to the original send record. Ordered newest first.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM email_events WHERE esp_message_id = ? ORDER BY created_at DESC LIMIT ?",
+        (esp_message_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_email_events(related_type: str | None = None, related_id: str | None = None, limit: int = 200) -> list:

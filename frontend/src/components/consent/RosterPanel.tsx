@@ -6,6 +6,7 @@ import {
   runConsentMaintenance,
   uploadRoster,
 } from '../../api/admin'
+import RosterErrorReport from './RosterErrorReport'
 import type { Institution, RosterDispatchSummary, RosterStudent, RosterUploadSummary } from '../../types'
 
 const CONSENT_STYLE: Record<string, string> = {
@@ -197,13 +198,7 @@ export default function RosterPanel() {
               {summary.created} created · {summary.updated} updated · {summary.total} total
               {summary.errors.length ? ` · ${summary.errors.length} row(s) failed` : ''}
             </div>
-            {summary.errors.length > 0 && (
-              <div className="mt-[6px] max-h-[120px] overflow-y-auto text-[0.76rem] text-[#991b1b]">
-                {summary.errors.slice(0, 10).map((e, i) => (
-                  <div key={i}>Row: {e.row.student_id || JSON.stringify(e.row)} — {e.error}</div>
-                ))}
-              </div>
-            )}
+            <RosterErrorReport summary={summary} />
           </div>
         )}
 

@@ -209,6 +209,9 @@ class DemoRequestCreate(BaseModel):
     message: Optional[str] = Field(default=None, max_length=5000)
     heard_about_us: Optional[str] = Field(default=None, max_length=64)
     consent_to_contact: bool = True
+    # Anti-spam (Brief §5.5/§13.2): invisible honeypot + reCAPTCHA v3 token.
+    website: Optional[str] = Field(default=None, max_length=512)
+    recaptcha_token: Optional[str] = Field(default=None, max_length=8192)
 
 
 class DemoRequestResponse(BaseModel):
