@@ -45,6 +45,8 @@ Copy `.env.example` → `.env`. Key variables:
 | `ENFORCE_CONSENT_ANALYSIS` | `true` = analysis blocked without active consent |
 | `CONSENT_EXPIRY_DAYS` | Accepted consent validity (default `30`) |
 | `CONSENT_REMINDER_DAYS` | Comma list of reminder days (default `3,7`) |
+| `MINDGUARD_DB_DIR` | Directory for `mindguard.db` (default: repo root) |
+| `LOG_LEVEL` | Root log level, e.g. `INFO`/`DEBUG` (default `INFO`) |
 
 Generate keys:
 
@@ -70,6 +72,22 @@ Health probe: http://localhost:8000/api/v1/healthz
 > The ML stack (`torch`) is required for full import of `backend.main`. If you
 > don't have it installed, you can still run the test suite (see §5).
 
+**Schema migrations.** The schema is versioned with Alembic
+(`backend/alembic/`, baseline `0001`). `init_db()` runs `alembic upgrade head`
+automatically on startup, so normal boots need no manual step. To inspect or
+drive migrations manually:
+
+```bash
+cd backend && PYTHONPATH=..:. alembic upgrade head   # idempotent
+cd backend && PYTHONPATH=..:. alembic history        # applied revisions
+```
+
+**Logging.** All logs are single-line JSON on stdout, with per-request
+correlation (`request_id`, `method`, `path`, `status_code`, `duration_ms`,
+`user_id`, `ip`). Every request emits one `http <METHOD> <path> -> <status>`
+access line. Set `LOG_LEVEL` to raise/lower verbosity; the root logger is
+configured by `backend/logging_setup.py` (no Alembic log config).
+
 ### Frontend
 
 ```bash
@@ -84,6 +102,12 @@ cd marketing && npm install && npm run dev    # http://localhost:3000
 
 The marketing demo form proxies to the backend via
 `MINDGUARD_API_URL` (default `http://localhost:8000`).
+
+Marketing pages (Delivery Brief §5.2): `/`, `/product`, `/for-schools`,
+`/for-universities`, `/pricing`, `/docs` (+ `/docs/roster-csv`, `/docs/faq`),
+`/security`, `/about`, `/blog` (+ 3 seed posts), `/demo`, `/contact`,
+`/privacy`, `/terms`, `/dpa` (PDF at `/dpa-template.pdf`), `/thank-you`.
+`robots.txt` and `sitemap.xml` are generated automatically.
 
 ---
 

@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 import httpx
+import jwt
 from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
@@ -81,7 +82,10 @@ from backend.services.consent_service import (
     process_consent_reminders, process_expired_consents,
     dispatch_consents_for_students, consents_to_csv,
 )
-from backend.services.consent_gate import require_consent_for_analysis
+from backend.services.analysis_service import (
+    INFERENCE_UNAVAILABLE_MESSAGE, inference_http_error,
+    run_consented_student_analysis,
+)
 from backend.services.crypto import decrypt_pii
 from backend.services.demo_service import (
     demo_email_context, work_email_warning, verify_recaptcha_token,
@@ -92,10 +96,12 @@ from backend.permissions import (
     PERM_CONSENT_MANAGE, PERM_DEMO_MANAGE, PERM_AUDIT_VIEW,
     require_permission, require_any_permission,
 )
-from backend.services.alert_service import compute_rolling_risk, try_create_alert
 from backend.auth import hash_password, verify_password, create_access_token, require_auth, blacklist_token
+from backend.logging_setup import (
+    generate_request_id, set_request_context, setup_logging,
+)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+setup_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MindGuard API", version="2.0.0")
@@ -123,6 +129,57 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    """Correlate all logs for a request and emit a structured access line."""
+    request_id = generate_request_id()
+    request.state.request_id = request_id
+    start = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        set_request_context(
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            status_code=status_code,
+            duration_ms=duration_ms,
+            ip=request.client.host if request.client else None,
+            user_id=_token_subject(request),
+        )
+        logger.info(
+            "http %s %s -> %s (%sms)",
+            request.method,
+            request.url.path,
+            status_code,
+            duration_ms,
+        )
+        # Clear the context so background work after the response is not
+        # incorrectly attributed to the last request.
+        set_request_context()
+
+
+def _token_subject(request: Request) -> str | None:
+    """Best-effort user id from the Bearer token (unverified, logging only).
+
+    Never fails: malformed/missing credentials simply yield None so the access
+    line still records ``user_id: null`` without perturbing the request.
+    """
+    try:
+        auth = request.headers.get("Authorization", "")
+        if not auth.lower().startswith("bearer "):
+            return None
+        token = auth.split(None, 1)[1]
+        payload = jwt.decode(token, options={"verify_signature": False})
+        return payload.get("sub")
+    except Exception:
+        return None
 
 
 @app.on_event("startup")
@@ -2408,74 +2465,21 @@ async def v1_student_analyze(
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
-    require_consent_for_analysis(student_id)
 
-    platform = (data.get("platform") or "unknown").strip().lower()
-    posts = data.get("posts")
-    if not isinstance(posts, list):
-        raise HTTPException(400, "posts must be a list")
-    if not posts:
-        raise HTTPException(400, "posts list cannot be empty")
+    try:
+        result = run_consented_student_analysis(
+            student_id=student_id,
+            posts=data.get("posts"),
+            platform=data.get("platform"),
+            actor=user,
+            ip=_client_ip(request),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise inference_http_error(exc)
 
-    for i, post in enumerate(posts):
-        if not isinstance(post, dict):
-            raise HTTPException(400, f"posts[{i}] must be an object")
-        if "risk_score" not in post:
-            raise HTTPException(400, f"posts[{i}] missing required field 'risk_score'")
-
-    rolling_score = compute_rolling_risk(posts, window_days=14)
-    top_platform = platform
-    n_posts = len(posts)
-
-    risk_record = update_rolling_risk(
-        student_id=student_id,
-        score=rolling_score,
-        top_platform=top_platform,
-        n_posts=n_posts,
-    )
-
-    write_audit(
-        user["id"], user["role_type"], "ROLLING_RISK_COMPUTED",
-        "student", student_id,
-        payload={"platform": platform, "score": rolling_score, "n_posts": n_posts},
-        ip=_client_ip(request),
-    )
-
-    alert = None
-    if rolling_score >= 0.65:
-        try:
-            alert = try_create_alert(
-                student_id=student_id,
-                counsellor_id=user["id"],
-                rolling_score=rolling_score,
-                platform=platform,
-            )
-        except Exception as exc:
-            logger.error("try_create_alert error student=%s: %s", student_id, exc)
-
-        if alert:
-            _safe_notify(
-                user["id"],
-                "Risk Alert Triggered",
-                f"Student {student['name']} has a rolling risk score of {rolling_score:.2f} on {platform}.",
-                "alert",
-            )
-            write_audit(
-                user["id"], user["role_type"], "ALERT_CREATED",
-                "alert", alert["id"],
-                payload={"student_id": student_id, "score": rolling_score},
-                ip=_client_ip(request),
-            )
-
-    return {
-        "student_id": student_id,
-        "platform": platform,
-        "rolling_score": rolling_score,
-        "n_posts": n_posts,
-        "risk_record": risk_record,
-        "alert_created": alert is not None,
-        "alert": alert,
-    }
+    return result
 
 
 # ═════════════════════════════════════════════════════════════════════

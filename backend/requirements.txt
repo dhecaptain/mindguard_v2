@@ -19,3 +19,4 @@ supabase>=2.0.0
 atproto>=0.0.46
 playwright>=1.40.0
 cryptography>=42.0.0
+alembic>=1.13
