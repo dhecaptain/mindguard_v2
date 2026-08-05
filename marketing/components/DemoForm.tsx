@@ -185,8 +185,8 @@ export default function DemoForm() {
           <input className={inputCls} value={form.role_title} onChange={set('role_title')} placeholder="Head of Pastoral Care" />
         </div>
         <div>
-          <label className={labelCls}>Organisation type</label>
-          <select className={inputCls} value={form.organisation_type} onChange={set('organisation_type')}>
+          <label className={labelCls} htmlFor="org-type">Organisation type</label>
+          <select id="org-type" className={inputCls} value={form.organisation_type} onChange={set('organisation_type')}>
             {ORG_TYPES.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -200,8 +200,8 @@ export default function DemoForm() {
           <input className={inputCls} value={form.country} onChange={set('country')} placeholder="UK" />
         </div>
         <div>
-          <label className={labelCls}>Student population</label>
-          <select className={inputCls} value={form.student_count_range} onChange={set('student_count_range')}>
+          <label className={labelCls} htmlFor="student-pop">Student population</label>
+          <select id="student-pop" className={inputCls} value={form.student_count_range} onChange={set('student_count_range')}>
             <option value="">Select a range...</option>
             {COUNT_RANGES.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -222,8 +222,8 @@ export default function DemoForm() {
       </div>
 
       <div>
-        <label className={labelCls}>How did you hear about us?</label>
-        <select className={inputCls} value={form.heard_about_us} onChange={set('heard_about_us')}>
+        <label className={labelCls} htmlFor="heard-about">How did you hear about us?</label>
+        <select id="heard-about" className={inputCls} value={form.heard_about_us} onChange={set('heard_about_us')}>
           <option value="">Select an option...</option>
           {['Conference', 'Word of mouth', 'Online search', 'Social media', 'Newsletter', 'Other'].map((o) => (
             <option key={o} value={o}>{o}</option>

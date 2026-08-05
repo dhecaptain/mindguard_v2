@@ -134,6 +134,59 @@ app.add_middleware(
 )
 
 
+# ── Security headers (Delivery Brief §8) ──────────────────────────────
+# CSP is applied only to HTML documents served by this app (the production SPA
+# mount) and never to API responses or the interactive docs, so /docs keeps its
+# inline Swagger assets while the SPA gets a strict, nonce-free policy. The
+# always-on headers apply to every response.
+_CSP_ENABLED = os.getenv("MINDGUARD_CSP", "true").strip().lower() != "false"
+
+_SECURITY_ALWAYS_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+}
+
+_CSP_POLICY = (
+    "default-src 'self' blob:; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+    "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co; "
+    "frame-src 'self' blob:; "
+    "object-src 'self' blob:; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+# Paths serving non-SPA HTML (interactive API docs) that rely on inline/CDN
+# scripts and must not receive the SPA CSP.
+_CSP_HTML_EXEMPT_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+def _build_security_headers(content_type: str, path: str) -> dict[str, str]:
+    headers = dict(_SECURITY_ALWAYS_HEADERS)
+    if (
+        _CSP_ENABLED
+        and (content_type or "").startswith("text/html")
+        and not path.startswith(_CSP_HTML_EXEMPT_PATHS)
+    ):
+        headers["Content-Security-Policy"] = _CSP_POLICY
+    return headers
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    headers = _build_security_headers(response.headers.get("content-type", ""), request.url.path)
+    for name, value in headers.items():
+        response.headers.setdefault(name, value)
+    return response
+
+
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
     """Correlate all logs for a request and emit a structured access line."""

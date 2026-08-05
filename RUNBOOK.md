@@ -49,6 +49,7 @@ Copy `.env.example` → `.env`. Key variables:
 | `LOG_LEVEL` | Root log level, e.g. `INFO`/`DEBUG` (default `INFO`) |
 | `SECRETS_FILE_DIR` | Optional dir of secret files named after each secret (12-factor) |
 | `<NAME>_FILE` | Optional single-file source for a secret, e.g. `JWT_SECRET_FILE` |
+| `MINDGUARD_CSP` | Set `false` to disable CSP/security headers (default `true`) |
 
 Secrets are resolved through `backend/secrets_manager.py` (`get_secret`): env
 vars, `<NAME>_FILE`, then `SECRETS_FILE_DIR`. Swapping to a secret manager
@@ -95,6 +96,16 @@ correlation (`request_id`, `method`, `path`, `status_code`, `duration_ms`,
 `user_id`, `ip`). Every request emits one `http <METHOD> <path> -> <status>`
 access line. Set `LOG_LEVEL` to raise/lower verbosity; the root logger is
 configured by `backend/logging_setup.py` (no Alembic log config).
+
+**Security headers (Brief §8).** Every response gets
+`X-Content-Type-Options: nosniff`, `Referrer-Policy:
+strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and
+`Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()`.
+HTML documents (the SPA served at `/`) additionally get a Content-Security-Policy
+(no inline scripts, Google Fonts + Tabler CDN allowed, Supabase for OAuth,
+`blob:` for downloads); `/docs`, `/redoc` and `/openapi.json` are exempt so
+Swagger UI keeps working. Pinned by `tests/test_security_headers.py`. Toggle
+everything off with `MINDGUARD_CSP=false` if a proxy already sets these.
 
 ### Frontend
 
@@ -188,6 +199,30 @@ cd backend && PYTHONPATH=..:. python3 scripts/export_openapi.py  # → openapi.j
 curl http://localhost:8000/api/v1/healthz
 # {"status":"ok","version":"2.0.0","db":{"db":"ok","tables":N}}
 ```
+
+### Load contract (Brief §9.5)
+
+1000-row roster upload must preview and commit in under 5s. Pinned by
+`tests/test_load_roster.py`:
+
+```bash
+cd backend && PYTHONPATH=..:. python3 -m pytest tests/test_load_roster.py -q
+```
+
+For a wall-clock preview measurement, time the API from the admin UI
+(Roster → upload a generated 1000-row CSV → preview) and confirm the UI
+renders the preview in well under 5s.
+
+### Accessibility (Brief §9.6)
+
+The e2e suite runs axe-core scans (WCAG 2.0/2.1 A+AA) on the consent portal
+(pre- and post-action) and the marketing demo form, asserting zero violations:
+
+```bash
+cd frontend && npm run test:e2e
+```
+
+`@axe-core/playwright` is a devDependency (e2e only); no runtime bundle impact.
 
 ---
 
