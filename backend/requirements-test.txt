@@ -12,3 +12,7 @@ python-dotenv>=1.0
 email-validator>=2.1
 cryptography>=42.0
 alembic>=1.13
+# backend.main imports numpy at module level, and its file-upload routes make
+# FastAPI require python-multipart at import — the offline suite needs both.
+numpy>=1.26
+python-multipart>=0.0.6
