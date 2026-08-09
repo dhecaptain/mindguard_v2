@@ -19,8 +19,15 @@ def app_base_url() -> str:
     return (get_secret("APP_BASE_URL") or os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
 
 
-def work_email_warning(email: str) -> str | None:
-    """Soft-warn when the requester used a personal email provider (Brief §6)."""
+def work_email_warning(email: str, organisation_type: str | None = None) -> str | None:
+    """Soft-warn when a school/university requester used a personal email (Brief §6).
+
+    The warning only applies to K-12 and university organisations, where a
+    non-educational address is unusual. Clinics, research orgs and others may
+    legitimately use personal email, so no warning is shown for them.
+    """
+    if organisation_type not in ("k12", "university"):
+        return None
     domain = (email or "").rsplit("@", 1)[-1].strip().lower()
     if domain in FREE_EMAIL_DOMAINS:
         return (

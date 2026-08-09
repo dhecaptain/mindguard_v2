@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test'
-import { API_BASE, ADMIN, expectNoAxeViolations, loginViaApi } from './helpers'
+import { API_BASE, ADMIN, blockExternalRequests, expectNoAxeViolations, loginViaApi } from './helpers'
 
 const DEMO_EMAIL = 'e2e-demo-request@example.com'
+
+test.beforeEach(async ({ page }) => {
+  await blockExternalRequests(page)
+})
 
 test.describe('Marketing demo request (Delivery Brief §5.5)', () => {
   test('submits the request form and persists it for the admin queue', async ({

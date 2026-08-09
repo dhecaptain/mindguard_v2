@@ -56,11 +56,18 @@ def test_list_demo_requests_filters_by_status(db):
 
 
 def test_work_email_warning_flags_free_providers():
-    assert work_email_warning("jordan@gmail.com") is not None
-    assert work_email_warning("Jordan@outlook.COM") is not None
-    assert work_email_warning("jordan@acme.org") is None
-    assert work_email_warning("jordan@school.ac.uk") is None
+    assert work_email_warning("jordan@gmail.com", "k12") is not None
+    assert work_email_warning("Jordan@outlook.COM", "university") is not None
+    assert work_email_warning("jordan@acme.org", "k12") is None
+    assert work_email_warning("jordan@school.ac.uk", "k12") is None
     assert work_email_warning("") is None
+
+
+def test_work_email_warning_only_for_k12_university():
+    assert work_email_warning("jordan@gmail.com", "clinic") is None
+    assert work_email_warning("jordan@gmail.com", "research") is None
+    assert work_email_warning("jordan@gmail.com", "other") is None
+    assert work_email_warning("jordan@gmail.com") is None
 
 
 def test_demo_request_migration_column_exists(db):

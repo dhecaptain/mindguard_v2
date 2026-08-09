@@ -46,6 +46,8 @@ checkpoints/
 
 # Local database — contains user data, never commit
 *.db
+*.db-shm
+*.db-wal
 mindguard.db
 
 # Binary / generated files

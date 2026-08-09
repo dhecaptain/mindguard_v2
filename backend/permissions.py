@@ -1,12 +1,15 @@
 """RBAC permission layer over the existing role model (Delivery Brief §5).
 
-Roles remain ``student`` / ``counsellor`` / ``admin`` (plus the ``counselor``
-alias). Instead of adding new roles, per-user permissions are computed as:
+Roles: ``student`` / ``counsellor`` / ``school_admin`` / ``admin`` (plus the
+``counselor`` alias). A ``school_admin`` is a counsellor who can additionally
+upload/refresh the student roster and drive the bulk consent workflow (Brief
+§1.1 "Role tightening — School Admin role added alongside Counsellor and
+Student"). Per-user permissions are computed as:
 
     role defaults ∪ permissions_json
 
 ``permissions_json`` on the ``users`` row is an *additive* list of extra
-permission grants, e.g. a counsellor promoted to school-admin gets
+permission grants, e.g. a counsellor promoted to roster duties gets
 ``["roster.upload", "students.view"]``. It is never used to *remove* a
 permission — a role's core permissions always apply.
 """
@@ -55,6 +58,13 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         PERM_ANALYSIS_RUN,
         PERM_STUDENTS_VIEW,
         PERM_CONSENT_MANAGE,
+    }),
+    # School admin = counsellor duties + roster/bulk-consent workflow (Brief §1.1/§2.5).
+    "school_admin": frozenset({
+        PERM_ANALYSIS_RUN,
+        PERM_STUDENTS_VIEW,
+        PERM_CONSENT_MANAGE,
+        PERM_ROSTER_UPLOAD,
     }),
     "admin": frozenset(ALL_PERMISSIONS),
 }

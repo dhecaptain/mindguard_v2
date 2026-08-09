@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { API_BASE, adminAuth, expectNoAxeViolations, fetchConsents, loginAsAdmin } from './helpers'
+import { API_BASE, adminAuth, blockExternalRequests, expectNoAxeViolations, fetchConsents, loginAsAdmin } from './helpers'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(__dirname, 'fixtures', 'roster-3minors-3adults.csv')
@@ -19,6 +19,10 @@ const ADULT_STUDENTS = [
 
 const portalUrl = (token: string) =>
   `http://127.0.0.1:5188/consent/${encodeURIComponent(token)}`
+
+test.beforeEach(async ({ page }) => {
+  await blockExternalRequests(page)
+})
 
 test.describe('Consent workflow (Delivery Brief §9.3)', () => {
   test('roster upload dispatches parent, courtesy and adult consent requests', async ({

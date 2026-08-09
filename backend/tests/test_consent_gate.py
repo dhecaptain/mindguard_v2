@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend import database
+from backend.config import CONSENT_EXPIRY_DAYS
 from backend.services import consent_gate, consent_service
 from backend.services import crypto
 
@@ -114,6 +115,73 @@ def test_process_reminders_day3(monkeypatch, db):
 
     summary2 = consent_service.process_consent_reminders(now=now)
     assert summary2["sent"] == 0
+
+
+def test_dispatch_uses_consent_expiry_days(db):
+    s = _seed(db)
+    updated = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    token_expiry = datetime.fromisoformat(updated["magic_token_expires_at"])
+    expires_at = datetime.fromisoformat(updated["expires_at"])
+    now = datetime.now(timezone.utc)
+    assert abs((token_expiry - now).total_seconds() - CONSENT_EXPIRY_DAYS * 86400) < 300
+    assert abs((expires_at - now).total_seconds() - CONSENT_EXPIRY_DAYS * 86400) < 300
+    assert updated["template_version"] == consent_service.CONSENT_TEMPLATE_VERSION
+
+
+def test_gate_blocks_expired_accepted_consent(db):
+    s = _seed(db)
+    updated = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    consent_service.accept_consent(updated["id"], "Student", "1.2.3.4")
+    database.update_consent_status(updated["id"], "ACCEPTED", expires_at=(
+        datetime.now(timezone.utc) - timedelta(days=1)).isoformat())
+    with pytest.raises(HTTPException):
+        consent_gate.require_consent_for_analysis(s["student"]["id"])
+    assert consent_gate.consent_status_for_ui(s["student"]["id"])["active"] is False
+
+
+def test_process_expired_accepted_becomes_renewal_due(db):
+    s = _seed(db)
+    updated = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    consent_service.accept_consent(updated["id"], "Student", "1.2.3.4")
+    database.update_consent_status(updated["id"], "ACCEPTED", expires_at=(
+        datetime.now(timezone.utc) - timedelta(days=1)).isoformat())
+    assert consent_service.process_expired_consents() == 1
+    assert database.get_consent_by_id(updated["id"])["status"] == "RENEWAL_DUE"
+
+
+def test_revoke_marks_analyses_consent_withdrawn(db):
+    s = _seed(db)
+    updated = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    consent_service.accept_consent(updated["id"], "Student", "1.2.3.4")
+    db.save_analysis(s["student"]["id"], "reddit", "some text", 0.91, "high")
+    db.save_analysis(s["student"]["id"], "reddit", "more text", 0.31, "low")
+    revoked = consent_service.revoke_consent(updated["id"], "1.2.3.4", user_agent="Test-UA/1.0")
+    assert revoked["status"] == "REVOKED"
+    conn = db.get_db()
+    rows = conn.execute(
+        "SELECT consent_withdrawn_at FROM analyses WHERE user_id = ?",
+        (s["student"]["id"],),
+    ).fetchall()
+    conn.close()
+    assert len(rows) == 2
+    assert all(r["consent_withdrawn_at"] is not None for r in rows)
+
+
+def test_response_user_agent_captured(db):
+    s = _seed(db)
+    updated = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    consent_service.record_view(updated["id"], user_agent="Parent-Browser/5.0")
+    consent_service.accept_consent(updated["id"], "Parent", "1.2.3.4", user_agent="Parent-Browser/5.0")
+    consent = database.get_consent_by_id(updated["id"])
+    assert consent["response_user_agent"] == "Parent-Browser/5.0"
+
+    second = db.create_consent(
+        s["student"]["id"], s["counsellor"]["id"], "student@school.edu", "student", ["reddit"]
+    )
+    declined = consent_service.dispatch_consent(second["id"], s["counsellor"]["id"])
+    consent_service.decline_consent(declined["id"], "5.6.7.8", "Chrome/120")
+    consent = database.get_consent_by_id(declined["id"])
+    assert consent["response_user_agent"] == "Chrome/120"
 
 
 def test_process_reminders_day7_after_day3(monkeypatch, db):

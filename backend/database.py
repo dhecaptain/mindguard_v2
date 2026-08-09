@@ -8,6 +8,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from backend.config import CONSENT_EXPIRY_DAYS
+
 logger = logging.getLogger(__name__)
 
 DB_PATH = Path(os.getenv("MINDGUARD_DB_DIR", str(Path(__file__).resolve().parent.parent))) / "mindguard.db"
@@ -76,9 +78,22 @@ def seed_defaults():
     import bcrypt
     pw = bcrypt.hashpw(b"password", bcrypt.gensalt()).decode()
 
+    # The admin must never ship with a known default password. Production should
+    # set MINDGUARD_ADMIN_PASSWORD; otherwise we generate one and log it once so
+    # the operator can capture it from the deploy log.
+    admin_password = os.getenv("MINDGUARD_ADMIN_PASSWORD") or ""
+    if not admin_password:
+        admin_password = secrets.token_urlsafe(24)
+        logger.warning(
+            "MINDGUARD_ADMIN_PASSWORD is not set; generated a random password for "
+            "admin@mindguard.org (%s). Set MINDGUARD_ADMIN_PASSWORD to control it.",
+            admin_password,
+        )
+    admin_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode()
+
     now = datetime.now(timezone.utc).isoformat()
     users = [
-        ("admin-001",  "admin@mindguard.org",      "Admin User",      "admin",      pw, "approved", now),
+        ("admin-001",  "admin@mindguard.org",      "Admin User",      "admin",      admin_hash, "approved", now),
         ("couns-001",  "counsellor@mindguard.org",  "Sarah Counsellor","counsellor", pw, "approved", now),
         ("stud-001",   "student@mindguard.org",     "Demo Student",    "student",    pw, "approved", now),
         ("stud-002",   "diana@mindguard.org",       "Diana Opiyo",     "student",    pw, "approved", "2025-01-15T00:00:00"),
@@ -142,6 +157,31 @@ def create_user(
     return {"id": uid, "email": email, "name": name, "role_type": role_type, "status": "pending", "referral_code": code}
 
 
+def update_user_password(user_id: str, password_hash: str) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (password_hash, user_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def update_user_role(user_id: str, role_type: str) -> dict | None:
+    """Set a user's role. Returns the updated user row or None if not found."""
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET role_type = ? WHERE id = ?",
+        (role_type, user_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return get_user_by_id(user_id) if ok else None
+
+
 def get_user_by_referral_code(code: str) -> dict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM users WHERE referral_code = ?", (code.upper(),)).fetchone()
@@ -200,6 +240,27 @@ def save_analysis(user_id: str, platform: str, text: str | None, prob: float, la
     conn.commit()
     conn.close()
     return aid
+
+
+def mark_analyses_consent_withdrawn(user_id: str, at: str | None = None) -> int:
+    """Stamp every analysis for a subject as ``consent withdrawn``.
+
+    Called when consent is revoked. Analyses are *never* deleted silently —
+    they stay retrievable but are flagged so the UI can show them as
+    withdrawn (Delivery Brief §2.8: "marks existing analyses as 'consent
+    withdrawn' (never deletes them silently — audit integrity)").
+    """
+    at = at or datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE analyses SET consent_withdrawn_at = ? "
+        "WHERE user_id = ? AND consent_withdrawn_at IS NULL",
+        (at, user_id),
+    )
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    return n
 
 
 def get_analyses(user_id: str, limit: int = 20):
@@ -508,8 +569,12 @@ def create_consent(
     cid = str(uuid.uuid4())
     magic_token = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
-    magic_token_expires_at = (now + timedelta(hours=72)).isoformat()
-    expires_at = (now + timedelta(days=7)).isoformat()
+    # Pending expiry and the magic-link TTL share the same window
+    # (Delivery Brief §4.1–4.2: "This link expires in 30 days", and
+    # institutions.consent_expiry_days defaults to 30).
+    consent_expiry = timedelta(days=CONSENT_EXPIRY_DAYS)
+    magic_token_expires_at = (now + consent_expiry).isoformat()
+    expires_at = (now + consent_expiry).isoformat()
     now_iso = now.isoformat()
     conn = get_db()
     conn.execute(
@@ -714,6 +779,22 @@ def get_all_consents(limit: int = 5000) -> list:
     return [dict(r) for r in rows]
 
 
+def get_institution_id_for_consent(consent_id: str) -> str | None:
+    """Resolve the institution a consent belongs to, via the roster student row.
+
+    Roster students link back to their consent through ``students.current_consent_id``,
+    which lets dispatch look up the institution's active template.
+    """
+    conn = get_db()
+    row = conn.execute(
+        "SELECT institution_id FROM students "
+        "WHERE current_consent_id = ? AND deleted_at IS NULL LIMIT 1",
+        (consent_id,),
+    ).fetchone()
+    conn.close()
+    return row["institution_id"] if row else None
+
+
 # ── Linked account functions ──────────────────────────────────────────
 
 def create_linked_account(
@@ -886,7 +967,15 @@ def write_audit(
 
 
 def get_audit_log(counsellor_id: str, limit: int = 100) -> list:
-    """Return audit entries where actor is the counsellor or target is one of their students."""
+    """Return audit entries where actor is the counsellor or target is one of their students.
+
+    Consent workflow entries (CONSENT_DISPATCHED / CONSENT_ACCEPTED / CONSENT_DECLINED /
+    CONSENT_REVOKED / TERMS_ACCEPTED, ...) are authored by the system/recipient with
+    ``target_type = 'consent'``, so they are matched by extending the query to any
+    consent whose ``counsellor_id`` is this user (Delivery Brief §2.8: "Admin sees
+    revocation events in the Audit Log"; §1.1: practitioner-agreement acceptance is
+    part of the consent audit trail).
+    """
     conn = get_db()
     student_ids = [
         r["id"] for r in conn.execute(
@@ -899,9 +988,12 @@ def get_audit_log(counsellor_id: str, limit: int = 100) -> list:
         SELECT * FROM audit_log
         WHERE actor_id = ?
            OR target_id IN ({placeholders})
+           OR (target_type = 'consent' AND target_id IN (
+               SELECT id FROM consents WHERE counsellor_id = ?
+           ))
         ORDER BY occurred_at DESC LIMIT ?
     """
-    params = [counsellor_id] + student_ids + [limit]
+    params = [counsellor_id] + student_ids + [counsellor_id, limit]
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]

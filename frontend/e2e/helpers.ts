@@ -6,6 +6,12 @@ export const API_BASE = 'http://127.0.0.1:8000'
 export const ADMIN = { email: 'e2e-admin@school.edu', password: 'Password123!' }
 export const COUNSELLOR = { email: 'e2e-counsellor@school.edu', password: 'Password123!' }
 
+/** Block Google Fonts so page "load" is not held hostage when offline (AGENTS.md). */
+export async function blockExternalRequests(page: Page): Promise<void> {
+  await page.route('**://fonts.googleapis.com/**', (r) => r.abort())
+  await page.route('**://fonts.gstatic.com/**', (r) => r.abort())
+}
+
 export async function loginViaApi(
   ctx: APIRequestContext,
   email: string,

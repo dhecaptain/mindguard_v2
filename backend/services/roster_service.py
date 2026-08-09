@@ -147,6 +147,8 @@ def upsert_roster(
         "errors": [],
         "parse_error": parse_error,
         "student_ids": [],
+        "minors": 0,
+        "adults": 0,
     }
     if parse_error or not rows:
         return summary
@@ -242,6 +244,10 @@ def upsert_roster(
         summary["parse_error"] = f"Roster rejected: {error_count} rows ({error_count / len(rows) * 100:.1f}%) failed validation. Rejection threshold is 10%."
         # Wipe valid list to make sure no DB writes occur
         return summary
+
+    # Minor/adult split of the valid rows (brief §2.4 routing preview).
+    summary["minors"] = sum(1 for item in valid_rows_data if item["minor"])
+    summary["adults"] = sum(1 for item in valid_rows_data if not item["minor"])
 
     # Second Pass: Perform DB Writes
     for item in valid_rows_data:

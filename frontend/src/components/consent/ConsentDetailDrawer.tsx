@@ -17,6 +17,9 @@ const EVENT_LABEL: Record<string, string> = {
   revoked: 'Consent revoked',
   expired: 'Link expired',
   reminder: 'Reminder sent',
+  bounced: 'Email bounced',
+  invalidated: 'Marked invalid (undeliverable)',
+  redispatched: 'Re-dispatched',
 }
 
 const AUDIT_LABEL: Record<string, string> = {
@@ -29,6 +32,8 @@ const AUDIT_LABEL: Record<string, string> = {
   CONSENT_ACCEPTED: 'Accepted',
   CONSENT_DECLINED: 'Declined',
   CONSENT_REVOKED: 'Revoked',
+  CONSENT_INVALIDATED: 'Invalidated (undeliverable)',
+  CONSENT_RENEWAL_DUE: 'Renewal due',
 }
 
 interface ConsentDetailDrawerProps {
@@ -75,6 +80,7 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
       EXPIRED: 'bg-[#f1f5f9] text-[#6b7280]',
       REVOKED: 'bg-[#fee2e2] text-[#991b1b]',
       RENEWAL_DUE: 'bg-[#fff7ed] text-[#9a3412]',
+      INVALID: 'bg-[#fee2e2] text-[#991b1b]',
     }
     return (
       <span className={`inline-block px-[8px] py-[2px] rounded-full text-[0.7rem] font-semibold ${styles[status] ?? styles.DRAFT}`}>
@@ -183,6 +189,14 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
                       : '—'}
                     {c.last_delivery_event_at ? ` · ${fmt(c.last_delivery_event_at)}` : ''}
                   </div>
+                </div>
+                <div>
+                  <div className="text-[0.68rem] uppercase tracking-wider text-[#9ca3af] font-semibold">Template version</div>
+                  <div className="text-[#374151]">{c.template_version || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-[0.68rem] uppercase tracking-wider text-[#9ca3af] font-semibold">Response user agent</div>
+                  <div className="text-[#374151] break-all">{c.response_user_agent || '—'}</div>
                 </div>
               </div>
               <div className="mt-[12px] pt-[12px] border-t border-[#f1f5f9]">

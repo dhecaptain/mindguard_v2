@@ -43,6 +43,7 @@ function RolePill({ role }: { role?: string }) {
   const styles: Record<string, string> = {
     student: 'bg-[#dbeafe] text-[#1e40af]',
     counsellor: 'bg-[#d1fae5] text-[#065f46]',
+    school_admin: 'bg-[#d1fae5] text-[#065f46]',
     admin: 'bg-[#fef3c7] text-[#92400e]',
   }
   return (
@@ -67,7 +68,7 @@ export default function Sidebar() {
   const notifRef = useRef<HTMLDivElement>(null)
 
   const role = user?.role_type?.toLowerCase() || 'student'
-  const isCounsellor = role === 'counsellor'
+  const isCounsellor = role === 'counsellor' || role === 'school_admin'
   const isAdmin = role === 'admin'
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const isCollapsed = isDesktop && sidebarCollapsed
@@ -93,7 +94,7 @@ export default function Sidebar() {
     video: Boolean(video?.ok),
   }
 
-  const sectionLabel = isAdmin ? 'Admin' : isCounsellor ? 'Counsellor' : 'Student'
+  const sectionLabel = isAdmin ? 'Admin' : role === 'school_admin' ? 'School Admin' : isCounsellor ? 'Counsellor' : 'Student'
 
   // Fetch open alert count for counsellors and admins
   useEffect(() => {

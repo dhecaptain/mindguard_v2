@@ -143,6 +143,23 @@ def process_email_event(payload: dict) -> dict:
         )
         recorded += 1
 
+    # A hard bounce on a consent request means the recipient never received it.
+    # Flip the consent to INVALID (Delivery Brief §3.4 status enum) so it stops
+    # sitting PENDING and surfaces in the tracker as undeliverable. Idempotent:
+    # a duplicate webhook returns before reaching this point.
+    if outcome == "bounced":
+        from backend.services.consent_service import mark_consent_invalid
+
+        for m in sends:
+            if m["related_type"] == "consent" and m.get("related_id"):
+                try:
+                    mark_consent_invalid(
+                        m["related_id"],
+                        reason=(data.get("bounce") or {}).get("description") or "ESP bounce",
+                    )
+                except Exception:  # pragma: no cover - defensive
+                    logger.exception("failed to mark consent %s invalid", m["related_id"])
+
     if outcome in _DELIVERY_OUTCOMES:
         logger.info(
             "email %s -> %s for %s/%s",

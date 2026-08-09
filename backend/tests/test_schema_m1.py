@@ -68,6 +68,7 @@ def test_extended_columns_additive(db):
         "signed_token_hash", "response_ip", "response_user_agent",
         "reminders_sent", "template_version", "notes",
     } <= set(_columns(conn, "consents"))
+    assert "consent_withdrawn_at" in _columns(conn, "analyses")
     assert "permissions_json" in _columns(conn, "users")
     conn.close()
 
