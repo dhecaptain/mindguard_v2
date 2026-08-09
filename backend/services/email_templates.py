@@ -19,6 +19,10 @@ _INK = "#0F172A"
 _SLATE = "#64748B"
 _BG = "#FFFFFF"
 
+# Version of the built-in consent templates. Recorded on each consent row at
+# dispatch time (consents.template_version) and visible in the tracker drawer.
+CONSENT_TEMPLATE_VERSION = "1.0.0"
+
 # Withdraw / privacy links are appended to every consent email footer.
 _FOOTER = (
     '<a href="{withdraw_url}" style="color:#0F766E;text-decoration:underline;font-size:12px;margin-right:16px;">'
@@ -156,6 +160,53 @@ def parent_consent_request(context: dict) -> tuple[str, str]:
     )
     footer = _FOOTER.format(**context)
     return subject, _layout(body, footer)
+
+
+# Tokens supported inside a stored consent_templates row. The values come from
+# the same context the built-in templates use.
+_TEMPLATE_TOKENS = (
+    "institution_name",
+    "student_first_name",
+    "parent_first_name",
+    "counsellor_email",
+    "consent_url",
+    "privacy_url",
+    "contact_url",
+    "withdraw_url",
+)
+
+
+def _substitute(source: str, context: dict) -> str:
+    body = source
+    for token in _TEMPLATE_TOKENS:
+        body = body.replace("{{" + token + "}}", _esc(context.get(token, "")))
+    return body
+
+
+def render_consent_request_from_template(
+    template: dict,
+    context: dict,
+    recipient_role: str = "student",
+) -> tuple[str, str]:
+    """Render a consent request from a stored ``consent_templates`` row.
+
+    ``subject_email_html`` is used for student recipients and
+    ``parent_email_html`` for parents. Both may contain ``{{token}}``
+    placeholders (see ``_TEMPLATE_TOKENS``), which are HTML-escaped before
+    substitution. Falls back to the built-in template (and its subject) for any
+    missing piece, so a partially-filled template row can never break dispatch.
+    """
+    if recipient_role == "parent":
+        source = template.get("parent_email_html")
+        fallback_subject, _ = parent_consent_request(context)
+    else:
+        source = template.get("subject_email_html")
+        fallback_subject, _ = student_consent_request(context)
+    if source and source.strip():
+        return fallback_subject, _layout(_substitute(source, context), _FOOTER.format(**context))
+    if recipient_role == "parent":
+        return parent_consent_request(context)
+    return student_consent_request(context)
 
 
 def student_courtesy_copy(context: dict) -> tuple[str, str]:

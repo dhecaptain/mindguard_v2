@@ -97,7 +97,7 @@ function PageRouter() {
     }
   }
 
-  if (role === 'counsellor') {
+  if (role === 'counsellor' || role === 'school_admin') {
     switch (currentPage) {
       case 'counsellor-dashboard': return <CounsellorDashboardPage />
       case 'students': return <StudentManagementPage />
@@ -192,7 +192,7 @@ export default function App() {
         .then((user) => {
           setAuth(user)
           setTermsAccepted(true)
-          if (user.role_type?.toLowerCase() === 'counsellor') {
+          if (user.role_type?.toLowerCase() === 'counsellor' || user.role_type?.toLowerCase() === 'school_admin') {
             setPage('counsellor-dashboard')
           } else if (user.role_type?.toLowerCase() === 'admin') {
             setPage('admin')

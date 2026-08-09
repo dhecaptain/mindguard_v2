@@ -34,7 +34,7 @@ from backend.config import (
 )
 from backend.models.schemas import (
     TextAnalysisRequest, TextAnalysisResponse,
-    PlatformRequest, LoginRequest, RegisterRequest, UserResponse,
+    PlatformRequest, LoginRequest, RegisterRequest, ChangePasswordRequest, UserResponse,
     CreateGroupRequest, UpdateGroupRequest, AddMemberRequest,
     GroupMessageRequest, UpdateNotificationPreferenceRequest,
     MuteGroupRequest, NOTIFICATION_TYPES,
@@ -67,6 +67,7 @@ from backend.database import (
     create_note, get_notes,
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
+    update_user_password, update_user_role,
     get_institution_by_id, list_institutions, list_students,
     get_student_by_id,
     create_demo_request, get_demo_request, list_demo_requests, update_demo_request,
@@ -242,8 +243,41 @@ def _token_subject(request: Request) -> str | None:
 async def startup():
     init_db()
     seed_defaults()
+    _bootstrap_admins()
     logger.info("Database initialized and seeded")
     asyncio.create_task(_consent_maintenance_loop())
+
+
+def _bootstrap_admins() -> None:
+    """Promote bootstrap admin emails (MINDGUARD_BOOTSTRAP_ADMIN_EMAIL) to admin.
+
+    Security-conscious provisioning: the operator lists exact existing user emails
+    (comma-separated). Each matching user is promoted to ``admin`` and the change
+    is recorded in the audit log as USER_PROMOTED. Unknown emails are logged and
+    skipped (no account is created implicitly).
+    """
+    raw = os.getenv("MINDGUARD_BOOTSTRAP_ADMIN_EMAIL", "")
+    emails = [e.strip().lower() for e in raw.split(",") if e.strip()]
+    if not emails:
+        return
+    for email in emails:
+        user = get_user_by_email(email)
+        if not user:
+            logger.warning(
+                "bootstrap admin: %s not found; create the account first, then redeploy",
+                email,
+            )
+            continue
+        if user["role_type"] == "admin":
+            logger.info("bootstrap admin: %s is already an admin", email)
+            continue
+        update_user_role(user["id"], "admin")
+        write_audit(
+            user["id"], "admin", "USER_PROMOTED",
+            "user", user["id"],
+            payload={"bootstrap": True, "previous_role": user["role_type"]},
+        )
+        logger.info("bootstrap admin: promoted %s to admin", email)
 
 
 async def _consent_maintenance_loop() -> None:
@@ -397,6 +431,28 @@ async def register(req: RegisterRequest, request: Request):
 
     logger.info("Register: user=%s role=%s minor=%s ip=%s", user["id"], role_type, is_minor, client_ip)
     return {"ok": True, "user": user}
+
+
+@app.post("/api/auth/change-password")
+async def change_password(req: ChangePasswordRequest, request: Request, user: dict = Depends(require_auth)):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"change-password:{client_ip}")
+
+    fresh = get_user_by_id(user["id"])
+    if not fresh or not verify_password(req.current_password, fresh["password_hash"]):
+        raise HTTPException(401, "Current password is incorrect")
+
+    if req.new_password == req.current_password:
+        raise HTTPException(400, "New password must be different from the current password")
+
+    update_user_password(user["id"], hash_password(req.new_password))
+    blacklist_token(user.get("_token_jti", ""))
+    write_audit(
+        user["id"], user["role_type"], "PASSWORD_CHANGED",
+        "user", user["id"], ip=client_ip,
+    )
+    logger.info("Password changed: user=%s ip=%s", user["id"], client_ip)
+    return {"ok": True}
 
 
 @app.get("/api/auth/me")
@@ -1726,6 +1782,10 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _client_user_agent(request: Request) -> str | None:
+    return request.headers.get("user-agent") or None
+
+
 # ── Consent management ────────────────────────────────────────────────
 
 @app.post("/api/v1/students/{student_id}/consent", status_code=201)
@@ -1942,7 +2002,7 @@ async def v1_portal_get_consent(token: str, request: Request):
     if consent["status"] not in ("PENDING", "VIEWED", "ACCEPTED", "DECLINED"):
         raise HTTPException(410, "This consent link is no longer active")
     try:
-        consent = record_view(consent["id"], ip=_client_ip(request))
+        consent = record_view(consent["id"], ip=_client_ip(request), user_agent=_client_user_agent(request))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
@@ -1979,6 +2039,7 @@ async def v1_portal_accept_consent(token: str, data: dict, request: Request):
             signature_name=signature_name,
             ip=_client_ip(request),
             platforms=platforms,
+            user_agent=_client_user_agent(request),
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
@@ -1999,7 +2060,7 @@ async def v1_portal_decline_consent(token: str, request: Request):
     if expires and datetime.now(timezone.utc).isoformat() > expires:
         raise HTTPException(410, "This consent link has expired")
     try:
-        updated = decline_consent(consent["id"], ip=_client_ip(request))
+        updated = decline_consent(consent["id"], ip=_client_ip(request), user_agent=_client_user_agent(request))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
@@ -2016,7 +2077,7 @@ async def v1_portal_revoke_consent(token: str, request: Request):
     if not verify_consent_token(consent, token):
         raise HTTPException(404, "Consent not found or link invalid")
     try:
-        updated = revoke_consent(consent["id"], ip=_client_ip(request))
+        updated = revoke_consent(consent["id"], ip=_client_ip(request), user_agent=_client_user_agent(request))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
@@ -2433,7 +2494,7 @@ async def v1_demo_request_create(data: DemoRequestCreate, request: Request):
     return {
         "id": demo["id"],
         "status": demo["status"],
-        "warning": work_email_warning(data.work_email),
+        "warning": work_email_warning(data.work_email, data.organisation_type),
     }
 
 

@@ -31,6 +31,7 @@ const STATUS_STYLE: Record<ConsentStatus, string> = {
   EXPIRED: 'bg-[#f1f5f9] text-[#6b7280]',
   REVOKED: 'bg-[#fee2e2] text-[#991b1b]',
   RENEWAL_DUE: 'bg-[#fff7ed] text-[#9a3412]',
+  INVALID: 'bg-[#fee2e2] text-[#991b1b]',
 }
 
 const DELIVERY_STYLE: Record<string, string> = {

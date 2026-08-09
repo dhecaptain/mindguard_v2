@@ -74,13 +74,25 @@ User clicks "Sign in with Google"
 
 ## Testing
 
-### Backend unit tests (133)
+### Backend unit tests (197)
 
 ```bash
 source .venv/bin/activate
 cd backend
 PYTHONPATH=..:. python3 -m pytest -q
 ```
+
+### Admin access & provisioning
+
+- On a **fresh** DB, `seed_defaults()` creates `admin@mindguard.org` using
+  `MINDGUARD_ADMIN_PASSWORD` (or a random password logged once — never a known
+  default). Demo users keep the "password" password.
+- `MINDGUARD_BOOTSTRAP_ADMIN_EMAIL` (comma-separated) promotes existing users to
+  admin at startup; each promotion is audit-logged (`USER_PROMOTED`). Unknown
+  emails are skipped, accounts are never auto-created.
+- Users rotate their own password via `POST /api/auth/change-password`
+  (requires the current password; the old token is revoked and the change is
+  audit-logged).
 
 ### End-to-end (Playwright)
 

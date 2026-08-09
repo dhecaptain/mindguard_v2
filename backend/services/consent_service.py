@@ -6,6 +6,8 @@ Valid transitions:
   PENDING|VIEWED -> ACCEPTED (accepted)
   PENDING|VIEWED -> DECLINED (declined)
   PENDING|VIEWED -> EXPIRED (TTL elapsed - checked on read)
+  PENDING|VIEWED -> INVALID (undeliverable / bounced at the ESP)
+  INVALID -> PENDING (re-dispatch)
   ACCEPTED -> REVOKED (revoked)
   ACCEPTED -> RENEWAL_DUE (auto on expiry)
 """
@@ -24,6 +26,9 @@ from backend.database import (
     get_user_by_email,
     get_user_by_id,
     get_all_consents,
+    get_institution_id_for_consent,
+    get_active_consent_template,
+    mark_analyses_consent_withdrawn,
     set_student_current_consent,
     update_consent_status,
     write_audit,
@@ -35,7 +40,11 @@ from backend.services.email_templates import (
     admin_consent_notification,
     consent_confirmation,
     consent_reminder,
+    parent_consent_request,
+    render_consent_request_from_template,
+    student_consent_request,
     student_courtesy_copy,
+    CONSENT_TEMPLATE_VERSION,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,11 +54,12 @@ MAX_CONSENT_VIEWS = 20
 
 CONSENT_TRANSITIONS = {
     "DRAFT":       ["PENDING"],
-    "PENDING":     ["VIEWED", "ACCEPTED", "DECLINED", "EXPIRED"],
-    "VIEWED":      ["ACCEPTED", "DECLINED", "EXPIRED"],
+    "PENDING":     ["VIEWED", "ACCEPTED", "DECLINED", "EXPIRED", "INVALID"],
+    "VIEWED":      ["ACCEPTED", "DECLINED", "EXPIRED", "INVALID"],
     "ACCEPTED":    ["REVOKED", "RENEWAL_DUE"],
     "DECLINED":    ["PENDING"],  # re-dispatch
     "EXPIRED":     ["PENDING"],  # re-dispatch
+    "INVALID":     ["PENDING"],  # re-dispatch after address corrected
     "REVOKED":     [],
     "RENEWAL_DUE": ["PENDING"],
 }
@@ -85,39 +95,52 @@ def remaining_views(consent_id: str) -> int:
 
 
 def _send_consent_email(consent: dict, reminder: bool = False) -> tuple[bool, str, str]:
+    """Send a consent request email, honouring the institution's active template.
+
+    When the consent's institution has an active ``consent_templates`` row the
+    stored HTML is used (with context tokens substituted); otherwise the
+    built-in §4.1/§4.2 template is used. Returns (ok, error, url).
+    """
     token = consent.get("magic_token") or ""
     url = _consent_url(token)
-    platforms = ", ".join(json.loads(consent.get("platforms_json") or "[]")) or "selected platforms"
-    role_label = "parent/guardian" if consent.get("recipient_role") == "parent" else "student"
+    institution_id = get_institution_id_for_consent(consent["id"])
+    template = get_active_consent_template(institution_id)
+    template_version = (template or {}).get("version") or CONSENT_TEMPLATE_VERSION
+
+    # Persist which template version rendered this request (drawer shows it).
+    if (consent.get("template_version") or "") != template_version:
+        consent = update_consent_status(consent["id"], consent["status"], template_version=template_version) or consent
+
+    context = {
+        "institution_name": consent.get("notes") or "your school",
+        "student_first_name": _student_first_name(consent),
+        "parent_first_name": consent.get("recipient_role") == "parent" and _parent_first_name(consent) or "Parent/Guardian",
+        "counsellor_email": _counsellor_email(consent),
+        "consent_url": url,
+    }
+    context.update(_footer_urls(token))
+
     subject_prefix = "Reminder: " if reminder else ""
-    subject = f"{subject_prefix}MindGuard consent request"
-    body_html = f"""
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family:Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;padding:24px;background:#f7f9fb">
-  <div style="background:#0F766E;border-radius:10px 10px 0 0;padding:24px 28px">
-    <h1 style="color:#ffffff;margin:0;font-size:22px">MindGuard</h1>
-    <p style="color:#ccfbf1;margin:6px 0 0;font-size:14px">Consent request for social media wellbeing analysis</p>
-  </div>
-  <div style="background:#ffffff;border:1px solid #d9e3df;border-top:none;border-radius:0 0 10px 10px;padding:28px">
-    <p>Dear {role_label},</p>
-    <p>A school counsellor has requested consent to analyse public social media information using MindGuard.</p>
-    <p><strong>Requested platforms:</strong> {platforms}</p>
-    <p><strong>Consent mode:</strong> {consent.get("mode", "ON_DEMAND").replace("_", " ").title()}</p>
-    <p style="margin:24px 0">
-      <a href="{url}" style="background:#0F766E;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;display:inline-block">
-        Review consent request
-      </a>
-    </p>
-    <p>If the button does not work, copy and paste this link into your browser:</p>
-    <p style="word-break:break-all;color:#0F766E">{url}</p>
-    <p style="font-size:13px;color:#64748b">This link expires automatically. You can accept or decline from the consent page.</p>
-  </div>
-</body>
-</html>
-"""
-    ok, error = send_html_email(consent["recipient_email"], subject, body_html)
+    if reminder:
+        subject, body_html = consent_reminder(context, day=_reminder_day(consent))
+    elif template and not reminder:
+        subject, body_html = render_consent_request_from_template(
+            template, context, recipient_role=consent.get("recipient_role", "student")
+        )
+    elif consent.get("recipient_role") == "parent":
+        subject, body_html = parent_consent_request(context)
+    else:
+        subject, body_html = student_consent_request(context)
+    subject = subject_prefix + subject
+
+    ok, error = send_html_email(
+        consent["recipient_email"],
+        subject,
+        body_html,
+        related_type="consent",
+        related_id=consent["id"],
+        metadata={"kind": "reminder" if reminder else "consent_request", "template_version": template_version},
+    )
     return ok, error, url
 
 
@@ -129,6 +152,30 @@ def check_and_expire(consent: dict) -> dict:
     if expires and datetime.now(timezone.utc).isoformat() > expires:
         consent = update_consent_status(consent["id"], "EXPIRED") or consent
     return consent
+
+
+def mark_consent_invalid(consent_id: str, reason: str | None = None) -> dict | None:
+    """Flip a PENDING/VIEWED consent to INVALID (undeliverable / bounced).
+
+    Called from the ESP webhook pipeline when a consent request bounces: the
+    request never reached the recipient, so it must not sit PENDING indefinitely.
+    An INVALID consent can be re-dispatched once the address is corrected.
+    """
+    consent = get_consent_by_id(consent_id)
+    if not consent:
+        return None
+    if consent["status"] not in ("PENDING", "VIEWED"):
+        return consent
+    updated = update_consent_status(consent_id, "INVALID")
+    write_audit(
+        None, "system", "CONSENT_INVALIDATED", "consent", consent_id,
+        payload={"reason": reason}, ip=None,
+    )
+    create_consent_event(
+        consent_id, "bounced", actor_type="system",
+        metadata={"reason": reason, "to_status": "INVALID"},
+    )
+    return updated
 
 
 def dispatch_consent(consent_id: str, actor_id: str, ip: str | None = None) -> dict:
@@ -151,8 +198,9 @@ def dispatch_consent(consent_id: str, actor_id: str, ip: str | None = None) -> d
         "PENDING",
         magic_token=token,
         signed_token_hash=hash_token(token),
-        magic_token_expires_at=(now + timedelta(hours=72)).isoformat(),
-        expires_at=(now + timedelta(days=7)).isoformat(),
+        magic_token_expires_at=(now + timedelta(days=CONSENT_EXPIRY_DAYS)).isoformat(),
+        expires_at=(now + timedelta(days=CONSENT_EXPIRY_DAYS)).isoformat(),
+        template_version=CONSENT_TEMPLATE_VERSION,
         dispatched_at=now.isoformat(),
     )
     write_audit(
@@ -204,7 +252,7 @@ def remind_consent(consent_id: str, actor_id: str, ip: str | None = None) -> dic
     return consent
 
 
-def record_view(consent_id: str, ip: str | None = None) -> dict:
+def record_view(consent_id: str, ip: str | None = None, user_agent: str | None = None) -> dict:
     """Record that the consent link was opened (PENDING -> VIEWED)."""
     consent = get_consent_by_id(consent_id)
     if not consent:
@@ -212,9 +260,12 @@ def record_view(consent_id: str, ip: str | None = None) -> dict:
     consent = check_and_expire(consent)
     if consent["status"] == "PENDING":
         now = datetime.now(timezone.utc).isoformat()
-        consent = update_consent_status(consent_id, "VIEWED", viewed_at=now, response_ip=ip)
+        consent = update_consent_status(
+            consent_id, "VIEWED", viewed_at=now, response_ip=ip,
+            response_user_agent=user_agent,
+        )
         write_audit(None, "recipient", "CONSENT_VIEWED", "consent", consent_id, ip=ip)
-    create_consent_event(consent_id, "viewed", actor_type="recipient", metadata={"ip": ip})
+    create_consent_event(consent_id, "viewed", actor_type="recipient", metadata={"ip": ip, "user_agent": user_agent})
     return consent
 
 
@@ -223,6 +274,7 @@ def accept_consent(
     signature_name: str,
     ip: str,
     platforms: list | None = None,
+    user_agent: str | None = None,
 ) -> dict:
     """Transition PENDING/VIEWED -> ACCEPTED with signature and optional platform list."""
     consent = get_consent_by_id(consent_id)
@@ -247,6 +299,7 @@ def accept_consent(
         accepted_at=now,
         expires_at=expiry,
         response_ip=ip,
+        response_user_agent=user_agent,
         platforms_json=json.dumps(final_platforms),
     )
     write_audit(
@@ -255,16 +308,16 @@ def accept_consent(
         "CONSENT_ACCEPTED",
         "consent",
         consent_id,
-        payload={"signature": signature_name},
+        payload={"signature": signature_name, "user_agent": user_agent},
         ip=ip,
     )
     create_consent_event(consent_id, "accepted", actor_type="recipient",
-                         metadata={"signature": signature_name, "ip": ip})
+                         metadata={"signature": signature_name, "ip": ip, "user_agent": user_agent})
     _notify_consent_response(updated, accepted=True)
     return updated
 
 
-def decline_consent(consent_id: str, ip: str | None = None) -> dict:
+def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | None = None) -> dict:
     """Transition PENDING/VIEWED -> DECLINED."""
     consent = get_consent_by_id(consent_id)
     if not consent:
@@ -274,15 +327,23 @@ def decline_consent(consent_id: str, ip: str | None = None) -> dict:
         raise ValueError(f"Cannot decline consent in status {consent['status']}")
 
     now = datetime.now(timezone.utc).isoformat()
-    updated = update_consent_status(consent_id, "DECLINED", declined_at=now, response_ip=ip)
+    updated = update_consent_status(
+        consent_id, "DECLINED", declined_at=now, response_ip=ip, response_user_agent=user_agent,
+    )
     write_audit(None, "recipient", "CONSENT_DECLINED", "consent", consent_id, ip=ip)
-    create_consent_event(consent_id, "declined", actor_type="recipient", metadata={"ip": ip})
+    create_consent_event(consent_id, "declined", actor_type="recipient",
+                         metadata={"ip": ip, "user_agent": user_agent})
     _notify_consent_response(updated, accepted=False)
     return updated
 
 
-def revoke_consent(consent_id: str, ip: str | None = None) -> dict:
-    """Transition ACCEPTED -> REVOKED."""
+def revoke_consent(consent_id: str, ip: str | None = None, user_agent: str | None = None) -> dict:
+    """Transition ACCEPTED -> REVOKED.
+
+    Marks the student's existing analyses as 'consent withdrawn' so the
+    revocation takes effect immediately without silently deleting records
+    (Delivery Brief §2.8).
+    """
     consent = get_consent_by_id(consent_id)
     if not consent:
         raise ValueError("Consent not found")
@@ -290,9 +351,16 @@ def revoke_consent(consent_id: str, ip: str | None = None) -> dict:
         raise ValueError(f"Cannot revoke consent in status {consent['status']}")
 
     now = datetime.now(timezone.utc).isoformat()
-    updated = update_consent_status(consent_id, "REVOKED", revoked_at=now, response_ip=ip)
-    write_audit(None, "recipient", "CONSENT_REVOKED", "consent", consent_id, ip=ip)
-    create_consent_event(consent_id, "revoked", actor_type="recipient", metadata={"ip": ip})
+    updated = update_consent_status(
+        consent_id, "REVOKED", revoked_at=now, response_ip=ip, response_user_agent=user_agent,
+    )
+    withdrawn = mark_analyses_consent_withdrawn(consent["student_id"])
+    write_audit(
+        None, "recipient", "CONSENT_REVOKED", "consent", consent_id,
+        payload={"analyses_withdrawn": withdrawn}, ip=ip,
+    )
+    create_consent_event(consent_id, "revoked", actor_type="recipient",
+                         metadata={"ip": ip, "analyses_withdrawn": withdrawn})
     return updated
 
 
@@ -515,6 +583,35 @@ def _student_first_name(consent: dict) -> str:
     return consent.get("student_name") or "the student"
 
 
+def _parent_first_name(consent: dict) -> str:
+    """Best-effort parent/guardian first name for a parent-routed consent."""
+    name = consent.get("signature_name") or ""
+    if name:
+        return str(name).strip().split()[0]
+    return "Parent/Guardian"
+
+
+def _counsellor_email(consent: dict) -> str:
+    """Best-effort initiating counsellor email for email-template context."""
+    admin = get_user_by_id(consent.get("counsellor_id") or "")
+    if admin and admin.get("email"):
+        return admin["email"]
+    return "counsellor@mindguard.app"
+
+
+def _reminder_day(consent: dict) -> int:
+    """Day-of-pending for the reminder subject line (3 or 7)."""
+    try:
+        dispatched = datetime.fromisoformat(consent.get("dispatched_at") or "")
+        elapsed = (datetime.now(timezone.utc) - dispatched).days
+    except (ValueError, TypeError):
+        elapsed = 3
+    for target in sorted(CONSENT_REMINDER_DAYS):
+        if elapsed >= target:
+            return target
+    return sorted(CONSENT_REMINDER_DAYS)[0] if CONSENT_REMINDER_DAYS else 3
+
+
 def _tracker_url() -> str:
     base = (os.getenv("APP_BASE_URL") or os.getenv("FRONTEND_URL") or "http://localhost:5173").rstrip("/")
     return f"{base}/#consent-tracker"
@@ -568,16 +665,27 @@ def _notify_consent_response(consent: dict, accepted: bool) -> None:
 
 
 def process_expired_consents() -> int:
-    """Flip PENDING/VIEWED consents past expires_at to EXPIRED. Returns count."""
+    """Flip expiring consents: PENDING/VIEWED -> EXPIRED, ACCEPTED -> RENEWAL_DUE.
+
+    Returns the number of consents transitioned. Accepted consents past their
+    ``expires_at`` surface as RENEWAL_DUE so the tracker can prompt a renewal;
+    analysis of that subject is already gated by ``get_active_consent``.
+    """
     changed = 0
     for consent in get_all_consents():
-        if consent["status"] not in ("PENDING", "VIEWED"):
-            continue
+        status = consent["status"]
         expires = consent.get("expires_at")
-        if expires and datetime.now(timezone.utc).isoformat() > expires:
+        if status not in ("PENDING", "VIEWED", "ACCEPTED"):
+            continue
+        if not (expires and datetime.now(timezone.utc).isoformat() > expires):
+            continue
+        if status in ("PENDING", "VIEWED"):
             update_consent_status(consent["id"], "EXPIRED")
             create_consent_event(consent["id"], "expired", actor_type="system")
-            changed += 1
+        else:
+            update_consent_status(consent["id"], "RENEWAL_DUE")
+            create_consent_event(consent["id"], "renewal_due", actor_type="system")
+        changed += 1
     return changed
 
 

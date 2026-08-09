@@ -172,6 +172,61 @@ def test_handle_webhook_bad_json_raises(db):
 
 # ── Delivery status surfaced on the tracker ───────────────────────────
 
+def test_bounce_flips_consent_to_invalid(db):
+    from services import consent_service
+
+    counsellor = db.create_user("counsellor@school.edu", "Counsellor", "x", role_type="counsellor")
+    student = db.create_user("student@school.edu", "Student", "x", role_type="student")
+    consent = db.create_consent(student["id"], counsellor["id"], "student@school.edu", "student", ["reddit"])
+    dispatched = consent_service.dispatch_consent(consent["id"], counsellor["id"])
+    assert dispatched["status"] == "PENDING"
+
+    db.create_email_event(
+        "consent", consent["id"], "sent",
+        esp_message_id="resend-email-1", recipient_email="student@school.edu",
+    )
+    result = process_email_event(_bounce_payload())
+    assert result["processed"] == 1
+    assert result["matched"] is True
+
+    after = db.get_consent_by_id(consent["id"])
+    assert after["status"] == "INVALID"
+    events = db.get_consent_events(consent["id"])
+    assert events[0]["event_type"] == "bounced"
+    assert events[0]["metadata_json"] and "to_status" in events[0]["metadata_json"]
+
+
+def test_bounce_does_not_flip_accepted_consent(db):
+    from services import consent_service
+
+    counsellor = db.create_user("c@school.edu", "Counsellor", "x", role_type="counsellor")
+    student = db.create_user("s@school.edu", "Student", "x", role_type="student")
+    consent = db.create_consent(student["id"], counsellor["id"], "s@school.edu", "student", ["reddit"])
+    dispatched = consent_service.dispatch_consent(consent["id"], counsellor["id"])
+    consent_service.accept_consent(dispatched["id"], "Student", "1.2.3.4")
+
+    db.create_email_event(
+        "consent", consent["id"], "sent",
+        esp_message_id="resend-email-1", recipient_email="s@school.edu",
+    )
+    process_email_event(_bounce_payload())
+    assert db.get_consent_by_id(consent["id"])["status"] == "ACCEPTED"
+
+
+def test_invalid_consent_can_be_redespatched(db):
+    from services import consent_service
+
+    counsellor = db.create_user("c2@school.edu", "Counsellor", "x", role_type="counsellor")
+    student = db.create_user("s2@school.edu", "Student", "x", role_type="student")
+    consent = db.create_consent(student["id"], counsellor["id"], "s2@school.edu", "student", ["reddit"])
+    dispatched = consent_service.dispatch_consent(consent["id"], counsellor["id"])
+    consent_service.mark_consent_invalid(consent["id"], reason="mailbox unavailable")
+    assert db.get_consent_by_id(consent["id"])["status"] == "INVALID"
+    re = consent_service.dispatch_consent(consent["id"], counsellor["id"])
+    assert re["status"] == "PENDING"
+    assert re["magic_token"] != dispatched["magic_token"]
+
+
 def test_query_consents_shows_delivery_status(db):
     counsellor = db.create_user("counsellor@school.edu", "Counsellor", "x", role_type="counsellor")
     student = db.create_user("student@school.edu", "Student", "x", role_type="student")

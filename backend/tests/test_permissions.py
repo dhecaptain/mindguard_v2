@@ -26,6 +26,27 @@ def test_role_defaults():
     assert perm.PERM_ROSTER_UPLOAD not in perm.role_permissions("counsellor")
 
 
+def test_school_admin_role_defaults():
+    """School Admin = counsellor duties + roster/bulk-consent workflow (Brief §1.1)."""
+    perms = perm.role_permissions("school_admin")
+    assert perm.PERM_ANALYSIS_RUN in perms
+    assert perm.PERM_STUDENTS_VIEW in perms
+    assert perm.PERM_CONSENT_MANAGE in perms
+    assert perm.PERM_ROSTER_UPLOAD in perms
+    # School admin is not an admin: no demo pipeline / full audit access by default.
+    assert perm.PERM_DEMO_MANAGE not in perms
+    assert perm.PERM_AUDIT_VIEW not in perms
+
+
+def test_school_admin_can_upload_roster_and_dispatch():
+    u = _user("school_admin")
+    perm.require_permission(u, perm.PERM_ROSTER_UPLOAD)
+    perm.require_permission(u, perm.PERM_CONSENT_MANAGE)
+    assert perm.has_permission(u, perm.PERM_ANALYSIS_RUN)
+    with pytest.raises(HTTPException):
+        perm.require_permission(u, perm.PERM_DEMO_MANAGE)
+
+
 def test_student_cannot_analyse():
     assert not perm.has_permission(_user("student"), perm.PERM_ANALYSIS_RUN)
     with pytest.raises(HTTPException) as exc:

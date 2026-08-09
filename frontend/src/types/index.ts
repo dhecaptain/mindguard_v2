@@ -1,7 +1,7 @@
 export type RiskLevel = 'low' | 'moderate' | 'high' | 'critical'
 export type Classification = 'Suicidal' | 'Non-Suicidal'
 export type InputMode = 'text' | 'image'
-export type RoleType = 'student' | 'counsellor' | 'admin'
+export type RoleType = 'student' | 'counsellor' | 'school_admin' | 'admin'
 
 export interface AnalysisResult {
   prob: number
@@ -126,7 +126,7 @@ export function formatPercent(value: number): string {
 
 export type ConsentStatus =
   | 'DRAFT' | 'PENDING' | 'VIEWED' | 'ACCEPTED'
-  | 'DECLINED' | 'EXPIRED' | 'REVOKED' | 'RENEWAL_DUE'
+  | 'DECLINED' | 'EXPIRED' | 'REVOKED' | 'RENEWAL_DUE' | 'INVALID'
 
 export type AlertStatus = 'OPEN' | 'CLOSED'
 export type AlertDisposition =
@@ -153,6 +153,8 @@ export interface Consent {
   email_sent?: boolean
   email_error?: string
   consent_url?: string
+  response_user_agent?: string
+  template_version?: string
   delivery_status?: 'delivered' | 'bounced' | 'complained'
   last_delivery_event_at?: string
 }
@@ -215,6 +217,8 @@ export interface RosterUploadSummary {
   total: number
   created: number
   updated: number
+  minors: number
+  adults: number
   errors: Array<{ row_number?: number; row: Record<string, string>; error: string }>
   parse_error?: string | null
   student_ids?: string[]

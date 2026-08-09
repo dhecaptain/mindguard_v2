@@ -166,3 +166,87 @@ def test_commit_defaults_platforms(monkeypatch, db):
     import json
     consent = _current_consent(db, summary["student_ids"][0])
     assert json.loads(consent["platforms_json"]) == consent_service.DEFAULT_BULK_PLATFORMS
+
+
+def test_upload_summary_reports_minor_adult_counts(db):
+    _seed_admin(db)
+    inst = db.create_institution("Riverside High", "secondary")
+    summary = roster_service.upsert_roster(
+        inst["id"],
+        _csv(
+            "S-1,Jane,Doe,jane@school.edu,2010-01-01,9,mom@school.edu\n"
+            "U-1,Alex,Roe,alex@uni.edu,2002-05-05,12,\n"
+            "S-2,Jake,Doe,jake@school.edu,2012-02-02,8,dad@school.edu\n"
+        ),
+        "admin-001",
+    )
+    assert summary["created"] == 3
+    assert summary["errors"] == []
+    assert summary["minors"] == 2
+    assert summary["adults"] == 1
+    assert summary["minors"] + summary["adults"] == summary["created"]
+
+
+OVERRIDE_HEADER = (
+    "student_id,first_name,last_name,email,date_of_birth,grade_level,parent_email,is_minor\n"
+)
+
+
+def _csv_override(body: str) -> bytes:
+    return (OVERRIDE_HEADER + body).encode("utf-8")
+
+
+def test_minor_override_beats_dob_calculation(monkeypatch, db):
+    _seed_admin(db)
+    inst = db.create_institution("Riverside High", "secondary")
+    summary = roster_service.upsert_roster(
+        inst["id"],
+        _csv_override(
+            # Adult by DOB but explicitly flagged minor -> must route to parent.
+            "O-1,Chris,Roe,chris@uni.edu,2002-05-05,12,mom@school.edu,yes\n"
+            # Minor by DOB but explicitly flagged adult -> must route to self.
+            "A-1,Dan,Roe,dan@uni.edu,2012-01-01,8,,no\n"
+        ),
+        "admin-001",
+    )
+    assert summary["errors"] == []
+    assert summary["created"] == 2
+    assert summary["minors"] == 1
+    assert summary["adults"] == 1
+    assert db.get_student_by_id(summary["student_ids"][0])["is_minor"] == 1
+    assert db.get_student_by_id(summary["student_ids"][1])["is_minor"] == 0
+
+    sent = []
+    _fake_send(monkeypatch, sent)
+    result = consent_service.dispatch_consents_for_students(
+        _students_for(db, summary), "admin-001"
+    )
+    assert result["created"] == 2
+    assert result["dispatched"] == 2
+    by_recipient = {
+        _current_consent(db, sid)["recipient_role"]
+        for sid in summary["student_ids"]
+    }
+    assert by_recipient == {"parent", "student"}
+
+
+def test_leap_day_birthday_age_boundary(db):
+    from datetime import date
+
+    from backend.services.roster_service import _age_years
+
+    leap_baby = date(2000, 2, 29)
+    assert _age_years(leap_baby, on=date(2016, 2, 29)) == 16
+    assert _age_years(leap_baby, on=date(2018, 2, 28)) == 17
+    assert _age_years(leap_baby, on=date(2018, 3, 1)) == 18
+
+    _seed_admin(db)
+    inst = db.create_institution("Riverside High", "secondary")
+    summary = roster_service.upsert_roster(
+        inst["id"],
+        _csv("L-1,Leap,Baby,leap@school.edu,2016-02-29,4,mom@school.edu\n"),
+        "admin-001",
+    )
+    assert summary["errors"] == []
+    assert summary["minors"] == 1
+    assert db.get_student_by_id(summary["student_ids"][0])["is_minor"] == 1

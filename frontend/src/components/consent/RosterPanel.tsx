@@ -196,6 +196,7 @@ export default function RosterPanel() {
             )}
             <div>
               {summary.created} created · {summary.updated} updated · {summary.total} total
+              {' · '}{summary.minors} minor(s) · {summary.adults} adult(s)
               {summary.errors.length ? ` · ${summary.errors.length} row(s) failed` : ''}
             </div>
             <RosterErrorReport summary={summary} />
