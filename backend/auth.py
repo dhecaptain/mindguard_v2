@@ -75,6 +75,8 @@ async def require_auth(authorization: str = Header(...)) -> dict:
         raise HTTPException(503, "Service temporarily unavailable")
     if not user:
         raise HTTPException(401, "User not found")
+    if str(user.get("status") or "").lower() == "revoked":
+        raise HTTPException(401, "Account has been revoked")
     user["_token_jti"] = jti
     return user
 

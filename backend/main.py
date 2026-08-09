@@ -366,6 +366,8 @@ async def login(req: LoginRequest, request: Request):
     user = get_user_by_email(req.email)
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
+    if str(user.get("status") or "").lower() == "revoked":
+        raise HTTPException(401, "Account has been revoked")
 
     token = create_access_token(user["id"], user["role_type"])
     logger.info("Login: user=%s ip=%s", user["id"], client_ip)
@@ -389,7 +391,18 @@ async def register(req: RegisterRequest, request: Request):
         raise HTTPException(400, "Email already registered")
 
     _role_map = {"student": "student", "counsellor": "counsellor", "counselor": "counsellor"}
-    role_type = _role_map.get(req.role.lower(), "student")
+    role_type = _role_map.get(req.role.lower(), "student") if req.role else "student"
+
+    # Staff roles carry access to every student's personal data and consent
+    # records, so they must be provisioned by an institution/admin — never via
+    # open self-registration. An unverified stranger must not be able to sign
+    # up as a counsellor and read the whole student roster.
+    if role_type != "student":
+        raise HTTPException(
+            403,
+            "Counsellor and school-admin accounts are provisioned by your institution. "
+            "Public registration is for students only.",
+        )
 
     # Parental consent gate for minor students
     is_minor = False
@@ -505,15 +518,24 @@ async def google_auth(data: dict, request: Request):
         logger.warning("Google auth failed ip=%s: %s", client_ip, e)
         raise HTTPException(401, "Invalid Supabase token")
 
-    email = (data.get("email") or sb_user.email or "").strip().lower()
-    name = (data.get("name") or
-            (sb_user.user_metadata.get("full_name") if sb_user.user_metadata else None) or
-            email.split("@")[0].replace(".", " ").title())
+    # The account identity must come from the verified Supabase session. The
+    # client-supplied body is attacker-controlled and must never influence which
+    # account is matched or created (an attacker could otherwise log in as any
+    # existing user by passing their email alongside a valid Google token).
+    email = (sb_user.email or "").strip().lower()
+    if not email:
+        raise HTTPException(401, "Invalid Supabase token")
 
     existing = get_user_by_email(email)
     if existing:
         user = existing
     else:
+        # Display name only for brand-new accounts, sanitised and length-capped.
+        # Existing accounts keep their stored name.
+        client_name = (data.get("name") or "").strip()
+        verified_name = (sb_user.user_metadata.get("full_name") if sb_user.user_metadata else None) or ""
+        name = (verified_name or client_name or email.split("@")[0].replace(".", " ").title())
+        name = str(name).strip()[:80] or email.split("@")[0].replace(".", " ").title()
         create_user(email, name, "", role_type="student")
         user = get_user_by_email(email)
 
@@ -1742,11 +1764,20 @@ async def admin_broadcast(data: dict, request: Request, user: dict = Depends(req
 
 @app.get("/api/users/directory")
 async def get_user_directory(role: str | None = None, user: dict = Depends(require_auth)):
-    """List users by role for starting conversations. Any authenticated user can call this."""
+    """List users by role for starting conversations.
+
+    Any authenticated user may look up peers by name/id, but emails are only
+    exposed to admins so the directory cannot be used to harvest the roster.
+    """
     users = get_all_users()
     if role:
         users = [u for u in users if u["role_type"] == role]
-    return users
+    if user["role_type"] == "admin":
+        return users
+    return [
+        {k: v for k, v in u.items() if k not in ("email", "password_hash", "dob", "parent_email")}
+        for u in users
+    ]
 
 
 # ── Resources routes ─────────────────────────────────────────────────
