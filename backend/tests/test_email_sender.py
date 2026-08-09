@@ -19,6 +19,28 @@ def test_is_resend_configured(monkeypatch):
     assert email_sender.is_resend_configured()
 
 
+def test_email_from_defaults_to_brand_not_personal(monkeypatch):
+    monkeypatch.delenv("EMAIL_FROM", raising=False)
+    assert email_sender.get_email_from() == "MindGuard <noreply@mindguard.ai>"
+
+
+def test_email_from_uses_configured_verified_domain(monkeypatch):
+    monkeypatch.setenv("EMAIL_FROM", "MindGuard <no-reply@schools.example.org>")
+    assert email_sender.get_email_from() == "MindGuard <no-reply@schools.example.org>"
+
+
+def test_email_from_warns_on_personal_sender(monkeypatch, caplog):
+    import logging
+
+    email_sender._personal_from_warned = False
+    monkeypatch.setenv("EMAIL_FROM", "MindGuard <davidpolycarp298@gmail.com>")
+    with caplog.at_level(logging.WARNING, logger="backend.services.email_sender"):
+        value = email_sender.get_email_from()
+    assert value == "MindGuard <davidpolycarp298@gmail.com>"
+    assert any("EMAIL_FROM" in r.message for r in caplog.records)
+    email_sender._personal_from_warned = False
+
+
 def test_no_provider_returns_error():
     ok, err = email_sender.send_html_email("a@b.c", "Subject", "<p>Hi</p>")
     assert ok is False

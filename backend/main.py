@@ -25,7 +25,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import (
@@ -41,6 +41,7 @@ from backend.models.schemas import (
     DemoRequestCreate, DemoRequestUpdate,
 )
 from backend.services.email_sender import send_html_email
+from backend.services.predictor import predict_one, predict_batch, InferenceUnavailableError
 from backend.services.webhook_service import handle_webhook
 from backend.services.email_templates import (
     demo_request_confirmation, demo_request_notification,
@@ -109,6 +110,17 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MindGuard API", version="2.0.0")
+
+
+@app.exception_handler(InferenceUnavailableError)
+async def inference_unavailable_handler(request: Request, exc: InferenceUnavailableError):
+    """Constrained hosts (too little RAM for torch) fail cleanly with a 503.
+
+    Catches the pre-import memory guard so that every inference route —
+    including the platform scrapers that re-wrap RuntimeError as 400 — returns
+    "service unavailable" instead of a misleading client error or an OOM kill.
+    """
+    return JSONResponse(status_code=503, content={"detail": INFERENCE_UNAVAILABLE_MESSAGE})
 
 
 class SPAStaticFiles(StaticFiles):
@@ -314,6 +326,7 @@ async def healthz():
 _rate_store: dict[str, list[float]] = defaultdict(list)
 _RATE_WINDOW = 60   # seconds
 _AUTH_RATE_MAX = 10  # max auth attempts per window per IP
+_ANALYSIS_RATE_MAX = 30  # max analysis/platform inferences per window per user
 
 
 def _check_rate_limit(key: str, max_requests: int = _AUTH_RATE_MAX, window: int = _RATE_WINDOW):
@@ -322,6 +335,17 @@ def _check_rate_limit(key: str, max_requests: int = _AUTH_RATE_MAX, window: int 
     if len(_rate_store[key]) >= max_requests:
         raise HTTPException(429, "Too many requests. Please try again later.")
     _rate_store[key].append(now)
+
+
+def _check_analysis_rate_limit(user_id: str):
+    """Cap expensive model/network inferences per authenticated user.
+
+    The analysis and platform endpoints fetch remote profiles and run model
+    inference; without a cap a single account can hammer them into a DoS. The
+    budget is shared across all analysis endpoints so switching between them
+    cannot bypass the limit.
+    """
+    _check_rate_limit(f"analyze:{user_id}", max_requests=_ANALYSIS_RATE_MAX)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -363,6 +387,11 @@ async def login(req: LoginRequest, request: Request):
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(f"login:{client_ip}")
 
+    # reCAPTCHA is enforced only when RECAPTCHA_SECRET is configured; local/dev
+    # stays token-free so the flow keeps working without a Google console setup.
+    if not await verify_recaptcha_token(req.recaptcha_token):
+        raise HTTPException(403, "reCAPTCHA verification failed")
+
     user = get_user_by_email(req.email)
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
@@ -377,6 +406,7 @@ async def login(req: LoginRequest, request: Request):
         "role": user["role_type"].capitalize(),
         "role_type": user["role_type"],
         "referral_code": _generate_referral_code(),
+        "terms_accepted": bool(user.get("terms_accepted_at")),
         "access_token": token,
     }
 
@@ -385,6 +415,9 @@ async def login(req: LoginRequest, request: Request):
 async def register(req: RegisterRequest, request: Request):
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(f"register:{client_ip}")
+
+    if not await verify_recaptcha_token(req.recaptcha_token):
+        raise HTTPException(403, "reCAPTCHA verification failed")
 
     existing = get_user_by_email(req.email)
     if existing:
@@ -476,6 +509,7 @@ async def get_me(user: dict = Depends(require_auth)):
         role=user["role_type"].capitalize(),
         role_type=user["role_type"],
         referral_code=user.get("referral_code") or _generate_referral_code(),
+        terms_accepted=bool(user.get("terms_accepted_at")),
     )
 
 
@@ -504,6 +538,9 @@ async def logout(authorization: str = Header(...), user: dict = Depends(require_
 async def google_auth(data: dict, request: Request):
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(f"google:{client_ip}")
+
+    if not await verify_recaptcha_token(data.get("recaptcha_token")):
+        raise HTTPException(403, "reCAPTCHA verification failed")
 
     access_token = data.get("access_token")
     if not access_token:
@@ -546,6 +583,7 @@ async def google_auth(data: dict, request: Request):
         "role": user["role_type"].capitalize(),
         "role_type": user["role_type"],
         "referral_code": _generate_referral_code(),
+        "terms_accepted": bool(user.get("terms_accepted_at")),
         "access_token": token,
     }
 
@@ -554,6 +592,7 @@ async def google_auth(data: dict, request: Request):
 
 @app.post("/api/analysis/text")
 async def analyze_text(req: TextAnalysisRequest, user: dict = Depends(require_auth)):
+    _check_analysis_rate_limit(user["id"])
     try:
         prob, ms = await predict_one(req.text)
     except Exception as exc:
@@ -569,6 +608,7 @@ async def analyze_text(req: TextAnalysisRequest, user: dict = Depends(require_au
 
 @app.post("/api/analysis/image")
 async def analyze_image(file: UploadFile = File(...), user: dict = Depends(require_auth)):
+    _check_analysis_rate_limit(user["id"])
     MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
     try:
         import pytesseract
@@ -868,6 +908,7 @@ def _fetch_reddit_rss_posts(username: str) -> list[dict]:
 @app.post("/api/platforms/reddit")
 async def analyze_reddit(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     client_id = req.client_id or os.getenv("REDDIT_CLIENT_ID", "")
     client_secret = req.client_secret or REDDIT_CLIENT_SECRET
     if not req.username.strip():
@@ -951,6 +992,8 @@ async def analyze_reddit(req: PlatformRequest, user: dict = Depends(require_auth
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except ImportError:
         raise HTTPException(501, "PRAW not installed. Install with: pip install praw")
     except prawcore.exceptions.NotFound:
@@ -968,6 +1011,7 @@ async def analyze_reddit(req: PlatformRequest, user: dict = Depends(require_auth
 @app.post("/api/platforms/bluesky")
 async def analyze_bluesky(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     target_handle = req.handle.strip().lstrip("@")
     login_handle = (req.identifier or req.handle).strip().lstrip("@")
     if target_handle and "." not in target_handle:
@@ -999,6 +1043,8 @@ async def analyze_bluesky(req: PlatformRequest, user: dict = Depends(require_aut
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except Exception as e:
         logger.error("Bluesky analysis error: %s", e)
         raise HTTPException(400, f"Bluesky analysis failed: {e}")
@@ -1007,6 +1053,7 @@ async def analyze_bluesky(req: PlatformRequest, user: dict = Depends(require_aut
 @app.post("/api/platforms/mastodon")
 async def analyze_mastodon(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     if not req.handle:
         raise HTTPException(400, "Handle required")
     handle_input = req.handle.strip().lstrip("@")
@@ -1101,6 +1148,8 @@ async def analyze_mastodon(req: PlatformRequest, user: dict = Depends(require_au
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except httpx.HTTPStatusError as e:
         logger.error("Mastodon HTTP status error: %s", e)
         raise HTTPException(400, f"Mastodon API returned an error: HTTP {e.response.status_code}")
@@ -1154,6 +1203,7 @@ def _download_and_transcribe_video(video_url: str, max_seconds: int = 600) -> tu
 @app.post("/api/platforms/youtube")
 async def analyze_youtube(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     if not req.channel_url:
         raise HTTPException(400, "YouTube channel or video URL required")
     try:
@@ -1332,6 +1382,8 @@ async def analyze_youtube(req: PlatformRequest, user: dict = Depends(require_aut
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except ImportError:
         raise HTTPException(501, "Video processing dependencies not installed")
     except subprocess.TimeoutExpired:
@@ -1346,6 +1398,7 @@ async def analyze_youtube(req: PlatformRequest, user: dict = Depends(require_aut
 @app.post("/api/platforms/video")
 async def analyze_video(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     if not req.video_url:
         raise HTTPException(400, "Video URL required")
     try:
@@ -1368,6 +1421,8 @@ async def analyze_video(req: PlatformRequest, user: dict = Depends(require_auth)
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except ImportError:
         raise HTTPException(501, "Video processing dependencies not installed")
     except subprocess.TimeoutExpired:
@@ -1382,6 +1437,7 @@ async def analyze_video(req: PlatformRequest, user: dict = Depends(require_auth)
 @app.post("/api/platforms/facebook")
 async def analyze_facebook(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     if not req.profile_url:
         raise HTTPException(400, "Facebook profile URL is required")
     if "facebook.com" not in req.profile_url.lower():
@@ -1406,6 +1462,8 @@ async def analyze_facebook(req: PlatformRequest, user: dict = Depends(require_au
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except ImportError:
         raise HTTPException(501, "Playwright is not installed. Install with: pip install playwright")
     except Exception as e:
@@ -1416,6 +1474,7 @@ async def analyze_facebook(req: PlatformRequest, user: dict = Depends(require_au
 @app.post("/api/platforms/twitter")
 async def analyze_twitter(req: PlatformRequest, user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     if not req.profile_url:
         raise HTTPException(400, "Twitter/X profile URL is required")
     lowered = req.profile_url.lower()
@@ -1441,6 +1500,8 @@ async def analyze_twitter(req: PlatformRequest, user: dict = Depends(require_aut
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except ImportError:
         raise HTTPException(501, "Playwright is not installed. Install with: pip install playwright")
     except Exception as e:
@@ -1456,6 +1517,7 @@ async def analyze_file(
     user: dict = Depends(require_auth),
 ):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
     try:
         contents = await file.read()
@@ -1506,6 +1568,8 @@ async def analyze_file(
 
     except HTTPException:
         raise
+    except InferenceUnavailableError:
+        raise
     except Exception as e:
         logger.error("File analysis error: %s", e)
         raise HTTPException(400, "File analysis failed")
@@ -1514,6 +1578,7 @@ async def analyze_file(
 @app.get("/api/platforms/unified")
 async def get_unified(user: dict = Depends(require_auth)):
     _require_analysis_staff(user)
+    _check_analysis_rate_limit(user["id"])
     user_results = _platform_results.get(user["id"], {})
     platforms = {}
     for key in ["reddit", "bluesky", "mastodon", "youtube", "file"]:
@@ -1579,8 +1644,12 @@ async def get_student_detail(student_id: str, user: dict = Depends(require_auth)
         raise HTTPException(404, "Student not found")
     from backend.database import get_analyses
     analyses = get_analyses(student_id, limit=50)
+    rolling = get_rolling_risk(student_id)
     if analyses:
         latest_prob = analyses[0]["prob"]
+        latest_label, latest_color, _ = risk_label(latest_prob)
+    elif rolling:
+        latest_prob = rolling["score"]
         latest_label, latest_color, _ = risk_label(latest_prob)
     else:
         latest_prob = 0.0
@@ -1599,6 +1668,7 @@ async def get_student_detail(student_id: str, user: dict = Depends(require_auth)
             "total_analyses": len(analyses),
             "high_risk_count": sum(1 for a in analyses if a["prob"] >= 0.75),
         },
+        "rolling_risk": rolling,
         "analyses": analyses,
     }
 
@@ -2618,6 +2688,7 @@ async def v1_student_analyze(
     user: dict = Depends(require_auth),
 ):
     _require_counsellor(user)
+    _check_analysis_rate_limit(user["id"])
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")

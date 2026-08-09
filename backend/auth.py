@@ -57,8 +57,8 @@ def decode_token(token: str) -> dict:
         raise HTTPException(401, "Invalid token")
 
 
-async def require_auth(authorization: str = Header(...)) -> dict:
-    if not authorization.startswith("Bearer "):
+async def require_auth(authorization: str | None = Header(None)) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Invalid authorization header")
     token = authorization[7:]
     payload = decode_token(token)

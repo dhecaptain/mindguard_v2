@@ -1,14 +1,149 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useCounsellorStore } from '../store/counsellorStore'
-import { getStudents, getStudentDetail, approveStudent, revokeStudent } from '../api/counsellor'
-import type { StudentDetail } from '../api/counsellor'
+import { usePlatformStore } from '../store'
+import { getStudents, getStudentDetail, approveStudent, revokeStudent, analyzeStudent } from '../api/counsellor'
+import type { StudentAnalysisResult, StudentDetail } from '../api/counsellor'
 import StudentTimeline from '../components/counsellor/StudentTimeline'
 import StudentNotes from '../components/counsellor/StudentNotes'
+import type { PlatformResult } from '../types'
 
 const STATUS_STYLES: Record<string, string> = {
   approved: 'bg-[#d1fae5] text-[#065f46]',
   pending: 'bg-[#fef3c7] text-[#92400e]',
   revoked: 'bg-[#f1f5f9] text-[#6b7280]',
+}
+
+const ANALYSIS_PLATFORMS: Array<{ key: string; label: string }> = [
+  { key: 'reddit', label: 'Reddit' },
+  { key: 'bluesky', label: 'Bluesky' },
+  { key: 'mastodon', label: 'Mastodon' },
+  { key: 'youtube', label: 'YouTube' },
+  { key: 'facebook', label: 'Facebook' },
+  { key: 'twitter', label: 'Twitter / X' },
+  { key: 'file', label: 'File upload' },
+]
+
+function riskTone(score: number): { color: string; label: string } {
+  if (score >= 0.75) return { color: '#ef4444', label: 'High risk' }
+  if (score >= 0.5) return { color: '#f59e0b', label: 'Elevated risk' }
+  return { color: '#22c55e', label: 'Low risk' }
+}
+
+function RiskAnalysisPanel({ student, onAnalyzed }: { student: StudentDetail; onAnalyzed: () => void }) {
+  const platformStore = usePlatformStore()
+  const [platform, setPlatform] = useState('')
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<StudentAnalysisResult | null>(null)
+  const [error, setError] = useState('')
+
+  const resultFor = (key: string): PlatformResult | null => {
+    switch (key) {
+      case 'reddit': return platformStore.reddit
+      case 'bluesky': return platformStore.bluesky
+      case 'mastodon': return platformStore.mastodon
+      case 'youtube': return platformStore.youtube
+      case 'facebook': return platformStore.facebook
+      case 'twitter': return platformStore.twitter
+      case 'file': return platformStore.file
+      default: return null
+    }
+  }
+
+  const available = ANALYSIS_PLATFORMS.filter((p) => {
+    const r = resultFor(p.key)
+    return !!r && r.df.length > 0
+  })
+
+  const selectedPosts = resultFor(platform)
+
+  const handleRun = async () => {
+    if (!platform || !selectedPosts || running) return
+    setRunning(true)
+    setError('')
+    try {
+      const res = await analyzeStudent(student.id, { platform, posts: selectedPosts.df })
+      setResult(res)
+      onAnalyzed()
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || err.message || 'Analysis failed')
+      setResult(null)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-[rgba(229,231,235,0.7)]">
+      <div className="px-[20px] py-[14px] border-b border-[#f1f5f9]">
+        <h3 className="text-[0.9rem] font-bold text-[#1f2937] flex items-center gap-[8px]">
+          <i className="ti ti-activity-heartbeat text-[16px] text-[#6b7280]" />
+          Run Rolling Risk Analysis
+        </h3>
+      </div>
+      <div className="px-[20px] py-[14px]">
+        {available.length === 0 ? (
+          <div className="text-[0.8rem] text-[#9ca3af]">
+            No platform analyses available yet. Run a Reddit, Bluesky, Mastodon, YouTube, Facebook, Twitter or file analysis first, then return here to compute this student's rolling risk.
+          </div>
+        ) : (
+          <>
+            <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-[#6b7280] mb-[6px]">
+              Source platform analysis
+            </label>
+            <div className="flex flex-col sm:flex-row gap-[10px]">
+              <select
+                value={platform}
+                onChange={(e) => { setPlatform(e.target.value); setResult(null); setError('') }}
+                className="flex-1 h-[40px] rounded-[7px] border border-[#d1d5db] bg-white px-[11px] text-[0.8rem] text-[#111827] outline-none focus:border-[#0F766E]"
+              >
+                <option value="">Select a platform result…</option>
+                {available.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label} ({resultFor(p.key)!.n_posts} posts)
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleRun}
+                disabled={!platform || running}
+                className="h-[40px] px-[16px] rounded-[7px] bg-[#0F766E] text-white text-[0.8rem] font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#115E59] transition-colors"
+              >
+                {running ? 'Running…' : 'Run analysis'}
+              </button>
+            </div>
+            <p className="mt-[10px] text-[0.72rem] text-[#6b7280]">
+              Consent-gated: this student must have an accepted, non-expired consent on record. Results persist to the risk summary and alert queue.
+            </p>
+            {error && (
+              <div className="mt-[12px] rounded-[7px] border border-[#fecaca] bg-[#fef2f2] px-[12px] py-[9px] text-[0.78rem] text-[#b91c1c]">
+                {error}
+              </div>
+            )}
+            {result && (
+              <div className="mt-[12px] rounded-[7px] border border-[#e5e7eb] bg-[#f8fafc] px-[14px] py-[12px]">
+                <div className="flex items-center justify-between gap-[10px]">
+                  <div className="text-[0.8rem] font-bold text-[#1f2937]">
+                    Rolling risk: {(result.rolling_score * 100).toFixed(0)}%
+                  </div>
+                  <span className="text-[0.72rem] font-bold uppercase" style={{ color: riskTone(result.rolling_score).color }}>
+                    {riskTone(result.rolling_score).label}
+                  </span>
+                </div>
+                <div className="mt-[8px] text-[0.72rem] text-[#6b7280] space-y-[2px]">
+                  <div>{result.n_posts} post(s) analysed on {result.platform}</div>
+                  <div>
+                    {result.alert_created
+                      ? <span className="text-[#b91c1c] font-semibold">Risk alert created and queued for follow-up.</span>
+                      : 'No alert triggered — score below threshold.'}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function formatDate(d: string) {
@@ -35,7 +170,7 @@ function CollapsibleSection({ title, icon, children }: { title: string; icon: st
   )
 }
 
-function StudentDetailView({ student, onBack }: { student: StudentDetail; onBack: () => void }) {
+function StudentDetailView({ student, onBack, onRefresh }: { student: StudentDetail; onBack: () => void; onRefresh: () => void }) {
   const gaugeAngle = Math.min(student.risk_summary.latest_prob * 180, 180)
   const gaugeColor = student.risk_summary.latest_prob >= 0.75 ? '#ef4444' : student.risk_summary.latest_prob >= 0.5 ? '#f59e0b' : '#22c55e'
 
@@ -88,6 +223,9 @@ function StudentDetailView({ student, onBack }: { student: StudentDetail; onBack
           </div>
         </div>
       </div>
+
+      {/* Run rolling risk analysis (consent-gated) */}
+      <RiskAnalysisPanel student={student} onAnalyzed={onRefresh} />
 
       {/* Analysis history */}
       <div className="bg-white rounded-xl border border-[rgba(229,231,235,0.7)]">
@@ -174,7 +312,7 @@ export default function StudentManagementPage() {
       )
     }
     if (studentDetail) {
-      return <StudentDetailView student={studentDetail} onBack={closeDetail} />
+      return <StudentDetailView student={studentDetail} onBack={closeDetail} onRefresh={() => openDetail(detailId!)} />
     }
   }
 

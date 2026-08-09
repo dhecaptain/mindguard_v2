@@ -1,10 +1,23 @@
+import logging
 import os
+import re
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from backend.database import create_email_event
 from backend.secrets_manager import get_secret
+
+logger = logging.getLogger(__name__)
+
+# Consumer mail providers can't be used as a verified ESP sender domain — the
+# "from" address must be one the ESP (Resend, SES, ...) has verified for you.
+# A personal Gmail as the consent/alert sender silently breaks deliverability
+# (or worse, leaks a staff member's private address to every parent).
+_PERSONAL_FROM_PATTERN = re.compile(
+    r"@(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|icloud|me|aol|protonmail|proton|zoho)\.", re.IGNORECASE
+)
+_personal_from_warned = False
 
 
 def is_resend_configured() -> bool:
@@ -16,7 +29,24 @@ def is_smtp_configured() -> bool:
 
 
 def get_email_from() -> str:
-    return os.getenv("EMAIL_FROM", "MindGuard <noreply@mindguard.ai>")
+    """Resolve the sender address, falling back to the committed default.
+
+    ``EMAIL_FROM`` is operator config (set in prod to a verified sender domain);
+    the code never falls back to a staff member's personal address. A warning is
+    logged (once) if the configured value looks like a consumer-mail account.
+    """
+    value = os.getenv("EMAIL_FROM") or "MindGuard <noreply@mindguard.ai>"
+    global _personal_from_warned
+    if _PERSONAL_FROM_PATTERN.search(value) and not _personal_from_warned:
+        _personal_from_warned = True
+        logger.warning(
+            "EMAIL_FROM (%s) looks like a personal/consumer mail address. "
+            "Consent and alert emails may be blocked, and recipient replies go to a "
+            "private inbox. Set EMAIL_FROM to a verified domain you control, e.g. "
+            "MindGuard <no-reply@your-school-domain.org>.",
+            value,
+        )
+    return value
 
 
 def _send_smtp(to_email: str, subject: str, body_html: str) -> tuple[bool, str]:
