@@ -41,6 +41,7 @@ class PlatformRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=254)
     password: str = Field(..., min_length=1)
+    recaptcha_token: Optional[str] = None
 
 
 class RegisterRequest(BaseModel):
@@ -51,6 +52,7 @@ class RegisterRequest(BaseModel):
     dob: Optional[str] = None
     parent_email: Optional[str] = None
     referred_by: Optional[str] = None
+    recaptcha_token: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -64,6 +66,7 @@ class UserResponse(BaseModel):
     role: str
     role_type: str
     referral_code: str
+    terms_accepted: bool = False
 
 
 # ── Group schemas ──────────────────────────────────────────────────────────────

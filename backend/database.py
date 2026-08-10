@@ -68,7 +68,14 @@ def _make_referral_code() -> str:
 
 
 def seed_defaults():
-    """Seed demo users if the DB is fresh."""
+    """Seed demo users if the DB is fresh.
+
+    Known-password demo accounts (``password``) are ONLY created when the app is
+    not running in production (``MINDGUARD_ENV != "production"``). In production
+    the only seeded account is ``admin@mindguard.org``, which never uses a known
+    default password — it is either set via ``MINDGUARD_ADMIN_PASSWORD`` or
+    generated randomly and logged once.
+    """
     conn = get_db()
     cur = conn.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] > 0:
@@ -76,7 +83,7 @@ def seed_defaults():
         return
 
     import bcrypt
-    pw = bcrypt.hashpw(b"password", bcrypt.gensalt()).decode()
+    is_production = os.getenv("MINDGUARD_ENV", "").strip().lower() == "production"
 
     # The admin must never ship with a known default password. Production should
     # set MINDGUARD_ADMIN_PASSWORD; otherwise we generate one and log it once so
@@ -94,28 +101,33 @@ def seed_defaults():
     now = datetime.now(timezone.utc).isoformat()
     users = [
         ("admin-001",  "admin@mindguard.org",      "Admin User",      "admin",      admin_hash, "approved", now),
-        ("couns-001",  "counsellor@mindguard.org",  "Sarah Counsellor","counsellor", pw, "approved", now),
-        ("stud-001",   "student@mindguard.org",     "Demo Student",    "student",    pw, "approved", now),
-        ("stud-002",   "diana@mindguard.org",       "Diana Opiyo",     "student",    pw, "approved", "2025-01-15T00:00:00"),
-        ("stud-003",   "brian@student.ac.ke",       "Brian Mwangi",    "student",    pw, "pending",  "2025-02-03T00:00:00"),
-        ("stud-004",   "fatuma@student.ac.ke",      "Fatuma Hassan",   "student",    pw, "approved", "2025-02-10T00:00:00"),
-        ("stud-005",   "kevin@student.ac.ke",       "Kevin Otieno",    "student",    pw, "pending",  "2025-03-01T00:00:00"),
-        ("couns-002",  "demo@mindguard.org",        "Demo User",       "counsellor", pw, "approved", now),
     ]
+    if not is_production:
+        pw = bcrypt.hashpw(b"password", bcrypt.gensalt()).decode()
+        users.extend([
+            ("couns-001",  "counsellor@mindguard.org",  "Sarah Counsellor","counsellor", pw, "approved", now),
+            ("stud-001",   "student@mindguard.org",     "Demo Student",    "student",    pw, "approved", now),
+            ("stud-002",   "diana@mindguard.org",       "Diana Opiyo",     "student",    pw, "approved", "2025-01-15T00:00:00"),
+            ("stud-003",   "brian@student.ac.ke",       "Brian Mwangi",    "student",    pw, "pending",  "2025-02-03T00:00:00"),
+            ("stud-004",   "fatuma@student.ac.ke",      "Fatuma Hassan",   "student",    pw, "approved", "2025-02-10T00:00:00"),
+            ("stud-005",   "kevin@student.ac.ke",       "Kevin Otieno",    "student",    pw, "pending",  "2025-03-01T00:00:00"),
+            ("couns-002",  "demo@mindguard.org",        "Demo User",       "counsellor", pw, "approved", now),
+        ])
     conn.executemany(
         "INSERT INTO users (id, email, name, role_type, password_hash, status, created_at) VALUES (?,?,?,?,?,?,?)",
         users,
     )
-    # Seed a demo conversation between student@mindguard.org and counsellor@mindguard.org
-    demo_msgs = [
-        ("msg-001", "couns-001", "stud-001", "Hello! Welcome to MindGuard. How are you feeling today?", now),
-        ("msg-002", "stud-001", "couns-001", "Hi! I'm doing okay, just wanted to check in.", now),
-        ("msg-003", "couns-001", "stud-001", "That's great to hear. I'm here whenever you need someone to talk to.", now),
-    ]
-    conn.executemany(
-        "INSERT OR IGNORE INTO communications (id, sender_id, receiver_id, message, read, created_at) VALUES (?,?,?,?,1,?)",
-        demo_msgs,
-    )
+    if not is_production:
+        # Seed a demo conversation between student@mindguard.org and counsellor@mindguard.org
+        demo_msgs = [
+            ("msg-001", "couns-001", "stud-001", "Hello! Welcome to MindGuard. How are you feeling today?", now),
+            ("msg-002", "stud-001", "couns-001", "Hi! I'm doing okay, just wanted to check in.", now),
+            ("msg-003", "couns-001", "stud-001", "That's great to hear. I'm here whenever you need someone to talk to.", now),
+        ]
+        conn.executemany(
+            "INSERT OR IGNORE INTO communications (id, sender_id, receiver_id, message, read, created_at) VALUES (?,?,?,?,1,?)",
+            demo_msgs,
+        )
     conn.commit()
     conn.close()
 

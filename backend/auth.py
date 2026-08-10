@@ -57,8 +57,8 @@ def decode_token(token: str) -> dict:
         raise HTTPException(401, "Invalid token")
 
 
-async def require_auth(authorization: str = Header(...)) -> dict:
-    if not authorization.startswith("Bearer "):
+async def require_auth(authorization: str | None = Header(None)) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Invalid authorization header")
     token = authorization[7:]
     payload = decode_token(token)
@@ -75,6 +75,8 @@ async def require_auth(authorization: str = Header(...)) -> dict:
         raise HTTPException(503, "Service temporarily unavailable")
     if not user:
         raise HTTPException(401, "User not found")
+    if str(user.get("status") or "").lower() == "revoked":
+        raise HTTPException(401, "Account has been revoked")
     user["_token_jti"] = jti
     return user
 

@@ -1,8 +1,9 @@
 import api from './client'
 import type { UserInfo } from '../types'
+import { getRecaptchaToken } from '../lib/recaptcha'
 
 export async function login(email: string, password: string): Promise<UserInfo & { access_token: string }> {
-  const { data } = await api.post('/auth/login', { email, password })
+  const { data } = await api.post('/auth/login', { email, password, recaptcha_token: await getRecaptchaToken() })
   if (data.access_token) {
     localStorage.setItem('mg_token', data.access_token)
   }
@@ -18,7 +19,7 @@ export async function register(params: {
   parent_email?: string
   referred_by?: string
 }): Promise<void> {
-  await api.post('/auth/register', params)
+  await api.post('/auth/register', { ...params, recaptcha_token: await getRecaptchaToken() })
 }
 
 export async function getMe(): Promise<UserInfo> {
@@ -36,7 +37,12 @@ export async function logout(): Promise<void> {
 }
 
 export async function googleLogin(supabaseToken: string, email?: string, name?: string): Promise<UserInfo & { access_token: string }> {
-  const { data } = await api.post('/auth/google', { access_token: supabaseToken, email, name })
+  const { data } = await api.post('/auth/google', {
+    access_token: supabaseToken,
+    email,
+    name,
+    recaptcha_token: await getRecaptchaToken(),
+  })
   if (data.access_token) {
     localStorage.setItem('mg_token', data.access_token)
   }

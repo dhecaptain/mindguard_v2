@@ -110,7 +110,30 @@ def has_permission(user: dict, permission: str) -> bool:
     return permission in user_permissions(user)
 
 
+_ACTIVE_STATUSES = ("approved", "active")
+_BLOCKED_STATUSES = ("pending", "revoked", "suspended", "disabled")
+
+
+def _ensure_active(user: dict) -> None:
+    """Block users whose account is not active from exercising permissions.
+
+    ``pending`` accounts (e.g. a counsellor that registered before staff
+    registration was closed) must not be able to view students, run analysis or
+    manage consent until an admin approves them. ``revoked``/``suspended``
+    accounts are likewise blocked at the permission layer as defense in depth
+    on top of the auth check.
+    """
+    status = str(user.get("status") or "approved").lower()
+    if status in _BLOCKED_STATUSES or status not in _ACTIVE_STATUSES:
+        raise HTTPException(
+            403,
+            "Your account has not been approved yet, or has been suspended. "
+            "Contact your school administrator if you believe this is in error.",
+        )
+
+
 def require_permission(user: dict, permission: str) -> None:
+    _ensure_active(user)
     if not has_permission(user, permission):
         raise HTTPException(
             403,
@@ -119,6 +142,7 @@ def require_permission(user: dict, permission: str) -> None:
 
 
 def require_any_permission(user: dict, permissions) -> None:
+    _ensure_active(user)
     user_perms = user_permissions(user)
     if not user_perms.intersection(set(permissions)):
         raise HTTPException(403, "You are not authorised to perform this action.")

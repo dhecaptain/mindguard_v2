@@ -73,6 +73,7 @@ export interface UserInfo {
   role: string
   role_type: RoleType
   referral_code: string
+  terms_accepted?: boolean
   dob?: string
   parent_email?: string
 }

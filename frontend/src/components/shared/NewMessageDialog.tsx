@@ -31,7 +31,7 @@ export default function NewMessageDialog({ roleFilter, excludeId, onSelect, onCl
     (u) =>
       u.id !== excludeId &&
       (u.name.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase()))
+        (u.email || '').toLowerCase().includes(search.toLowerCase()))
   )
 
   return (

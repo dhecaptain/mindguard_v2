@@ -19,7 +19,6 @@ export default function SignInPage({ onSuccess }: SignInPageProps) {
   const [regName, setRegName] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
-  const [regRole, setRegRole] = useState('student')
   const [regDob, setRegDob] = useState('')
   const [regParentEmail, setRegParentEmail] = useState('')
   const [regReferredBy, setRegReferredBy] = useState('')
@@ -36,11 +35,6 @@ export default function SignInPage({ onSuccess }: SignInPageProps) {
       setTab('register')
     }
   }, [])
-
-  const fillDemo = (role: string) => {
-    setEmail(`${role}@mindguard.org`)
-    setPassword('password')
-  }
 
   const handleLogin = async () => {
     setError('')
@@ -69,7 +63,7 @@ export default function SignInPage({ onSuccess }: SignInPageProps) {
     try {
       await register({
         name: regName, email: regEmail, password: regPassword,
-        role: regRole, dob: regDob || undefined,
+        role: 'student', dob: regDob || undefined,
         parent_email: isMinor ? regParentEmail : undefined,
         referred_by: regReferredBy || undefined,
       })
@@ -196,25 +190,6 @@ export default function SignInPage({ onSuccess }: SignInPageProps) {
                 {loading ? 'Signing in…' : 'Sign In'}
               </button>
 
-              <div className="pt-1">
-                <div className="text-[0.68rem] text-[#9ca3af] font-semibold uppercase tracking-widest mb-2">Demo accounts</div>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { label: 'Counselor', slug: 'demo' },
-                    { label: 'Student', slug: 'student' },
-                  ].map((d) => (
-                    <button
-                      key={d.label}
-                      onClick={() => fillDemo(d.slug)}
-                      className="px-3 py-[5px] text-[0.78rem] font-medium bg-[#f1f5f9] text-[#374151] rounded-md border border-[#e5e7eb] cursor-pointer hover:bg-[#e5e7eb] transition-colors"
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[0.68rem] text-[#9ca3af] mt-1.5">Any password works in dev mode</p>
-              </div>
-
               {isSupabaseAvailable() && (
                 <>
                   <div className="relative my-2">
@@ -274,17 +249,6 @@ export default function SignInPage({ onSuccess }: SignInPageProps) {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Role</label>
-                  <select
-                    value={regRole}
-                    onChange={(e) => { setRegRole(e.target.value); setIsMinor(false); setRegDob('') }}
-                    className={inputClass}
-                  >
-                    <option value="student">Student</option>
-                    <option value="counsellor">Counsellor</option>
-                  </select>
-                </div>
-                <div>
                   <label className={labelClass}>
                     Referral Code <span className="text-[#9ca3af] normal-case font-normal">(optional)</span>
                   </label>
@@ -297,48 +261,47 @@ export default function SignInPage({ onSuccess }: SignInPageProps) {
                     maxLength={8}
                   />
                 </div>
+                <div className="flex items-center gap-2 bg-[#eff6ff] border border-[#bfdbfe] rounded-lg px-3 py-2 text-[0.78rem] text-[#1e40af]">
+                  <i className="ti ti-school text-[14px] flex-shrink-0" />
+                  Counsellor and school-admin accounts are provisioned by your institution. Public registration is for students only.
+                </div>
               </div>
 
-              {regRole === 'student' && (
+              <div>
+                <label className={labelClass}>Date of Birth</label>
+                <input
+                  type="date"
+                  value={regDob}
+                  onChange={(e) => {
+                    setRegDob(e.target.value)
+                    const birth = new Date(e.target.value)
+                    const age = new Date().getFullYear() - birth.getFullYear()
+                    setIsMinor(age < 18)
+                  }}
+                  className={inputClass}
+                />
+              </div>
+              {isMinor && (
                 <>
+                  <div className="flex items-start gap-2 bg-[#fef3c7] border border-[#fde68a] rounded-lg px-3 py-2 text-[0.78rem] text-[#92400e]">
+                    <i className="ti ti-info-circle text-[14px] mt-px flex-shrink-0" />
+                    A parent or guardian must provide consent for users under 18. A notification will be sent to their email.
+                  </div>
                   <div>
-                    <label className={labelClass}>Date of Birth</label>
+                    <label className={labelClass}>
+                      Parent/Guardian Email <span className="text-[#ef4444]">*</span>
+                    </label>
                     <input
-                      type="date"
-                      value={regDob}
-                      onChange={(e) => {
-                        setRegDob(e.target.value)
-                        const birth = new Date(e.target.value)
-                        const age = new Date().getFullYear() - birth.getFullYear()
-                        setIsMinor(age < 18)
-                      }}
+                      type="email"
+                      value={regParentEmail}
+                      onChange={(e) => setRegParentEmail(e.target.value)}
                       className={inputClass}
+                      placeholder="parent@example.com"
+                      required
                     />
                   </div>
-                  {isMinor && (
-                    <>
-                      <div className="flex items-start gap-2 bg-[#fef3c7] border border-[#fde68a] rounded-lg px-3 py-2 text-[0.78rem] text-[#92400e]">
-                        <i className="ti ti-info-circle text-[14px] mt-px flex-shrink-0" />
-                        A parent or guardian must provide consent for users under 18. A notification will be sent to their email.
-                      </div>
-                      <div>
-                        <label className={labelClass}>
-                          Parent/Guardian Email <span className="text-[#ef4444]">*</span>
-                        </label>
-                        <input
-                          type="email"
-                          value={regParentEmail}
-                          onChange={(e) => setRegParentEmail(e.target.value)}
-                          className={inputClass}
-                          placeholder="parent@example.com"
-                          required
-                        />
-                      </div>
-                    </>
-                  )}
                 </>
               )}
-
               <button
                 onClick={handleRegister}
                 disabled={!regName || !regEmail || !regPassword || loading}

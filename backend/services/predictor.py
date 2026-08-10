@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 _MIN_INFERENCE_RAM_MB = 1500
 
 
+class InferenceUnavailableError(RuntimeError):
+    """Raised before torch is imported when the host cannot fit the model.
+
+    A dedicated type (rather than a bare RuntimeError) lets route handlers map
+    the constraint to a 503 "service unavailable" instead of a 400 "bad request"
+    or an OOM kill.
+    """
+
+
 def _mem_available_mb() -> int | None:
     try:
         with open("/proc/meminfo", encoding="utf-8") as fh:
@@ -34,7 +43,7 @@ def _ensure_memory_headroom() -> None:
         return
     available = _mem_available_mb()
     if available is not None and available < _MIN_INFERENCE_RAM_MB:
-        raise RuntimeError(
+        raise InferenceUnavailableError(
             f"Not enough free memory for inference (need >= {_MIN_INFERENCE_RAM_MB} MB, "
             f"have ~{available} MB). Give the service at least 2 GB of RAM — the "
             "Railway free tier caps at 0.5 GB and will crash the worker."

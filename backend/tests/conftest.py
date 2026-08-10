@@ -24,3 +24,20 @@ def crypto_key(tmp_path, monkeypatch):
     monkeypatch.setattr(crypto, "_ENCRYPTION_KEY_HEX", "b" * 64)
     monkeypatch.setattr(crypto, "_KEY_FILE", tmp_path / ".encryption_key")
     yield
+
+
+@pytest.fixture(autouse=True)
+def clear_in_memory_state():
+    """Reset the shared per-process in-memory stores before every test.
+
+    ``backend.main`` keeps rate-limit buckets (keyed by IP — every TestClient
+    presents as ``testclient``) and per-user platform results as module
+    globals. Without a reset, a burst of logins/analysis across test files
+    within one 60s window trips the auth/analysis rate limits and fails tests
+    that are correct in isolation.
+    """
+    import backend.main as main
+
+    main._rate_store.clear()
+    main._platform_results.clear()
+    yield

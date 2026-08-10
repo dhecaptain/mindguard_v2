@@ -28,6 +28,15 @@ export interface StudentDetail {
     total_analyses: number
     high_risk_count: number
   }
+  rolling_risk: {
+    id: string
+    student_id: string
+    computed_at: string
+    score: number
+    window_days: number
+    top_platform: string
+    n_posts: number
+  } | null
   analyses: Array<{
     id: string
     platform: string
@@ -36,6 +45,25 @@ export interface StudentDetail {
     label: string
     created_at: string
   }>
+}
+
+export interface StudentAnalysisResult {
+  student_id: string
+  platform: string
+  rolling_score: number
+  n_posts: number
+  risk_record: {
+    score: number
+    top_platform: string
+    n_posts: number
+    updated_at: string
+  }
+  alert_created: boolean
+  alert: {
+    id: string
+    level: string
+    reason_code: string
+  } | null
 }
 
 export interface Referral {
@@ -84,6 +112,16 @@ export async function getStudents(): Promise<StudentDTO[]> {
 
 export async function getStudentDetail(id: string): Promise<StudentDetail> {
   const { data } = await api.get(`/counsellor/students/${id}`)
+  return data
+}
+
+// ─── Consent-gated student analysis ───────────────────────────────────────────
+
+export async function analyzeStudent(
+  studentId: string,
+  payload: { platform: string; posts: Array<{ risk_score: number; date?: string; text?: string }> }
+): Promise<StudentAnalysisResult> {
+  const { data } = await api.post(`/v1/students/${studentId}/analyze`, payload)
   return data
 }
 

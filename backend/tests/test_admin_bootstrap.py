@@ -22,7 +22,7 @@ from backend.auth import hash_password, verify_password  # noqa: E402
 def _register(client, email: str, password: str) -> dict:
     resp = client.post(
         "/api/auth/register",
-        json={"name": "Admin User", "email": email, "password": password, "role": "counsellor"},
+        json={"name": "Admin User", "email": email, "password": password, "role": "student"},
     )
     assert resp.status_code == 200, resp.text
     return resp.json()["user"]
