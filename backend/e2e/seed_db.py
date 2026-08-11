@@ -64,6 +64,9 @@ for _uid, email, name, role in ACCOUNTS:
         conn.execute("UPDATE users SET role_type = ? WHERE id = ?", (role, existing["id"]))
     else:
         database.create_user(email, name, hash_password("Password123!"), role_type=role)
+    # Staff accounts must be approved to exercise permissions (permissions.py
+    # blocks ``pending`` accounts); mirror how real staff get provisioned.
+    conn.execute("UPDATE users SET status = 'approved' WHERE email = ?", (email,))
     conn.commit()
     conn.close()
 

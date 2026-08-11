@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getToken, clearToken } from '../lib/tokenStorage'
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ||
@@ -9,7 +10,7 @@ const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('mg_token')
+  const token = getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -20,7 +21,7 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('mg_token')
+      clearToken()
       window.location.reload()
     }
     const msg = err.response?.data?.detail || err.message || 'Request failed'

@@ -146,6 +146,32 @@ def get_user_by_id(user_id: str):
     return dict(row) if row else None
 
 
+# ── Token revocation (persistent blacklist) ──────────────────────────
+# Revoked JWTs live in the ``revoked_tokens`` table so logout survives worker
+# restarts and is shared across processes (previously an in-memory set).
+
+
+def revoke_token(jti: str, expires_at: str | None = None) -> None:
+    """Persist a revoked JWT, pruning expired rows opportunistically."""
+    now = datetime.now(timezone.utc).isoformat()
+    expiry = expires_at or (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+    conn = get_db()
+    conn.execute("DELETE FROM revoked_tokens WHERE expires_at < ?", (now,))
+    conn.execute(
+        "INSERT OR IGNORE INTO revoked_tokens (jti, revoked_at, expires_at) VALUES (?,?,?)",
+        (jti, now, expiry),
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_token_revoked(jti: str) -> bool:
+    conn = get_db()
+    row = conn.execute("SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,)).fetchone()
+    conn.close()
+    return row is not None
+
+
 def create_user(
     email: str, name: str, password_hash: str, role_type: str = "student",
     dob: str | None = None, parent_email: str | None = None, referred_by: str | None = None,
@@ -221,13 +247,29 @@ def accept_user_terms(user_id: str) -> bool:
     return ok
 
 
-def get_students(limit: int = 200, offset: int = 0):
+def get_students(limit: int = 200, offset: int = 0, counsellor_id: str | None = None):
+    """List student accounts.
+
+    When ``counsellor_id`` is given, scope the list to students that have at
+    least one consent record for that counsellor (least-privilege: a counsellor
+    must not enumerate the platform-wide student directory). Admins pass None
+    and see all students.
+    """
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, email, name, role_type, status, created_at FROM users "
-        "WHERE role_type = 'student' ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        (limit, offset),
-    ).fetchall()
+    if counsellor_id:
+        rows = conn.execute(
+            "SELECT DISTINCT u.id, u.email, u.name, u.role_type, u.status, u.created_at "
+            "FROM users u JOIN consents c ON c.student_id = u.id "
+            "WHERE u.role_type = 'student' AND c.counsellor_id = ? "
+            "ORDER BY u.created_at DESC LIMIT ? OFFSET ?",
+            (counsellor_id, limit, offset),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, email, name, role_type, status, created_at FROM users "
+            "WHERE role_type = 'student' ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -505,9 +547,12 @@ def get_notification_summary(user_id: str):
     return {"unread": unread}
 
 
-def mark_notification_read(nid: str):
+def mark_notification_read(nid: str, user_id: str):
     conn = get_db()
-    conn.execute("UPDATE notifications SET read = 1 WHERE id = ?", (nid,))
+    conn.execute(
+        "UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?",
+        (nid, user_id),
+    )
     conn.commit()
     conn.close()
 
@@ -919,6 +964,23 @@ def get_open_alert_for_student(student_id: str) -> dict | None:
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def get_alert_by_id(alert_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute("SELECT * FROM alerts WHERE id = ?", (alert_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def has_consent_relationship(student_id: str, counsellor_id: str) -> bool:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT 1 FROM consents WHERE student_id = ? AND counsellor_id = ? LIMIT 1",
+        (student_id, counsellor_id),
+    ).fetchone()
+    conn.close()
+    return row is not None
 
 
 def dispose_alert(

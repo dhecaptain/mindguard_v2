@@ -20,13 +20,36 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-# In-memory blacklist for revoked tokens (keyed by jti).
-# Replace with Redis or a DB table for multi-process / persistent revocation.
+# In-memory cache of revoked tokens (keyed by jti). The source of truth is the
+# persistent ``revoked_tokens`` table (database.revoke_token) so revocation
+# survives restarts and is shared across processes; this set only avoids a DB
+# hit for tokens already seen as revoked in this process.
 _token_blacklist: set[str] = set()
 
 
-def blacklist_token(jti: str) -> None:
+def blacklist_token(jti: str, expires_at: str | None = None) -> None:
+    if not jti:
+        return
     _token_blacklist.add(jti)
+    try:
+        from backend.database import revoke_token
+        revoke_token(jti, expires_at=expires_at)
+    except Exception as e:
+        logger.error("Failed to persist revoked token %s: %s", jti, e)
+
+
+def _is_token_revoked(jti: str) -> bool:
+    if jti in _token_blacklist:
+        return True
+    try:
+        from backend.database import is_token_revoked
+        revoked = is_token_revoked(jti)
+    except Exception as e:
+        logger.error("Failed to check revoked token %s: %s", jti, e)
+        return True  # fail closed on DB errors
+    if revoked:
+        _token_blacklist.add(jti)
+    return revoked
 
 
 def hash_password(password: str) -> str:
@@ -65,7 +88,7 @@ async def require_auth(authorization: str | None = Header(None)) -> dict:
     if "sub" not in payload:
         raise HTTPException(401, "Invalid token payload")
     jti = payload.get("jti", "")
-    if jti and jti in _token_blacklist:
+    if jti and _is_token_revoked(jti):
         raise HTTPException(401, "Token has been revoked")
     try:
         from backend.database import get_user_by_id
@@ -78,6 +101,7 @@ async def require_auth(authorization: str | None = Header(None)) -> dict:
     if str(user.get("status") or "").lower() == "revoked":
         raise HTTPException(401, "Account has been revoked")
     user["_token_jti"] = jti
+    user["_token_exp"] = payload.get("exp")
     return user
 
 

@@ -1,11 +1,12 @@
 import api from './client'
 import type { UserInfo } from '../types'
 import { getRecaptchaToken } from '../lib/recaptcha'
+import { setToken, clearToken } from '../lib/tokenStorage'
 
 export async function login(email: string, password: string): Promise<UserInfo & { access_token: string }> {
   const { data } = await api.post('/auth/login', { email, password, recaptcha_token: await getRecaptchaToken() })
   if (data.access_token) {
-    localStorage.setItem('mg_token', data.access_token)
+    setToken(data.access_token)
   }
   return data
 }
@@ -32,7 +33,7 @@ export async function acceptTerms(): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  localStorage.removeItem('mg_token')
+  clearToken()
   await api.post('/auth/logout')
 }
 
@@ -44,7 +45,7 @@ export async function googleLogin(supabaseToken: string, email?: string, name?: 
     recaptcha_token: await getRecaptchaToken(),
   })
   if (data.access_token) {
-    localStorage.setItem('mg_token', data.access_token)
+    setToken(data.access_token)
   }
   return data
 }

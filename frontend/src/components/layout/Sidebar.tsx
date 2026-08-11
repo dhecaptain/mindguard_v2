@@ -3,6 +3,7 @@ import { useAuthStore, useUiStore, useNotificationStore, usePlatformStore } from
 import { useCounsellorStore } from '../../store/counsellorStore'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { getAlerts } from '../../api/counsellor'
+import { clearToken } from '../../lib/tokenStorage'
 import { NOTIFICATION_TYPE_LABELS, NOTIFICATION_TYPE_ICONS } from '../../types'
 
 const STUDENT_NAV_ITEMS: { key: string; icon: string; label: string }[] = [
@@ -347,7 +348,7 @@ export default function Sidebar() {
       </div>
       <button
         onClick={() => {
-          localStorage.removeItem('mg_token')
+          clearToken()
           useAuthStore.getState().logout()
         }}
         className={`w-full py-[10px] text-[#6b7280] text-[0.75rem] font-medium border-t border-[#161d26] cursor-pointer hover:text-[#d1d5db] hover:bg-[#0e1520] transition-colors flex items-center justify-center gap-[6px] bg-transparent`}
