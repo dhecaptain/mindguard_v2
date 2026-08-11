@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore, useUiStore } from './store'
 import { getMe, logout as apiLogout } from './api/auth'
 import { initSupabase } from './lib/supabase'
+import { getToken, clearToken } from './lib/tokenStorage'
 import { useIdleTimeout } from './hooks/useIdleTimeout'
 import SignInPage from './components/auth/SignInPage'
 import TermsPage from './components/auth/TermsPage'
@@ -186,7 +187,7 @@ export default function App() {
 
   useEffect(() => {
     initSupabase()
-    const token = localStorage.getItem('mg_token')
+    const token = getToken()
     if (token) {
       getMe()
         .then((user) => {
@@ -200,7 +201,7 @@ export default function App() {
           setInitialized(true)
         })
         .catch(() => {
-          localStorage.removeItem('mg_token')
+          clearToken()
           setLoading(false)
           setInitialized(true)
         })

@@ -1,5 +1,6 @@
 import asyncio
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -62,7 +63,8 @@ from backend.database import (
     get_consents_by_counsellor, get_consents_by_student, query_consents,
     get_consent_with_student, get_audit_log_for_target, get_consent_events,
     create_linked_account, get_linked_accounts, revoke_linked_account,
-    get_alerts, dispose_alert, get_open_alert_for_student,
+    get_alerts, dispose_alert, get_alert_by_id, get_open_alert_for_student,
+    has_consent_relationship,
     write_audit, get_audit_log, get_all_audit_log,
     health_check,
     create_note, get_notes,
@@ -138,6 +140,12 @@ def _require_analysis_staff(user: dict) -> None:
 
 
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
+_ORIGIN_RE = re.compile(r"^https?://[a-zA-Z0-9\-\.]+(?::\d{1,5})?$")
+for _origin in _cors_origins:
+    if _origin == "*":
+        raise RuntimeError("CORS_ORIGINS must not be '*' while allow_credentials=True")
+    if not _ORIGIN_RE.match(_origin):
+        raise RuntimeError(f"Invalid origin in CORS_ORIGINS: {_origin!r}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -380,6 +388,39 @@ def _validate_external_host(host: str) -> None:
         raise HTTPException(400, "Invalid hostname")
 
 
+def _is_private_ip(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return True
+    return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+
+
+def _validate_public_video_url(video_url: str) -> None:
+    """SSRF guard for yt-dlp inputs: the URL must be http(s) with a public host.
+
+    Blocks literal loopback/private/cloud-metadata hosts and refuses names whose
+    DNS resolves only to private addresses (defense against rebinding).
+    """
+    if not video_url or len(video_url) > 2048:
+        raise HTTPException(400, "Invalid video URL")
+    parsed = urlparse(video_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(400, "Invalid video URL")
+    host = parsed.hostname.lower()
+    if host.endswith("."):
+        host = host[:-1]
+    _validate_external_host(host)
+    try:
+        import socket
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except OSError:
+        raise HTTPException(400, "Invalid video URL")
+    for info in infos:
+        if _is_private_ip(info[4][0]):
+            raise HTTPException(400, "Invalid video URL")
+
+
 # ── Auth routes ──────────────────────────────────────────────────────
 
 @app.post("/api/auth/login")
@@ -492,7 +533,9 @@ async def change_password(req: ChangePasswordRequest, request: Request, user: di
         raise HTTPException(400, "New password must be different from the current password")
 
     update_user_password(user["id"], hash_password(req.new_password))
-    blacklist_token(user.get("_token_jti", ""))
+    exp = user.get("_token_exp")
+    expires_at = datetime.fromtimestamp(exp, timezone.utc).isoformat() if exp else None
+    blacklist_token(user.get("_token_jti", ""), expires_at=expires_at)
     write_audit(
         user["id"], user["role_type"], "PASSWORD_CHANGED",
         "user", user["id"], ip=client_ip,
@@ -529,7 +572,9 @@ async def accept_terms(request: Request, user: dict = Depends(require_auth)):
 async def logout(authorization: str = Header(...), user: dict = Depends(require_auth)):
     jti = user.get("_token_jti", "")
     if jti:
-        blacklist_token(jti)
+        exp = user.get("_token_exp")
+        expires_at = datetime.fromtimestamp(exp, timezone.utc).isoformat() if exp else None
+        blacklist_token(jti, expires_at=expires_at)
     logger.info("Logout: user=%s", user["id"])
     return {"ok": True}
 
@@ -1162,6 +1207,7 @@ async def analyze_mastodon(req: PlatformRequest, user: dict = Depends(require_au
 
 
 def _download_and_transcribe_video(video_url: str, max_seconds: int = 600) -> tuple[str, str]:
+    _validate_public_video_url(video_url)
     import yt_dlp
     from faster_whisper import WhisperModel
 
@@ -1602,9 +1648,9 @@ async def get_unified(user: dict = Depends(require_auth)):
 
 @app.get("/api/counsellor/students")
 async def get_counsellor_students(user: dict = Depends(require_auth)):
-    if user["role_type"] not in ("counsellor", "admin"):
-        raise HTTPException(403, "Counsellor or admin access required")
-    return get_students()
+    _require_counsellor(user)
+    is_admin = user["role_type"] == "admin"
+    return get_students(counsellor_id=None if is_admin else user["id"])
 
 
 @app.post("/api/counsellor/students/approve")
@@ -1637,11 +1683,12 @@ async def revoke_counsellor_student(data: dict, user: dict = Depends(require_aut
 
 @app.get("/api/counsellor/students/{student_id}")
 async def get_student_detail(student_id: str, user: dict = Depends(require_auth)):
-    if user["role_type"] not in ("counsellor", "admin"):
-        raise HTTPException(403, "Counsellor or admin access required")
+    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    if user["role_type"] != "admin" and not has_consent_relationship(student_id, user["id"]):
+        raise HTTPException(403, "You do not have a consent relationship with this student")
     from backend.database import get_analyses
     analyses = get_analyses(student_id, limit=50)
     rolling = get_rolling_risk(student_id)
@@ -1790,7 +1837,7 @@ async def get_user_notifications(user: dict = Depends(require_auth)):
 async def mark_user_notification_read(data: dict, user: dict = Depends(require_auth)):
     nid = data.get("id")
     if nid:
-        mark_notification_read(nid)
+        mark_notification_read(nid, user["id"])
     return {"ok": True}
 
 
@@ -2295,6 +2342,12 @@ async def v1_dispose_alert(
     reason_note = (data.get("reason_note") or "").strip()
     supersedes_id = data.get("supersedes_id")
 
+    alert = get_alert_by_id(alert_id)
+    if not alert:
+        raise HTTPException(404, "Alert not found")
+    if alert.get("counsellor_id") != user["id"]:
+        raise HTTPException(403, "You do not own this alert")
+
     try:
         result = dispose_alert(
             alert_id=alert_id,
@@ -2420,6 +2473,8 @@ async def v1_admin_roster_upload(
     raw = await file.read()
     if not raw:
         raise HTTPException(400, "Uploaded file is empty")
+    if len(raw) > 50 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 50 MB)")
     try:
         minor_age = int(inst.get("minor_age_threshold") or 18)
     except (TypeError, ValueError):
@@ -2453,6 +2508,8 @@ async def v1_admin_roster_commit(
     raw = await file.read()
     if not raw:
         raise HTTPException(400, "Uploaded file is empty")
+    if len(raw) > 50 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 50 MB)")
     try:
         minor_age = int(inst.get("minor_age_threshold") or 18)
     except (TypeError, ValueError):
