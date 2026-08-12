@@ -5,7 +5,9 @@ scoped to non-API HTML documents (the production SPA mount) while the
 interactive docs stay exempt.
 """
 
-from backend.main import _build_security_headers
+from fastapi.testclient import TestClient
+
+from backend.main import _build_security_headers, app
 
 
 def test_always_on_headers_present_on_api_response():
@@ -39,3 +41,16 @@ def test_csp_allows_required_assets():
     assert "https://cdn.jsdelivr.net" in csp
     assert "https://*.supabase.co" in csp
     assert "blob:" in csp
+
+
+def test_hsts_emitted_only_over_https():
+    with TestClient(app) as c:
+        resp = c.get("/api/v1/healthz", headers={"X-Forwarded-Proto": "https"})
+        assert resp.status_code == 200
+        assert resp.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
+
+
+def test_hsts_absent_over_plain_http():
+    with TestClient(app) as c:
+        resp = c.get("/api/v1/healthz", headers={"X-Forwarded-Proto": "http"})
+        assert "Strict-Transport-Security" not in resp.headers

@@ -94,6 +94,7 @@ from backend.services.analysis_service import (
     run_consented_student_analysis,
 )
 from backend.services.crypto import decrypt_pii
+from backend.services.consent_gate import consent_status_for_ui
 from backend.services.demo_service import (
     demo_email_context, work_email_warning, verify_recaptcha_token,
 )
@@ -139,7 +140,7 @@ def _require_analysis_staff(user: dict) -> None:
     require_permission(user, PERM_ANALYSIS_RUN)
 
 
-_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5188,http://127.0.0.1:5188").split(",") if o.strip()]
 _ORIGIN_RE = re.compile(r"^https?://[a-zA-Z0-9\-\.]+(?::\d{1,5})?$")
 for _origin in _cors_origins:
     if _origin == "*":
@@ -153,6 +154,67 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+# ── CSRF defense (Origin check) ─────────────────────────────────────────
+# Bearer-token auth already blocks cookie-based CSRF, but an extra Origin check
+# on state-changing requests defends against confused-deputy / drive-by POSTs.
+# Requests from browsers carry an Origin header (or Sec-Fetch-Site); we reject
+# any unsafe request whose Origin is neither the request's own host nor an
+# explicitly trusted origin. Requests with no Origin/Sec-Fetch-Site (curl, server
+# webhooks, mobile clients) pass, and same-site (Sec-Fetch-Site: same-site) calls
+# to an untrusted host still require an explicit trusted origin.
+_TRUSTED_ORIGINS = {
+    o.rstrip("/")
+    for o in os.getenv("TRUSTED_ORIGINS", "").split(",") if o.strip()
+} | set(_cors_origins)
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _origin_matches_host(origin: str, request: Request) -> bool:
+    """True when an Origin header matches the request's own host (scheme-aware)."""
+    try:
+        parsed = urlparse(origin)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    # The immediate Host may be rewritten by a reverse proxy (e.g. Next.js
+    # `rewrites` forwards /api calls to the backend); fall back to the first
+    # X-Forwarded-Host hop. The browser still sets Origin itself, so an attacker
+    # cannot forge it — this only widens which host reflects a legitimate origin.
+    hosts = [request.headers.get("host", "")]
+    forwarded = request.headers.get("x-forwarded-host", "")
+    if forwarded:
+        hosts.append(forwarded.split(",")[0].strip())
+    hosts = [h for h in hosts if h]
+    if not hosts:
+        return False
+    scheme = "https" if _request_is_secure(request) else "http"
+    return parsed.scheme == scheme and any(parsed.netloc == h for h in hosts)
+
+
+@app.middleware("http")
+async def csrf_origin_middleware(request: Request, call_next):
+    if request.method in _SAFE_METHODS:
+        return await call_next(request)
+    origin = request.headers.get("origin", "")
+    site = (request.headers.get("sec-fetch-site", "") or "").strip().lower()
+    if site == "cross-site":
+        logger.warning("csrf: blocking cross-site %s %s", request.method, request.url.path)
+        return Response("Forbidden", status_code=403)
+    if origin:
+        if origin in _TRUSTED_ORIGINS or _origin_matches_host(origin, request):
+            return await call_next(request)
+        logger.warning(
+            "csrf: blocking %s %s from untrusted origin %s",
+            request.method, request.url.path, origin,
+        )
+        return Response("Forbidden", status_code=403)
+    if site and site not in ("same-origin", "same-site", "none"):
+        logger.warning("csrf: blocking %s %s (sec-fetch-site=%s)", request.method, request.url.path, site)
+        return Response("Forbidden", status_code=403)
+    return await call_next(request)
 
 
 # ── Security headers (Delivery Brief §8) ──────────────────────────────
@@ -199,10 +261,28 @@ def _build_security_headers(content_type: str, path: str) -> dict[str, str]:
     return headers
 
 
+def _request_is_secure(request: Request) -> bool:
+    """True when the client connection is HTTPS (honors X-Forwarded-Proto).
+
+    HSTS is only meaningful over HTTPS; emitting it on plain HTTP would let a
+    network attacker inject the header and disable a host's HSTS entirely, so it
+    is gated on a secure channel (including behind TLS-terminating proxies).
+    """
+    proto = request.headers.get("x-forwarded-proto", "")
+    if proto:
+        return proto.split(",")[0].strip() == "https"
+    return request.url.scheme == "https"
+
+
+_HSTS = "max-age=31536000; includeSubDomains"
+
+
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     headers = _build_security_headers(response.headers.get("content-type", ""), request.url.path)
+    if _request_is_secure(request):
+        headers.setdefault("Strict-Transport-Security", _HSTS)
     for name, value in headers.items():
         response.headers.setdefault(name, value)
     return response
@@ -1717,6 +1797,7 @@ async def get_student_detail(student_id: str, user: dict = Depends(require_auth)
         },
         "rolling_risk": rolling,
         "analyses": analyses,
+        "consent_status": consent_status_for_ui(student_id),
     }
 
 
@@ -2188,6 +2269,7 @@ async def v1_portal_accept_consent(token: str, data: dict, request: Request):
             ip=_client_ip(request),
             platforms=platforms,
             user_agent=_client_user_agent(request),
+            token=token,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
@@ -2208,7 +2290,7 @@ async def v1_portal_decline_consent(token: str, request: Request):
     if expires and datetime.now(timezone.utc).isoformat() > expires:
         raise HTTPException(410, "This consent link has expired")
     try:
-        updated = decline_consent(consent["id"], ip=_client_ip(request), user_agent=_client_user_agent(request))
+        updated = decline_consent(consent["id"], ip=_client_ip(request), user_agent=_client_user_agent(request), token=token)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:

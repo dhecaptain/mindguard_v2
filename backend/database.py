@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from backend.config import CONSENT_EXPIRY_DAYS
+from backend.services.crypto import decrypt_pii, encrypt_pii, hash_email, hash_token, redact_pii
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,39 @@ def get_db() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def _decrypt_field(value) -> str | None:
+    """Decrypt a `gcm1:` PII blob; leave legacy plaintext (and non-str) untouched."""
+    if isinstance(value, str) and value.startswith("gcm1:"):
+        try:
+            return decrypt_pii(value)
+        except ValueError:
+            return value
+    return value
+
+
+def _decrypt_consent_row(row: dict) -> dict:
+    if "recipient_email" in row:
+        row = {**row, "recipient_email": _decrypt_field(row["recipient_email"])}
+    return row
+
+
+def _decrypt_demo_row(row: dict) -> dict:
+    if any(k in row for k in ("full_name", "work_email", "organisation")):
+        row = {
+            **row,
+            "full_name": _decrypt_field(row.get("full_name")),
+            "work_email": _decrypt_field(row.get("work_email")),
+            "organisation": _decrypt_field(row.get("organisation")),
+        }
+    return row
+
+
+def _decrypt_email_event_row(row: dict) -> dict:
+    if "recipient_email" in row:
+        row = {**row, "recipient_email": _decrypt_field(row["recipient_email"])}
+    return row
 
 
 def health_check() -> dict:
@@ -624,7 +658,6 @@ def create_consent(
     mode: str = "ON_DEMAND",
 ) -> dict:
     cid = str(uuid.uuid4())
-    magic_token = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     # Pending expiry and the magic-link TTL share the same window
     # (Delivery Brief §4.1–4.2: "This link expires in 30 days", and
@@ -638,32 +671,41 @@ def create_consent(
         """INSERT INTO consents (
             id, student_id, counsellor_id, recipient_email, recipient_role,
             status, platforms_json, mode, magic_token, magic_token_expires_at,
-            expires_at, created_at, updated_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            expires_at, created_at, updated_at, recipient_email_hash
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
-            cid, student_id, counsellor_id, recipient_email, recipient_role,
-            "DRAFT", json.dumps(platforms), mode, magic_token,
+            cid, student_id, counsellor_id, encrypt_pii(recipient_email), recipient_role,
+            "DRAFT", json.dumps(platforms), mode, None,
             magic_token_expires_at, expires_at, now_iso, now_iso,
+            hash_email(recipient_email),
         ),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM consents WHERE id = ?", (cid,)).fetchone()
     conn.close()
-    return dict(row)
+    return _decrypt_consent_row(dict(row))
 
 
 def get_consent_by_id(consent_id: str) -> dict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM consents WHERE id = ?", (consent_id,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _decrypt_consent_row(dict(row)) if row else None
 
 
 def get_consent_by_token(token: str) -> dict | None:
+    """Resolve a consent by its presented portal token.
+
+    Signed tokens match via their SHA-256 hash (raw token is never persisted);
+    legacy pre-M3 plain-UUID tokens match the stored ``magic_token``.
+    """
     conn = get_db()
-    row = conn.execute("SELECT * FROM consents WHERE magic_token = ?", (token,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM consents WHERE signed_token_hash = ? OR magic_token = ? LIMIT 1",
+        (hash_token(token), token),
+    ).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _decrypt_consent_row(dict(row)) if row else None
 
 
 def update_consent_status(consent_id: str, status: str, **kwargs) -> dict | None:
@@ -688,7 +730,7 @@ def update_consent_status(consent_id: str, status: str, **kwargs) -> dict | None
     conn.commit()
     row = conn.execute("SELECT * FROM consents WHERE id = ?", (consent_id,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _decrypt_consent_row(dict(row)) if row else None
 
 
 def get_consents_by_counsellor(counsellor_id: str) -> list:
@@ -700,7 +742,7 @@ def get_consents_by_counsellor(counsellor_id: str) -> list:
         (counsellor_id,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_decrypt_consent_row(dict(r)) for r in rows]
 
 
 def query_consents(
@@ -728,10 +770,10 @@ def query_consents(
         term = f"%{search.strip()}%"
         where.append(
             "(LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ? OR "
-            "LOWER(c.recipient_email) LIKE ? OR LOWER(c.student_id) LIKE ? OR "
+            "c.recipient_email_hash = ? OR LOWER(c.student_id) LIKE ? OR "
             "LOWER(c.id) LIKE ?)"
         )
-        params += [term, term, term, term, term]
+        params += [term, term, hash_email(search.strip()), term, term]
     if date_from:
         where.append("c.created_at >= ?")
         params.append(str(date_from))
@@ -744,14 +786,14 @@ def query_consents(
     delivery_subquery = (
         "SELECT e.event FROM email_events e "
         "WHERE e.related_type = 'consent' AND e.related_id = c.id "
-        "AND e.recipient_email = c.recipient_email "
+        "AND e.recipient_email_hash = c.recipient_email_hash "
         "AND e.event IN ('delivered','bounced','complained') "
         "ORDER BY e.created_at DESC LIMIT 1"
     )
     delivery_at_subquery = (
         "SELECT e.created_at FROM email_events e "
         "WHERE e.related_type = 'consent' AND e.related_id = c.id "
-        "AND e.recipient_email = c.recipient_email "
+        "AND e.recipient_email_hash = c.recipient_email_hash "
         "AND e.event IN ('delivered','bounced','complained') "
         "ORDER BY e.created_at DESC LIMIT 1"
     )
@@ -772,7 +814,7 @@ def query_consents(
         params + [limit, offset],
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows], total
+    return [_decrypt_consent_row(dict(r)) for r in rows], total
 
 
 def get_consent_with_student(consent_id: str) -> dict | None:
@@ -780,14 +822,14 @@ def get_consent_with_student(consent_id: str) -> dict | None:
     delivery_subquery = (
         "SELECT e.event FROM email_events e "
         "WHERE e.related_type = 'consent' AND e.related_id = c.id "
-        "AND e.recipient_email = c.recipient_email "
+        "AND e.recipient_email_hash = c.recipient_email_hash "
         "AND e.event IN ('delivered','bounced','complained') "
         "ORDER BY e.created_at DESC LIMIT 1"
     )
     delivery_at_subquery = (
         "SELECT e.created_at FROM email_events e "
         "WHERE e.related_type = 'consent' AND e.related_id = c.id "
-        "AND e.recipient_email = c.recipient_email "
+        "AND e.recipient_email_hash = c.recipient_email_hash "
         "AND e.event IN ('delivered','bounced','complained') "
         "ORDER BY e.created_at DESC LIMIT 1"
     )
@@ -800,7 +842,7 @@ def get_consent_with_student(consent_id: str) -> dict | None:
         (consent_id,),
     ).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _decrypt_consent_row(dict(row)) if row else None
 
 
 def get_audit_log_for_target(target_type: str, target_id: str, limit: int = 200) -> list:
@@ -822,7 +864,7 @@ def get_consents_by_student(student_id: str) -> list:
         (student_id,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_decrypt_consent_row(dict(r)) for r in rows]
 
 
 def get_all_consents(limit: int = 5000) -> list:
@@ -833,7 +875,7 @@ def get_all_consents(limit: int = 5000) -> list:
         (limit,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_decrypt_consent_row(dict(r)) for r in rows]
 
 
 def get_institution_id_for_consent(consent_id: str) -> str | None:
@@ -1033,7 +1075,7 @@ def write_audit(
         "INSERT INTO audit_log (id, actor_id, actor_role, action, target_type, target_id, payload_json, ip, occurred_at) "
         "VALUES (?,?,?,?,?,?,?,?,?)",
         (aid, actor_id, actor_role, action, target_type, target_id,
-         json.dumps(payload) if payload else None, ip, now),
+         json.dumps(redact_pii(payload)) if payload else None, ip, now),
     )
     conn.commit()
     conn.close()
@@ -1661,7 +1703,7 @@ def create_consent_event(
         "INSERT INTO consent_events (id, consent_id, event_type, actor_type, actor_id, metadata_json, created_at) "
         "VALUES (?,?,?,?,?,?,?)",
         (eid, consent_id, event_type, actor_type, actor_id,
-         json.dumps(metadata) if metadata else None, now),
+         json.dumps(redact_pii(metadata)) if metadata else None, now),
     )
     conn.commit()
     conn.close()
@@ -1702,18 +1744,18 @@ def create_demo_request(
         """INSERT INTO demo_requests (
             id, full_name, work_email, organisation, organisation_type,
             role_title, country, student_count_range, message, heard_about_us,
-            status, consent_to_contact, created_at, updated_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            status, consent_to_contact, created_at, updated_at, work_email_hash
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
-            rid, full_name, work_email, organisation, organisation_type,
+            rid, encrypt_pii(full_name), encrypt_pii(work_email), encrypt_pii(organisation), organisation_type,
             role_title, country, student_count_range, message, heard_about_us,
-            "new", 1 if consent_to_contact else 0, now, now,
+            "new", 1 if consent_to_contact else 0, now, now, hash_email(work_email),
         ),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM demo_requests WHERE id = ?", (rid,)).fetchone()
     conn.close()
-    return dict(row) if row else {"id": rid}
+    return _decrypt_demo_row(dict(row)) if row else {"id": rid}
 
 
 def get_demo_request(demo_request_id: str) -> dict | None:
@@ -1723,21 +1765,21 @@ def get_demo_request(demo_request_id: str) -> dict | None:
         (demo_request_id,),
     ).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _decrypt_demo_row(dict(row)) if row else None
 
 
 def list_demo_requests(status: str | None = None, limit: int = 100, offset: int = 0) -> list:
     delivery_subquery = (
         "SELECT e.event FROM email_events e "
         "WHERE e.related_type = 'demo_request' AND e.related_id = d.id "
-        "AND e.recipient_email = d.work_email "
+        "AND e.recipient_email_hash = d.work_email_hash "
         "AND e.event IN ('delivered','bounced','complained') "
         "ORDER BY e.created_at DESC LIMIT 1"
     )
     delivery_at_subquery = (
         "SELECT e.created_at FROM email_events e "
         "WHERE e.related_type = 'demo_request' AND e.related_id = d.id "
-        "AND e.recipient_email = d.work_email "
+        "AND e.recipient_email_hash = d.work_email_hash "
         "AND e.event IN ('delivered','bounced','complained') "
         "ORDER BY e.created_at DESC LIMIT 1"
     )
@@ -1761,7 +1803,7 @@ def list_demo_requests(status: str | None = None, limit: int = 100, offset: int 
             (limit, offset),
         ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_decrypt_demo_row(dict(r)) for r in rows]
 
 
 def update_demo_request(demo_request_id: str, **kwargs) -> dict | None:
@@ -1796,9 +1838,11 @@ def create_email_event(
     now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     conn.execute(
-        "INSERT INTO email_events (id, related_type, related_id, event, esp_message_id, recipient_email, metadata_json, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?)",
-        (eid, related_type, related_id, event, esp_message_id, recipient_email,
+        "INSERT INTO email_events (id, related_type, related_id, event, esp_message_id, recipient_email, recipient_email_hash, metadata_json, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (eid, related_type, related_id, event, esp_message_id,
+         encrypt_pii(recipient_email) if recipient_email else None,
+         hash_email(recipient_email) if recipient_email else None,
          json.dumps(metadata) if metadata else None, now),
     )
     conn.commit()
@@ -1818,7 +1862,7 @@ def get_email_events_by_esp_message_id(esp_message_id: str, limit: int = 50) -> 
         (esp_message_id, limit),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_decrypt_email_event_row(dict(r)) for r in rows]
 
 
 def get_email_events(related_type: str | None = None, related_id: str | None = None, limit: int = 200) -> list:
@@ -1839,4 +1883,4 @@ def get_email_events(related_type: str | None = None, related_id: str | None = N
             (limit,),
         ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_decrypt_email_event_row(dict(r)) for r in rows]

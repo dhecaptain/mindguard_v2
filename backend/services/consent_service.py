@@ -11,6 +11,7 @@ Valid transitions:
   ACCEPTED -> REVOKED (revoked)
   ACCEPTED -> RENEWAL_DUE (auto on expiry)
 """
+import hmac
 import json
 import logging
 import os
@@ -27,6 +28,7 @@ from backend.database import (
     get_user_by_id,
     get_all_consents,
     get_institution_id_for_consent,
+    get_institution_by_id,
     get_active_consent_template,
     mark_analyses_consent_withdrawn,
     set_student_current_consent,
@@ -73,15 +75,20 @@ def _consent_url(token: str) -> str:
 def verify_consent_token(consent: dict, token: str) -> bool:
     """Validate a portal token against the consent record.
 
-    Signed tokens (``v1.``) are verified with the HMAC; legacy plain-UUID
-    tokens are accepted for backwards compatibility with pre-M3 records.
+    Signed tokens (``v1.``) are verified by HMAC signature and must match the
+    stored SHA-256 hash (the raw token is never persisted; a re-dispatch
+    invalidates earlier links). Legacy plain-UUID tokens are accepted for
+    backwards compatibility with pre-M3 records.
     """
     token = str(token or "")
-    if not token or consent.get("magic_token") != token:
+    if not token:
         return False
     if token.startswith("v1."):
-        return verify_signed_token(token, consent["id"])
-    return len(token) == 36  # legacy uuid4 magic token
+        if not verify_signed_token(token, consent["id"]):
+            return False
+        expected = consent.get("signed_token_hash") or ""
+        return bool(expected) and hmac.compare_digest(hash_token(token), expected)
+    return consent.get("magic_token") == token and len(token) == 36  # legacy uuid4 magic token
 
 
 def view_count(consent_id: str) -> int:
@@ -94,14 +101,14 @@ def remaining_views(consent_id: str) -> int:
     return max(0, MAX_CONSENT_VIEWS - view_count(consent_id))
 
 
-def _send_consent_email(consent: dict, reminder: bool = False) -> tuple[bool, str, str]:
+def _send_consent_email(consent: dict, reminder: bool = False, token: str | None = None) -> tuple[bool, str, str]:
     """Send a consent request email, honouring the institution's active template.
 
     When the consent's institution has an active ``consent_templates`` row the
     stored HTML is used (with context tokens substituted); otherwise the
     built-in §4.1/§4.2 template is used. Returns (ok, error, url).
     """
-    token = consent.get("magic_token") or ""
+    token = token or consent.get("magic_token") or ""
     url = _consent_url(token)
     institution_id = get_institution_id_for_consent(consent["id"])
     template = get_active_consent_template(institution_id)
@@ -196,13 +203,13 @@ def dispatch_consent(consent_id: str, actor_id: str, ip: str | None = None) -> d
     updated = update_consent_status(
         consent_id,
         "PENDING",
-        magic_token=token,
         signed_token_hash=hash_token(token),
         magic_token_expires_at=(now + timedelta(days=CONSENT_EXPIRY_DAYS)).isoformat(),
         expires_at=(now + timedelta(days=CONSENT_EXPIRY_DAYS)).isoformat(),
         template_version=CONSENT_TEMPLATE_VERSION,
         dispatched_at=now.isoformat(),
     )
+    updated["magic_token"] = token
     write_audit(
         actor_id,
         "counsellor",
@@ -236,7 +243,12 @@ def remind_consent(consent_id: str, actor_id: str, ip: str | None = None) -> dic
     if consent["status"] not in ("PENDING", "VIEWED"):
         raise ValueError(f"Cannot send reminder for consent in status {consent['status']}")
 
-    email_sent, email_error, url = _send_consent_email(consent, reminder=True)
+    token = create_signed_token(consent_id)
+    consent = update_consent_status(
+        consent_id, consent["status"], signed_token_hash=hash_token(token),
+    ) or consent
+
+    email_sent, email_error, url = _send_consent_email(consent, reminder=True, token=token)
     write_audit(
         actor_id,
         "counsellor",
@@ -275,6 +287,7 @@ def accept_consent(
     ip: str,
     platforms: list | None = None,
     user_agent: str | None = None,
+    token: str | None = None,
 ) -> dict:
     """Transition PENDING/VIEWED -> ACCEPTED with signature and optional platform list."""
     consent = get_consent_by_id(consent_id)
@@ -313,11 +326,11 @@ def accept_consent(
     )
     create_consent_event(consent_id, "accepted", actor_type="recipient",
                          metadata={"signature": signature_name, "ip": ip, "user_agent": user_agent})
-    _notify_consent_response(updated, accepted=True)
+    _notify_consent_response(updated, accepted=True, token=token)
     return updated
 
 
-def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | None = None) -> dict:
+def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | None = None, token: str | None = None) -> dict:
     """Transition PENDING/VIEWED -> DECLINED."""
     consent = get_consent_by_id(consent_id)
     if not consent:
@@ -333,7 +346,7 @@ def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | No
     write_audit(None, "recipient", "CONSENT_DECLINED", "consent", consent_id, ip=ip)
     create_consent_event(consent_id, "declined", actor_type="recipient",
                          metadata={"ip": ip, "user_agent": user_agent})
-    _notify_consent_response(updated, accepted=False)
+    _notify_consent_response(updated, accepted=False, token=token)
     return updated
 
 
@@ -564,14 +577,14 @@ def _footer_urls(token: str) -> dict:
     }
 
 
-def _reminder_context(consent: dict) -> dict:
+def _reminder_context(consent: dict, token: str) -> dict:
     ctx = {
         "institution_name": consent.get("notes") or "your school",
         "student_first_name": consent.get("student_name") or "there",
         "counsellor_email": "counsellor@mindguard.app",
-        "consent_url": _consent_url(consent["magic_token"]),
+        "consent_url": _consent_url(token),
     }
-    ctx.update(_footer_urls(consent["magic_token"]))
+    ctx.update(_footer_urls(token))
     return ctx
 
 
@@ -617,14 +630,14 @@ def _tracker_url() -> str:
     return f"{base}/#consent-tracker"
 
 
-def _notify_consent_response(consent: dict, accepted: bool) -> None:
+def _notify_consent_response(consent: dict, accepted: bool, token: str | None = None) -> None:
     """Send the §4.5 confirmation + §4.6 admin notification after a response.
 
     Never raises: a failed email must not undo an already-recorded decision.
     The recipient always receives the confirmation; the admin notification is
     sent to the consent's initiating counsellor when that account resolves.
     """
-    token = consent.get("magic_token") or ""
+    token = token or consent.get("magic_token") or ""
     status = "ACCEPTED" if accepted else "DECLINED"
     context = {
         "student_first_name": _student_first_name(consent),
@@ -689,14 +702,39 @@ def process_expired_consents() -> int:
     return changed
 
 
+def _reminder_days_for_consent(consent: dict) -> list[int]:
+    """Effective reminder schedule for a consent.
+
+    Honors the institution's ``consent_reminder_days`` override (stored as a JSON
+    array string, e.g. ``"[3,7]"``); falls back to the global
+    ``CONSENT_REMINDER_DAYS`` when unset, unparsable, or empty.
+    """
+    inst_id = get_institution_id_for_consent(consent["id"])
+    if inst_id:
+        inst = get_institution_by_id(inst_id)
+        raw = (inst or {}).get("consent_reminder_days")
+        if raw:
+            try:
+                parsed = json.loads(raw)
+            except (ValueError, TypeError):
+                parsed = None
+            if (
+                isinstance(parsed, list)
+                and parsed
+                and all(isinstance(d, int) and d > 0 for d in parsed)
+            ):
+                return sorted(parsed)
+    return sorted(CONSENT_REMINDER_DAYS)
+
+
 def process_consent_reminders(now: datetime | None = None) -> dict:
     """Send day-3/day-7 reminders for pending consents. Returns a summary.
 
     Reminder n is sent when ``dispatched_at`` is at least ``CONSENT_REMINDER_DAYS[n]``
-    days old and fewer than n+1 reminders have already been sent.
+    days old and fewer than n+1 reminders have already been sent. The effective
+    schedule is per-institution when that institution overrides the default.
     """
     now = now or datetime.now(timezone.utc)
-    days = sorted(CONSENT_REMINDER_DAYS)
     sent, failed = [], []
     for consent in get_all_consents():
         if consent["status"] not in ("PENDING", "VIEWED"):
@@ -708,6 +746,7 @@ def process_consent_reminders(now: datetime | None = None) -> dict:
             elapsed = (now - datetime.fromisoformat(dispatched)).days
         except (ValueError, TypeError):
             continue
+        days = _reminder_days_for_consent(consent)
         already = int(consent.get("reminders_sent") or 0)
         for index, target_day in enumerate(days):
             if elapsed >= target_day and already <= index:
@@ -718,7 +757,11 @@ def process_consent_reminders(now: datetime | None = None) -> dict:
 
 
 def _send_reminder_for(consent: dict, day: int, new_count: int) -> tuple[bool, str]:
-    subject, html = consent_reminder(_reminder_context(consent), day=day)
+    token = create_signed_token(consent["id"])
+    consent = update_consent_status(
+        consent["id"], consent["status"], signed_token_hash=hash_token(token),
+    ) or consent
+    subject, html = consent_reminder(_reminder_context(consent, token), day=day)
     ok, err = send_html_email(
         consent["recipient_email"],
         subject,

@@ -292,6 +292,34 @@ gunzip -c mindguard-<stamp>.db.gz > mindguard.db   # into MINDGUARD_DB_DIR
 
 Pinned by `tests/test_backup_script.py`.
 
+### Consent email deliverability (SPF/DKIM/DMARC)
+
+All transactional email (consent requests, reminders, demo replies) is sent
+through **Resend** (`email_sender.py`). Before go-live, complete DNS
+authentication on the sending domain so consent links land in the inbox rather
+than spam:
+
+1. **SPF** — in DNS add a TXT record for the sending domain:
+   `v=spf1 include:amazonses.com ~all` (Resend uses Amazon SES; follow the exact
+   value Resend shows under *Domains* for your account).
+2. **DKIM** — add the TXT records Resend provides (`sendgrid._domainkey` or
+   Resend's generated selectors). Verify both SPF and DKIM show **Verified** in
+   the Resend dashboard.
+3. **DMARC** — add `_dmarc.<sending-domain>` TXT:
+   `v=DMARC1; p=none; rua=mailto:dmarc@<your-domain>; pct=100`. Start at
+   `p=none`, review aggregate reports, then tighten to `p=quarantine`.
+4. Set `EMAIL_FROM` to a verified sender on the authenticated domain, e.g.
+   `MindGuard <noreply@<your-domain>>` (never a personal Gmail — the app logs a
+   warning and consumers will bounce). `RESEND_API_KEY` must be set (see §2).
+5. **Verify** with [mail-tester.com](https://www.mail-tester.com) — send a
+   consent request to a throwaway address and aim for **≥ 9/10**. Warm up
+   sending volume gradually if the domain is new (see `brief.txt` for the full
+   deliverability plan).
+
+The backend webhook secret (`RESEND_WEBHOOK_SECRET`) must also be set — see
+`.env.example`. Delivery events (delivered/bounced/complained) flow through
+`POST /webhooks/email/resend` and are recorded in `email_events`.
+
 ### Paid upgrade (Hobby, $5/mo) — steps
 
 1. Billing → Upgrade to **Hobby**.

@@ -73,6 +73,28 @@ export async function fetchConsents(
   return rows
 }
 
+/**
+ * Mint a fresh, live portal link for a consent. Raw tokens are never persisted
+ * (P0-3) so the tracker list cannot expose `magic_token`; the `remind` endpoint
+ * is the supported way for an authorised user to obtain a current link.
+ */
+export async function fetchConsentToken(
+  ctx: APIRequestContext,
+  token: string,
+  consentId: string,
+): Promise<string> {
+  const res = await ctx.post(`${API_BASE}/api/v1/consents/${consentId}/remind`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  expect(res.ok()).toBeTruthy()
+  const body = await res.json()
+  expect(body.consent_url).toBeTruthy()
+  const pathname = new URL(body.consent_url).pathname
+  const portalToken = decodeURIComponent(pathname.split('/').pop() ?? '')
+  expect(portalToken).toBeTruthy()
+  return portalToken
+}
+
 export async function expectNoAxeViolations(page: Page, tag: string): Promise<void> {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

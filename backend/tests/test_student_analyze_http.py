@@ -108,6 +108,23 @@ def test_runs_analysis_with_active_consent(db, client):
     assert body["rolling_risk"] is not None
     assert body["rolling_risk"]["score"] == data["rolling_score"]
     assert body["risk_summary"]["latest_prob"] == data["rolling_score"]
+    assert body["consent_status"]["active"] is True
+
+
+def test_student_detail_reports_missing_consent_for_ui_gating(db, client):
+    counsellor = _make_user(db, "c5@school.edu", "counsellor")
+    student = _make_user(db, "s5@school.edu", "student")
+    db.create_consent(student["id"], counsellor["id"], "student@school.edu", "student", ["reddit"])
+    token = _login(client, "c5@school.edu")
+
+    resp = client.get(
+        f"/api/counsellor/students/{student['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["consent_status"]["enforced"] is True
+    assert body["consent_status"]["active"] is False
 
 
 def test_404_for_unknown_student(db, client):

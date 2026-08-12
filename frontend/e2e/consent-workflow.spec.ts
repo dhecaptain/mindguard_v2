@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { API_BASE, adminAuth, blockExternalRequests, expectNoAxeViolations, fetchConsents, loginAsAdmin } from './helpers'
+import { API_BASE, adminAuth, blockExternalRequests, expectNoAxeViolations, fetchConsentToken, fetchConsents, loginAsAdmin } from './helpers'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(__dirname, 'fixtures', 'roster-3minors-3adults.csv')
@@ -56,7 +56,11 @@ test.describe('Consent workflow (Delivery Brief §9.3)', () => {
       [...ADULT_STUDENTS].sort(),
     )
     expect(new Set(rows.map((r) => r.student_id)).size).toBe(6)
-    expect(parentRows.every((r) => r.magic_token)).toBeTruthy()
+    // Raw tokens are never persisted (P0-3): every parent must still have a
+    // live link mintable by an authorised user.
+    for (const row of parentRows) {
+      expect(await fetchConsentToken(request, token, row.id)).toBeTruthy()
+    }
     expect(rows.every((r) => ['PENDING', 'SENT', 'VIEWED'].includes(r.status))).toBeTruthy()
   })
 
@@ -67,9 +71,9 @@ test.describe('Consent workflow (Delivery Brief §9.3)', () => {
     const { token } = await adminAuth(request)
     const rows = await fetchConsents(request, token)
     const parentRow = rows.find((r) => r.recipient_email === PARENT_EMAILS[0])
-    expect(parentRow?.magic_token).toBeTruthy()
+    const parentToken = await fetchConsentToken(request, token, parentRow!.id)
 
-    await page.goto(portalUrl(parentRow!.magic_token))
+    await page.goto(portalUrl(parentToken))
     await expectNoAxeViolations(page, 'consent portal (pre-action)')
     await page.getByPlaceholder('Type your full name').fill('Rebecca Haddad')
     await page.getByRole('button', { name: 'Accept consent' }).click()
@@ -87,9 +91,9 @@ test.describe('Consent workflow (Delivery Brief §9.3)', () => {
     const { token } = await adminAuth(request)
     const rows = await fetchConsents(request, token)
     const adultRow = rows.find((r) => r.recipient_email === ADULT_STUDENTS[0])
-    expect(adultRow?.magic_token).toBeTruthy()
+    const adultToken = await fetchConsentToken(request, token, adultRow!.id)
 
-    await page.goto(portalUrl(adultRow!.magic_token))
+    await page.goto(portalUrl(adultToken))
     await page.getByRole('button', { name: 'Decline' }).click()
     await expect(page.getByText('Consent declined.')).toBeVisible()
 
