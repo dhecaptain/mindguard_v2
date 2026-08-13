@@ -41,7 +41,7 @@ def test_email_from_warns_on_personal_sender(monkeypatch, caplog):
     email_sender._personal_from_warned = False
 
 
-def test_no_provider_returns_error():
+def test_no_provider_returns_error(db):
     ok, err = email_sender.send_html_email("a@b.c", "Subject", "<p>Hi</p>")
     assert ok is False
     assert "SMTP is not configured" in err
@@ -114,7 +114,7 @@ def test_resend_success_logs_esp_message_id(db, monkeypatch):
     assert events[0]["esp_message_id"] == "resend-msg-42"
 
 
-def test_resend_failure_falls_back_to_smtp(monkeypatch):
+def test_resend_failure_falls_back_to_smtp(db, monkeypatch):
     monkeypatch.setenv("RESEND_API_KEY", "re_123")
     smtp_called = []
 

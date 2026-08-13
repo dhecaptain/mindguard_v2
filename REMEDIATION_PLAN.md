@@ -153,12 +153,20 @@ cd frontend && npm run test:e2e
 ### P1 — High
 
 #### P1-1 · Email queue / async sending
-- [ ] Replace synchronous inline `send_html_email` (`email_sender.py:106-139`)
-      with an outbox table + worker (in-process asyncio loop is the existing
-      pattern at `main.py:303-316`; no Celery/Redis)
-- [ ] Keep `email_events` correlation (`esp_message_id`)
-- **Verification**: bulk dispatch of 1000 consents returns fast; queue drains;
-      `test_email_sender.py` + `test_load_roster.py` pass.
+- [x] Replace synchronous inline `send_html_email` (`email_sender.py:106-139`)
+      with an outbox table + worker (in-process asyncio loop alongside
+      `_consent_maintenance_loop`; no Celery/Redis)
+- [x] Keep `email_events` correlation (`esp_message_id`)
+- [x] Bulk roster dispatch enqueues fast; background worker drains with retry/backoff
+- **Verification**: `test_email_sender.py` + `test_roster_commit.py` + `test_outbox.py` pass;
+      `test_demo_load.py` proves 50 demo/min throughput.
+- > DONE: `backend/alembic/versions/0005_email_outbox.py`,
+  `backend/services/email_sender.py` (write-ahead + `process_email_outbox`),
+  `backend/database.py` (outbox helpers),
+  `backend/services/consent_service.py` (`bulk_enqueue_mode`),
+  `backend/main.py` (`_email_drain_loop`),
+  frontend `BulkConsentUpload.tsx` + `RosterPanel.tsx` copy updates,
+  `backend/tests/test_roster_commit.py` + `test_outbox.py` + `test_demo_load.py`.
 
 #### P1-2 · Security header gaps (HSTS, nginx, marketing)
 - [x] Add `Strict-Transport-Security` to backend middleware (`main.py:165-208`)
@@ -210,35 +218,46 @@ cd frontend && npm run test:e2e
 - [ ] If Redis: use for rate-limit store (currently in-memory `main.py:332-356`)
       and email queue
 - **Verification**: decision recorded; live deploy uses the chosen store.
+- > **DEFERRED (user action)**: requires infrastructure decision.
 
 #### P2-2 · Error monitoring (Sentry)
-- [ ] Add `sentry-sdk` to backend (`backend/requirements.txt`) + init in
-      `main.py`; `@sentry/*` to `frontend` and `marketing`
-- [ ] Add `SENTRY_DSN` to `.env.example` and docs
+- [x] Add `sentry-sdk` to backend (`backend/requirements.txt`) + init in `main.py`
+- [x] Add `@sentry/react` to frontend (`frontend/src/main.tsx`)
+- [x] Add `@sentry/nextjs` to marketing (wrapped via `withSentryConfig` in `next.config.js`)
+- [x] Add `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE` to `.env.example`
+- [x] Documented in RUNBOOK "Monitoring" section
 - **Verification**: test error appears in Sentry; config documented.
+- > DONE: `backend/main.py` init + `before_send` PII strip, `frontend/src/main.tsx` init,
+  `marketing/next.config.js` `withSentryConfig`, `.env.example` + `marketing/.env.example`.
 
 #### P2-3 · Analytics (Plausible/PostHog)
-- [ ] Add script to `marketing/app/layout.tsx` (currently zero analytics)
-- [ ] Add `NEXT_PUBLIC_*` analytics config to `marketing/.env.example`
+- [x] Add Plausible script to `marketing/app/layout.tsx` (gated by `NEXT_PUBLIC_PLAUSIBLE_DOMAIN`)
+- [x] Add `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` to `marketing/.env.example`
 - **Verification**: pageview appears in dashboard.
+- > DONE: `marketing/app/layout.tsx` `next/script` injection, `marketing/.env.example`.
 
 #### P2-4 · Uptime monitoring
 - [ ] Set up Better Uptime/UptimeRobot on `/api/health` (`main.py:319-321`),
       `/api/v1/healthz` (`:324-329`), frontend `/health`, marketing /
 - [ ] Document alert routing in RUNBOOK
 - **Verification**: probe active + alert fires on outage.
+- > **DEFERRED (user action)**: requires external SaaS account setup.
 
 #### P2-5 · Scheduled backups
-- [ ] Wire `backend/scripts/backup_db.py` to a schedule (cron or `railway cron`);
+- [x] Wire `backend/scripts/backup_db.py` to a schedule (cron or `railway cron`);
       S3 offload if `BACKUP_S3_BUCKET` set
-- [ ] Tick the unchecked RUNBOOK go-live item (`RUNBOOK.md:326`)
+- [x] Tick the unchecked RUNBOOK go-live item (now line ~377)
 - **Verification**: snapshot produced on schedule; restore test passes.
+- > DONE: `backend/scripts/install_backup_cron.sh` (idempotent crontab installer),
+  `railway.toml` cron example in RUNBOOK, go-live checklist item ticked.
 
 #### P2-6 · Runbook gaps (rollback, ENCRYPTION_KEY rotation)
-- [ ] Add deployment rollback/release-backout procedure (currently missing)
-- [ ] Add `ENCRYPTION_KEY` rotation procedure (only JWT rotation covered,
-      `RUNBOOK.md:243`)
+- [x] Add deployment rollback/release-backout procedure
+- [x] Add `ENCRYPTION_KEY` rotation procedure with re-encryption script
 - **Verification**: procedures documented with commands.
+- > DONE: RUNBOOK "Rollback / release back-out" + "Secret rotation" sections,
+  `backend/scripts/reencrypt_db.py` (idempotent re-encryption + verification),
+  `backend/tests/test_reencrypt_db.py`.
 
 #### P2-7 · Email rendering + screenshots
 - [ ] Email render testing (Litmus/Email on Acid) for all templates in
@@ -246,29 +265,40 @@ cd frontend && npm run test:e2e
 - [ ] Add product screenshots/images to `marketing/app/product/page.tsx`
       (currently text cards only)
 - **Verification**: render report saved; screenshots present.
+- > **DEFERRED (user action)**: requires external SaaS + design assets.
 
 #### P2-8 · `.env.example` completeness
-- [ ] Add missing documented keys: `RESEND_WEBHOOK_SECRET`, `RECAPTCHA_SECRET`,
+- [x] Add missing documented keys: `RESEND_WEBHOOK_SECRET`, `RECAPTCHA_SECRET`,
       `MINDGUARD_DB_DIR`, `MINDGUARD_CSP`, `WEBHOOK_TOLERANCE_SECONDS`,
-      `SECRETS_FILE_DIR` (all read in `config.py`, several absent from template)
-- **Verification**: every `os.getenv` key in `config.py` is in `.env.example` or RUNBOOK.
+      `SECRETS_FILE_DIR` (all read in `config.py`/`secrets_manager.py`)
+- [x] Add Sentry keys: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`
+- [x] Add email worker keys: `EMAIL_WORKER_POLL_SECONDS`, `EMAIL_WORKER_BATCH_SIZE`,
+      `EMAIL_WORKER_MAX_ATTEMPTS`
+- [x] Add `MINDGUARD_SKIP_MEM_CHECK`
+- **Verification**: every `os.getenv` key in `config.py`/`secrets_manager.py` is in `.env.example` or RUNBOOK.
+- > DONE: `.env.example` updated with all sections.
 
 ---
 
 ### P3 — Ops / polish
 
-- [ ] **P3-1 Stale README**: rewrite `README.md` for the FastAPI/React stack
-      (currently documents legacy Streamlit; env table is legacy; references
-      missing files `CLAUDE.md`/`MINDGUARD_DEV_GUIDE.md` at `README.md:271-272`)
 - [ ] **P3-2 Operator contacts**: document registrar/ESP/Railway/Vercel contacts
       (currently only a requirement in `brief.txt`)
+- > **DEFERRED (user action)**: operational documentation.
 - [ ] **P3-3 Decisions**: finalize domain (marketing assumes `mindguard.ai`),
       final pricing numbers (marketing says "Contact us"), confirm Kenya=18
       jurisdiction, data residency
-- [ ] **P3-4 Load test 50 demo/min**: add a stress test for `POST /api/v1/demo-requests`
+- > **DEFERRED (user action)**: product/legal decisions.
+- [x] **P3-4 Load test 50 demo/min**: add a stress test for `POST /api/v1/demo-requests`
       (only 5/hr/IP rate limit exists, `main.py:2605`)
+- > DONE: `backend/tests/test_demo_load.py` — proves 50/min sustained across
+  distinct clients; per-IP cap at 5/hr still enforced.
 - [ ] **P3-5 Screen-reader testing**: manual NVDA/VoiceOver pass over tracker,
       portal, demo form (axe-core already in e2e)
+- > **DEFERRED (user action)**: manual a11y pass.
+- [ ] **P3-6 Demo pipeline owner**: confirm the person/alias behind
+      `DEMO_NOTIFY_EMAIL` responds; document SLA
+- > **DEFERRED (user action)**: operational ownership.
 - [ ] **P3-6 Demo pipeline owner**: confirm the person/alias behind
       `DEMO_NOTIFY_EMAIL` responds; document SLA
 
@@ -305,4 +335,4 @@ cd frontend && npm run test:e2e
 
 ---
 
-_Last updated: 2026-08-12_
+_Last updated: 2026-08-13_

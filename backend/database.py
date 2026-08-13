@@ -58,6 +58,17 @@ def _decrypt_email_event_row(row: dict) -> dict:
     return row
 
 
+def _decrypt_outbox_row(row: dict) -> dict:
+    if "to_email" in row:
+        row = {**row, "to_email": _decrypt_field(row["to_email"])}
+    if row.get("metadata_json"):
+        try:
+            row = {**row, "metadata_json": json.loads(row["metadata_json"])}
+        except (ValueError, TypeError):
+            pass
+    return row
+
+
 def health_check() -> dict:
     """Lightweight liveness probe: verify the DB is reachable and schema is present."""
     try:
@@ -1863,6 +1874,107 @@ def get_email_events_by_esp_message_id(esp_message_id: str, limit: int = 50) -> 
     ).fetchall()
     conn.close()
     return [_decrypt_email_event_row(dict(r)) for r in rows]
+
+
+def enqueue_email(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    related_type: str | None = None,
+    related_id: str | None = None,
+    metadata: dict | None = None,
+) -> str:
+    """Persist an outgoing email to the outbox (write-ahead, Remediation P1-1).
+
+    The message is durably recorded (recipient encrypted at rest) before any
+    transport attempt so a crash mid-send is recovered by the worker, which
+    drains rows still in ``queued``. Returns the outbox row id.
+    """
+    eid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO email_outbox (id, to_email, to_email_hash, subject, body_html, "
+        "related_type, related_id, metadata_json, status, attempts, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,'queued',0,?)",
+        (eid, encrypt_pii(to_email), hash_email(to_email), subject, body_html,
+         related_type, related_id, json.dumps(metadata) if metadata else None, now),
+    )
+    conn.commit()
+    conn.close()
+    return eid
+
+
+def _outbox_set(outbox_id: str, **updates) -> None:
+    sets = ", ".join(f"{col} = ?" for col in updates)
+    conn = get_db()
+    conn.execute(f"UPDATE email_outbox SET {sets} WHERE id = ?", (*updates.values(), outbox_id))
+    conn.commit()
+    conn.close()
+
+
+def mark_email_outbox_sent(outbox_id: str, esp_message_id: str | None = None) -> None:
+    """Mark an outbox row delivered (terminal state)."""
+    now = datetime.now(timezone.utc).isoformat()
+    _outbox_set(outbox_id, status="sent", esp_message_id=esp_message_id, sent_at=now,
+                error=None, next_attempt_at=None)
+
+
+def mark_email_outbox_failed(outbox_id: str, error: str, retry_at: str | None = None) -> None:
+    """Mark an outbox row failed; ``retry_at`` is when the worker may retry it."""
+    _outbox_set(outbox_id, status="failed", error=error, next_attempt_at=retry_at)
+
+
+def fetch_due_email_outbox(batch_size: int = 50, max_attempts: int = 5) -> list:
+    """Rows the worker may process now: queued, or failed and due for retry."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM email_outbox WHERE (status = 'queued' OR "
+        "(status = 'failed' AND attempts < ? AND next_attempt_at <= ?)) "
+        "ORDER BY created_at ASC LIMIT ?",
+        (max_attempts, now, batch_size),
+    ).fetchall()
+    conn.close()
+    return [_decrypt_outbox_row(dict(r)) for r in rows]
+
+
+def bump_email_outbox_attempts(outbox_id: str) -> None:
+    conn = get_db()
+    conn.execute(
+        "UPDATE email_outbox SET attempts = attempts + 1 WHERE id = ?",
+        (outbox_id,),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_email_outbox(limit: int = 200, status: str | None = None) -> list:
+    """Observability helper (tests, admin ops): most-recent outbox rows first."""
+    conn = get_db()
+    if status:
+        rows = conn.execute(
+            "SELECT * FROM email_outbox WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM email_outbox ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    conn.close()
+    return [_decrypt_outbox_row(dict(r)) for r in rows]
+
+
+def count_pending_email_outbox() -> int:
+    """Queued + failed rows awaiting (re)delivery by the worker."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM email_outbox WHERE status = 'queued' "
+        "OR status = 'failed'"
+    ).fetchone()
+    conn.close()
+    return row["n"] if row else 0
 
 
 def get_email_events(related_type: str | None = None, related_id: str | None = None, limit: int = 200) -> list:

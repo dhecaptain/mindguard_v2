@@ -249,6 +249,10 @@ Set these in the Railway service dashboard (Variables):
 | `MINDGUARD_CSP` | leave unset (`true`); set `false` only if a proxy sets CSP |
 | `HF_CACHE_DIR` | `/tmp/huggingface` (already set in Dockerfile) |
 | `LOG_LEVEL` | `INFO` |
+| `SENTRY_DSN` | error monitoring DSN (see *Monitoring* below); unset disables Sentry |
+| `EMAIL_WORKER_POLL_SECONDS` | outbox drain cadence (default `3`) |
+| `EMAIL_WORKER_BATCH_SIZE` | outbox rows drained per pass (default `50`) |
+| `EMAIL_WORKER_MAX_ATTEMPTS` | max delivery attempts per outbox row (default `5`) |
 
 Email provider — one of:
 - **Resend** (preferred): `RESEND_API_KEY`.
@@ -283,6 +287,28 @@ Nightly snapshot (keeps 7 by default; uploads to S3-compatible storage if
 ```bash
 cd backend && PYTHONPATH=..:. python3 scripts/backup_db.py /var/backups/mindguard
 ```
+
+**Scheduling (Remediation P2-5)** — pick one:
+
+- **Dedicated VM / self-hosted** — install a nightly crontab entry:
+
+  ```bash
+  chmod +x scripts/install_backup_cron.sh
+  BACKUP_DIR=/var/backups/mindguard BACKUP_S3_BUCKET=mindguard-backups ./scripts/install_backup_cron.sh
+  ```
+
+  Idempotent (re-running replaces the previous entry). Default schedule
+  `17 3 * * *` (03:17 daily); override with `CRON_SCHEDULE`.
+- **Railway** — add a cron job to `railway.toml` (instead of the crontab):
+
+  ```toml
+  [[cronJobs]]
+  schedule = "0 3 * * *"
+  command  = "cd backend && PYTHONPATH=..:. python3 scripts/backup_db.py /var/backups/mindguard"
+  ```
+
+  The volume-backed `/var/backups/mindguard` directory must be on the same
+  persistent volume so snapshots survive redeploys.
 
 Restore — stop the app, replace the DB, restart:
 
@@ -332,6 +358,68 @@ The backend webhook secret (`RESEND_WEBHOOK_SECRET`) must also be set — see
    `CORS_ORIGINS` to match.
 6. Keep the **marketing site** on free Serverless (low traffic) to save cost.
 
+### Monitoring (Sentry, Plausible)
+
+- **Sentry** — set `SENTRY_DSN` on the backend and frontend (`VITE_SENTRY_DSN`),
+  `SENTRY_ENVIRONMENT`, and optional `SENTRY_TRACES_SAMPLE_RATE` (default `0.1`).
+  The backend's `before_send` hook strips request bodies and email fields so PII
+  never leaves the tenant. Marketing uses the same Sentry org via `@sentry/nextjs`
+  (Remediation P2-2). Verify: intentionally raise once in staging and confirm the
+  event appears in the Sentry project.
+- **Plausible** — privacy-first analytics for the marketing site (Remediation
+  P2-3): set `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` in `marketing/.env`. The script only
+  loads when the domain is configured; no cookies are set.
+
+### Rollback / release back-out
+
+If a deploy breaks `/api/health`, webhooks, or consent dispatch:
+
+1. **Stop the bleed first** — Railway → Deploys → select the previous (green)
+   deployment → **Redeploy**. The volume keeps `mindguard.db` + `.encryption_key`,
+   so the DB state is preserved. For marketing, Vercel → Deployments → previous
+   commit → **Promote to Production**.
+2. **Never roll back alone if the DB schema advanced.** If the broken release ran
+   a new Alembic migration, the DB is ahead of the old code. Either:
+   - (preferred) push a **forward fix** on top, or
+   - restore the pre-release DB snapshot (`scripts/backup_db.py` — see Backups)
+     before redeploying the old code. `gunzip -c mindguard-<stamp>.db.gz > mindguard.db`.
+3. **Roll back config too** — if the release changed `.env` (new `ENCRYPTION_KEY`,
+   `SENTRY_DSN`, `EMAIL_WORKER_*`), revert the Variables to the previous values so
+   old code gets a config it understands.
+4. **After recovery** — check `/api/v1/healthz`, the audit log (`ROSTER_COMMIT`
+   etc. for the window), and Sentry for the root cause before re-attempting the
+   release. Post-mortem in the release notes.
+
+### Secret rotation
+
+Two secrets can rotate independently, and only the second needs a window:
+
+- **`JWT_SECRET`** — rotation is instant and non-destructive: set a new value and
+  redeploy. Existing sessions stop validating immediately (clients re-login).
+- **`ENCRYPTION_KEY`** — PII is AES-256-GCM under a single key, so rotation must
+  re-encrypt the database (Remediation P2-6). Procedure:
+
+  1. Snapshot first: `cd backend && PYTHONPATH=..:. python3 scripts/backup_db.py /var/backups/mindguard`.
+  2. In a maintenance window, stop the app (Railway → Service → Disable, or
+     scale to 0).
+  3. Generate the new key: `python -c "import secrets; print(secrets.token_hex(32))"`.
+  4. Re-encrypt in place:
+
+     ```bash
+     cd backend
+     OLD_ENCRYPTION_KEY=<current-64-hex> NEW_ENCRYPTION_KEY=<new-64-hex> \
+       PYTHONPATH=..:. python3 scripts/reencrypt_db.py
+     ```
+
+     The script re-encrypts every `gcm1:` blob, verifies the DB reads back under
+     the new key, and writes the new key to `.encryption_key`. Key-derived hashes
+     (`student_id_hash`, `*_email_hash`, `signed_token_hash`) are unchanged.
+  5. Set `ENCRYPTION_KEY=<new-64-hex>` in Railway Variables and redeploy.
+  6. Restart the app and smoke-test: login, roster upload, consent dispatch,
+     `scripts/test_email.py`.
+  7. If anything fails, restore the snapshot and redeploy with the old key —
+     no data was lost (the snapshot predates the rotation).
+
 ### Other services
 
 - **Marketing** — deploy `marketing/` to Vercel; set `MINDGUARD_API_URL` to the
@@ -351,7 +439,7 @@ The backend webhook secret (`RESEND_WEBHOOK_SECRET`) must also be set — see
 - [ ] `APP_BASE_URL` points at the public app
 - [ ] Google OAuth callback + redirect URLs verified
 - [ ] Service RAM ≥ 2 GB (analysis does not crash)
-- [ ] Nightly backup scheduled (cron/`railway cron` → `scripts/backup_db.py`)
+- [ ] Nightly backup scheduled (cron/`railway cron` → `scripts/backup_db.py`) ✓ `scripts/install_backup_cron.sh`
 - [ ] `/api/v1/healthz` responds `ok`
 - [ ] Full backend test suite green
 - [ ] Roster upload → consent dispatch → accept → analysis verified end-to-end

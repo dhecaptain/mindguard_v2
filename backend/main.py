@@ -41,7 +41,7 @@ from backend.models.schemas import (
     MuteGroupRequest, NOTIFICATION_TYPES,
     DemoRequestCreate, DemoRequestUpdate,
 )
-from backend.services.email_sender import send_html_email
+from backend.services.email_sender import process_email_outbox, send_html_email
 from backend.services.predictor import predict_one, predict_batch, InferenceUnavailableError
 from backend.services.webhook_service import handle_webhook
 from backend.services.email_templates import (
@@ -111,6 +111,33 @@ from backend.logging_setup import (
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Error monitoring (Remediation P2-2): report server exceptions to Sentry when
+# SENTRY_DSN is set. Initialised before app creation so startup failures are
+# captured; sampling is a no-op when the DSN is absent.
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        release=f"mindguard-backend@{os.getenv('APP_VERSION', '2.0.0')}",
+        before_send=lambda event, hint: _sentry_before_send(event, hint),
+    )
+    logger.info("Sentry initialised (env=%s)", os.getenv("SENTRY_ENVIRONMENT", "production"))
+
+
+def _sentry_before_send(event, hint):
+    """Never upload PII: drop request bodies and recipient emails from reports."""
+    for key in ("request",):
+        event.pop(key, None)
+    for key in list(event.get("extra", {})):
+        if "email" in key.lower() or "recipient" in key.lower():
+            event["extra"].pop(key, None)
+    return event
+
 
 app = FastAPI(title="MindGuard API", version="2.0.0")
 
@@ -346,6 +373,7 @@ async def startup():
     _bootstrap_admins()
     logger.info("Database initialized and seeded")
     asyncio.create_task(_consent_maintenance_loop())
+    asyncio.create_task(_email_drain_loop())
 
 
 def _bootstrap_admins() -> None:
@@ -394,6 +422,26 @@ async def _consent_maintenance_loop() -> None:
         except Exception:
             logger.exception("consent maintenance run failed")
         await asyncio.sleep(3600)
+
+
+async def _email_drain_loop() -> None:
+    """Drain the email outbox in the background (Remediation P1-1).
+
+    Polls every ``EMAIL_WORKER_POLL_SECONDS`` (default 3s) and delivers rows the
+    request path enqueued without a synchronous flush (bulk roster dispatch) or
+    that were left ``queued`` by a crash mid-send. Runs in a worker thread so the
+    blocking SQLite/transport work never stalls the event loop.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(
+                process_email_outbox,
+                batch_size=int(os.getenv("EMAIL_WORKER_BATCH_SIZE", "50")),
+                max_attempts=int(os.getenv("EMAIL_WORKER_MAX_ATTEMPTS", "5")),
+            )
+        except Exception:
+            logger.exception("email outbox drain failed")
+        await asyncio.sleep(int(os.getenv("EMAIL_WORKER_POLL_SECONDS", "3")))
 
 
 @app.get("/api/health")
@@ -2607,7 +2655,7 @@ async def v1_admin_roster_commit(
         payload={"created": summary["created"], "updated": summary["updated"],
                  "errors": len(summary["errors"]), "total": summary["total"],
                  "consents_dispatched": dispatch["dispatched"],
-                 "consents_failed": dispatch["email_failed"],
+                 "consents_queued": dispatch["email_queued"],
                  "skipped_no_parent": dispatch["skipped_no_parent"]},
     )
     return {"roster": summary, "dispatch": dispatch}

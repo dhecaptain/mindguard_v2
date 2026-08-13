@@ -38,7 +38,9 @@ test.describe('Consent workflow (Delivery Brief §9.3)', () => {
     await page.getByRole('button', { name: 'Upload & send consents' }).click()
 
     await expect(page.getByText('6 request(s) dispatched')).toBeVisible()
-    await expect(page.getByText(/6 email\(s\) failed/)).toBeVisible()
+    await expect(
+      page.getByText('6 request(s) dispatched · 6 email(s) queued · 3 courtesy copy/copies'),
+    ).toBeVisible()
 
     const { token } = await adminAuth(request)
     const rows = await fetchConsents(request, token)

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Script from 'next/script'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -57,9 +58,22 @@ const FOOTER_COLS: { title: string; links: { href: string; label: string }[] }[]
   },
 ]
 
+// Privacy-first analytics (Remediation P2-3): Plausible script is injected only
+// when the site domain is configured via NEXT_PUBLIC_PLAUSIBLE_DOMAIN. No
+// cookies, no fingerprinting — keeps the marketing site's consent story honest.
+const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      {PLAUSIBLE_DOMAIN && (
+        <Script
+          defer
+          data-domain={PLAUSIBLE_DOMAIN}
+          src="https://plausible.io/js/script.js"
+          strategy="afterInteractive"
+        />
+      )}
       <body className="min-h-screen flex flex-col">
         <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-[#eef2f6]">
           <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
