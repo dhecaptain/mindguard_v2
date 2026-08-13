@@ -56,8 +56,10 @@ function RiskAnalysisPanel({ student, onAnalyzed }: { student: StudentDetail; on
 
   const selectedPosts = resultFor(platform)
 
+  const consentDenied = student.consent_status?.enforced === true && student.consent_status?.active === false
+
   const handleRun = async () => {
-    if (!platform || !selectedPosts || running) return
+    if (!platform || !selectedPosts || running || consentDenied) return
     setRunning(true)
     setError('')
     try {
@@ -81,7 +83,12 @@ function RiskAnalysisPanel({ student, onAnalyzed }: { student: StudentDetail; on
         </h3>
       </div>
       <div className="px-[20px] py-[14px]">
-        {available.length === 0 ? (
+        {consentDenied ? (
+          <div className="rounded-[7px] border border-[#fef3c7] bg-[#fffbeb] px-[12px] py-[9px] text-[0.78rem] text-[#92400e]">
+            This student has no active (accepted, non-expired) consent on record. Analysis is consent-gated —
+            dispatch and obtain consent before running a rolling risk analysis.
+          </div>
+        ) : available.length === 0 ? (
           <div className="text-[0.8rem] text-[#9ca3af]">
             No platform analyses available yet. Run a Reddit, Bluesky, Mastodon, YouTube, Facebook, Twitter or file analysis first, then return here to compute this student's rolling risk.
           </div>

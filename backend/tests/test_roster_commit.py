@@ -21,12 +21,9 @@ def _students_for(db, summary) -> list:
     return [db.get_student_by_id(i) for i in summary["student_ids"]]
 
 
-def _fake_send(monkeypatch, store):
-    def fake_send(to, subject, body, **kwargs):
-        store.append((to, subject, kwargs))
-        return True, ""
-
-    monkeypatch.setattr(consent_service, "send_html_email", fake_send)
+def _outbox_rows(db) -> list:
+    """Outbox rows left by a bulk dispatch (queued for the background worker)."""
+    return db.list_email_outbox()
 
 
 def _current_consent(db, roster_student_id):
@@ -35,7 +32,7 @@ def _current_consent(db, roster_student_id):
     return db.get_consent_by_id(row["current_consent_id"])
 
 
-def test_commit_dispatches_adult_to_student(monkeypatch, db):
+def test_commit_dispatches_adult_to_student(db):
     _seed_admin(db)
     inst = db.create_institution("Riverside High", "secondary")
     summary = roster_service.upsert_roster(
@@ -43,17 +40,18 @@ def test_commit_dispatches_adult_to_student(monkeypatch, db):
         _csv("U-1,Alex,Roe,alex@uni.edu,2002-05-05,12,\n"),
         "admin-001",
     )
-    sent = []
-    _fake_send(monkeypatch, sent)
     result = consent_service.dispatch_consents_for_students(
         _students_for(db, summary), "admin-001"
     )
     assert result["created"] == 1
     assert result["dispatched"] == 1
-    assert result["email_sent"] == 1
-    assert result["courtesy_sent"] == 0
+    assert result["email_queued"] == 1
+    assert result["courtesy_queued"] == 0
     assert result["routing_errors"] == []
-    assert sent[0][0] == "alex@uni.edu"
+
+    rows = _outbox_rows(db)
+    assert {r["to_email"] for r in rows} == {"alex@uni.edu"}
+    assert all(r["status"] == "queued" for r in rows)
 
     consent = _current_consent(db, summary["student_ids"][0])
     assert consent is not None
@@ -61,7 +59,7 @@ def test_commit_dispatches_adult_to_student(monkeypatch, db):
     assert consent["status"] == "PENDING"
 
 
-def test_commit_dispatches_minor_to_parent_with_courtesy(monkeypatch, db):
+def test_commit_dispatches_minor_to_parent_with_courtesy(db):
     _seed_admin(db)
     inst = db.create_institution("Riverside High", "secondary")
     summary = roster_service.upsert_roster(
@@ -69,14 +67,12 @@ def test_commit_dispatches_minor_to_parent_with_courtesy(monkeypatch, db):
         _csv("S-1,Jane,Doe,jane@school.edu,2010-01-01,9,mom@school.edu\n"),
         "admin-001",
     )
-    sent = []
-    _fake_send(monkeypatch, sent)
     result = consent_service.dispatch_consents_for_students(
         _students_for(db, summary), "admin-001"
     )
     assert result["created"] == 1
-    assert result["courtesy_sent"] == 1
-    addresses = {s[0] for s in sent}
+    assert result["courtesy_queued"] == 1
+    addresses = {r["to_email"] for r in _outbox_rows(db)}
     assert "mom@school.edu" in addresses
     assert "jane@school.edu" in addresses
 
@@ -87,7 +83,7 @@ def test_commit_dispatches_minor_to_parent_with_courtesy(monkeypatch, db):
     assert consent["status"] == "PENDING"
 
 
-def test_commit_minor_without_parent_is_routing_error(monkeypatch, db):
+def test_commit_minor_without_parent_is_routing_error(db):
     _seed_admin(db)
     inst = db.create_institution("Riverside High", "secondary")
     
@@ -117,8 +113,6 @@ def test_commit_minor_without_parent_is_routing_error(monkeypatch, db):
     created_student = db.create_student(**student_payload)
     created_student = db.get_student_by_id(created_student["id"])
 
-    sent = []
-    _fake_send(monkeypatch, sent)
     result = consent_service.dispatch_consents_for_students(
         [created_student], "admin-001"
     )
@@ -126,10 +120,10 @@ def test_commit_minor_without_parent_is_routing_error(monkeypatch, db):
     assert result["skipped_no_parent"] == 1
     assert len(result["routing_errors"]) == 1
     assert "parent_email" in result["routing_errors"][0]["reason"]
-    assert sent == []
+    assert _outbox_rows(db) == []
 
 
-def test_commit_skips_students_with_live_consent(monkeypatch, db):
+def test_commit_skips_students_with_live_consent(db):
     _seed_admin(db)
     inst = db.create_institution("Riverside High", "secondary")
     summary = roster_service.upsert_roster(
@@ -137,22 +131,21 @@ def test_commit_skips_students_with_live_consent(monkeypatch, db):
         _csv("U-1,Alex,Roe,alex@uni.edu,2002-05-05,12,\n"),
         "admin-001",
     )
-    sent = []
-    _fake_send(monkeypatch, sent)
     consent_service.dispatch_consents_for_students(
         _students_for(db, summary), "admin-001"
     )
+    queued_after_first = len(_outbox_rows(db))
+    assert queued_after_first == 1
 
-    sent.clear()
     result = consent_service.dispatch_consents_for_students(
         _students_for(db, summary), "admin-001"
     )
     assert result["created"] == 0
     assert result["skipped_live"] == 1
-    assert sent == []
+    assert len(_outbox_rows(db)) == queued_after_first
 
 
-def test_commit_defaults_platforms(monkeypatch, db):
+def test_commit_defaults_platforms(db):
     _seed_admin(db)
     inst = db.create_institution("Riverside High", "secondary")
     summary = roster_service.upsert_roster(
@@ -160,8 +153,6 @@ def test_commit_defaults_platforms(monkeypatch, db):
         _csv("U-1,Alex,Roe,alex@uni.edu,2002-05-05,12,\n"),
         "admin-001",
     )
-    sent = []
-    _fake_send(monkeypatch, sent)
     consent_service.dispatch_consents_for_students(_students_for(db, summary), "admin-001")
     import json
     consent = _current_consent(db, summary["student_ids"][0])
@@ -196,7 +187,7 @@ def _csv_override(body: str) -> bytes:
     return (OVERRIDE_HEADER + body).encode("utf-8")
 
 
-def test_minor_override_beats_dob_calculation(monkeypatch, db):
+def test_minor_override_beats_dob_calculation(db):
     _seed_admin(db)
     inst = db.create_institution("Riverside High", "secondary")
     summary = roster_service.upsert_roster(
@@ -216,8 +207,6 @@ def test_minor_override_beats_dob_calculation(monkeypatch, db):
     assert db.get_student_by_id(summary["student_ids"][0])["is_minor"] == 1
     assert db.get_student_by_id(summary["student_ids"][1])["is_minor"] == 0
 
-    sent = []
-    _fake_send(monkeypatch, sent)
     result = consent_service.dispatch_consents_for_students(
         _students_for(db, summary), "admin-001"
     )

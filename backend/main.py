@@ -41,7 +41,7 @@ from backend.models.schemas import (
     MuteGroupRequest, NOTIFICATION_TYPES,
     DemoRequestCreate, DemoRequestUpdate,
 )
-from backend.services.email_sender import send_html_email
+from backend.services.email_sender import process_email_outbox, send_html_email
 from backend.services.predictor import predict_one, predict_batch, InferenceUnavailableError
 from backend.services.webhook_service import handle_webhook
 from backend.services.email_templates import (
@@ -94,6 +94,7 @@ from backend.services.analysis_service import (
     run_consented_student_analysis,
 )
 from backend.services.crypto import decrypt_pii
+from backend.services.consent_gate import consent_status_for_ui
 from backend.services.demo_service import (
     demo_email_context, work_email_warning, verify_recaptcha_token,
 )
@@ -110,6 +111,33 @@ from backend.logging_setup import (
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Error monitoring (Remediation P2-2): report server exceptions to Sentry when
+# SENTRY_DSN is set. Initialised before app creation so startup failures are
+# captured; sampling is a no-op when the DSN is absent.
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        release=f"mindguard-backend@{os.getenv('APP_VERSION', '2.0.0')}",
+        before_send=lambda event, hint: _sentry_before_send(event, hint),
+    )
+    logger.info("Sentry initialised (env=%s)", os.getenv("SENTRY_ENVIRONMENT", "production"))
+
+
+def _sentry_before_send(event, hint):
+    """Never upload PII: drop request bodies and recipient emails from reports."""
+    for key in ("request",):
+        event.pop(key, None)
+    for key in list(event.get("extra", {})):
+        if "email" in key.lower() or "recipient" in key.lower():
+            event["extra"].pop(key, None)
+    return event
+
 
 app = FastAPI(title="MindGuard API", version="2.0.0")
 
@@ -139,7 +167,7 @@ def _require_analysis_staff(user: dict) -> None:
     require_permission(user, PERM_ANALYSIS_RUN)
 
 
-_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5188,http://127.0.0.1:5188").split(",") if o.strip()]
 _ORIGIN_RE = re.compile(r"^https?://[a-zA-Z0-9\-\.]+(?::\d{1,5})?$")
 for _origin in _cors_origins:
     if _origin == "*":
@@ -153,6 +181,67 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+# ── CSRF defense (Origin check) ─────────────────────────────────────────
+# Bearer-token auth already blocks cookie-based CSRF, but an extra Origin check
+# on state-changing requests defends against confused-deputy / drive-by POSTs.
+# Requests from browsers carry an Origin header (or Sec-Fetch-Site); we reject
+# any unsafe request whose Origin is neither the request's own host nor an
+# explicitly trusted origin. Requests with no Origin/Sec-Fetch-Site (curl, server
+# webhooks, mobile clients) pass, and same-site (Sec-Fetch-Site: same-site) calls
+# to an untrusted host still require an explicit trusted origin.
+_TRUSTED_ORIGINS = {
+    o.rstrip("/")
+    for o in os.getenv("TRUSTED_ORIGINS", "").split(",") if o.strip()
+} | set(_cors_origins)
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _origin_matches_host(origin: str, request: Request) -> bool:
+    """True when an Origin header matches the request's own host (scheme-aware)."""
+    try:
+        parsed = urlparse(origin)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    # The immediate Host may be rewritten by a reverse proxy (e.g. Next.js
+    # `rewrites` forwards /api calls to the backend); fall back to the first
+    # X-Forwarded-Host hop. The browser still sets Origin itself, so an attacker
+    # cannot forge it — this only widens which host reflects a legitimate origin.
+    hosts = [request.headers.get("host", "")]
+    forwarded = request.headers.get("x-forwarded-host", "")
+    if forwarded:
+        hosts.append(forwarded.split(",")[0].strip())
+    hosts = [h for h in hosts if h]
+    if not hosts:
+        return False
+    scheme = "https" if _request_is_secure(request) else "http"
+    return parsed.scheme == scheme and any(parsed.netloc == h for h in hosts)
+
+
+@app.middleware("http")
+async def csrf_origin_middleware(request: Request, call_next):
+    if request.method in _SAFE_METHODS:
+        return await call_next(request)
+    origin = request.headers.get("origin", "")
+    site = (request.headers.get("sec-fetch-site", "") or "").strip().lower()
+    if site == "cross-site":
+        logger.warning("csrf: blocking cross-site %s %s", request.method, request.url.path)
+        return Response("Forbidden", status_code=403)
+    if origin:
+        if origin in _TRUSTED_ORIGINS or _origin_matches_host(origin, request):
+            return await call_next(request)
+        logger.warning(
+            "csrf: blocking %s %s from untrusted origin %s",
+            request.method, request.url.path, origin,
+        )
+        return Response("Forbidden", status_code=403)
+    if site and site not in ("same-origin", "same-site", "none"):
+        logger.warning("csrf: blocking %s %s (sec-fetch-site=%s)", request.method, request.url.path, site)
+        return Response("Forbidden", status_code=403)
+    return await call_next(request)
 
 
 # ── Security headers (Delivery Brief §8) ──────────────────────────────
@@ -199,10 +288,28 @@ def _build_security_headers(content_type: str, path: str) -> dict[str, str]:
     return headers
 
 
+def _request_is_secure(request: Request) -> bool:
+    """True when the client connection is HTTPS (honors X-Forwarded-Proto).
+
+    HSTS is only meaningful over HTTPS; emitting it on plain HTTP would let a
+    network attacker inject the header and disable a host's HSTS entirely, so it
+    is gated on a secure channel (including behind TLS-terminating proxies).
+    """
+    proto = request.headers.get("x-forwarded-proto", "")
+    if proto:
+        return proto.split(",")[0].strip() == "https"
+    return request.url.scheme == "https"
+
+
+_HSTS = "max-age=31536000; includeSubDomains"
+
+
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     headers = _build_security_headers(response.headers.get("content-type", ""), request.url.path)
+    if _request_is_secure(request):
+        headers.setdefault("Strict-Transport-Security", _HSTS)
     for name, value in headers.items():
         response.headers.setdefault(name, value)
     return response
@@ -266,6 +373,7 @@ async def startup():
     _bootstrap_admins()
     logger.info("Database initialized and seeded")
     asyncio.create_task(_consent_maintenance_loop())
+    asyncio.create_task(_email_drain_loop())
 
 
 def _bootstrap_admins() -> None:
@@ -314,6 +422,26 @@ async def _consent_maintenance_loop() -> None:
         except Exception:
             logger.exception("consent maintenance run failed")
         await asyncio.sleep(3600)
+
+
+async def _email_drain_loop() -> None:
+    """Drain the email outbox in the background (Remediation P1-1).
+
+    Polls every ``EMAIL_WORKER_POLL_SECONDS`` (default 3s) and delivers rows the
+    request path enqueued without a synchronous flush (bulk roster dispatch) or
+    that were left ``queued`` by a crash mid-send. Runs in a worker thread so the
+    blocking SQLite/transport work never stalls the event loop.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(
+                process_email_outbox,
+                batch_size=int(os.getenv("EMAIL_WORKER_BATCH_SIZE", "50")),
+                max_attempts=int(os.getenv("EMAIL_WORKER_MAX_ATTEMPTS", "5")),
+            )
+        except Exception:
+            logger.exception("email outbox drain failed")
+        await asyncio.sleep(int(os.getenv("EMAIL_WORKER_POLL_SECONDS", "3")))
 
 
 @app.get("/api/health")
@@ -1717,6 +1845,7 @@ async def get_student_detail(student_id: str, user: dict = Depends(require_auth)
         },
         "rolling_risk": rolling,
         "analyses": analyses,
+        "consent_status": consent_status_for_ui(student_id),
     }
 
 
@@ -2188,6 +2317,7 @@ async def v1_portal_accept_consent(token: str, data: dict, request: Request):
             ip=_client_ip(request),
             platforms=platforms,
             user_agent=_client_user_agent(request),
+            token=token,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
@@ -2208,7 +2338,7 @@ async def v1_portal_decline_consent(token: str, request: Request):
     if expires and datetime.now(timezone.utc).isoformat() > expires:
         raise HTTPException(410, "This consent link has expired")
     try:
-        updated = decline_consent(consent["id"], ip=_client_ip(request), user_agent=_client_user_agent(request))
+        updated = decline_consent(consent["id"], ip=_client_ip(request), user_agent=_client_user_agent(request), token=token)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
@@ -2525,7 +2655,7 @@ async def v1_admin_roster_commit(
         payload={"created": summary["created"], "updated": summary["updated"],
                  "errors": len(summary["errors"]), "total": summary["total"],
                  "consents_dispatched": dispatch["dispatched"],
-                 "consents_failed": dispatch["email_failed"],
+                 "consents_queued": dispatch["email_queued"],
                  "skipped_no_parent": dispatch["skipped_no_parent"]},
     )
     return {"roster": summary, "dispatch": dispatch}

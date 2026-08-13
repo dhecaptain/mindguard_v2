@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import secrets
 from pathlib import Path
 
@@ -112,6 +113,55 @@ def hash_student_id(student_id: str) -> str:
 def hash_token(token: str) -> str:
     """SHA-256 of a consent token, stored at rest so a leak cannot be replayed."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_email(email: str) -> str:
+    """Deterministic SHA-256 of a normalised email.
+
+    Used for equality joins (consent ↔ delivery event) and exact-match search
+    over recipient emails whose plaintext is encrypted at rest.
+    """
+    return hashlib.sha256(str(email or "").strip().lower().encode("utf-8")).hexdigest()
+
+
+# ── PII redaction for semi-structured audit/event payloads ────────────
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_CONSENT_URL_RE = re.compile(r"(/consent/)(v1\.[A-Za-z0-9._\-]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+_REDACT_KEYS = {
+    "signature", "recipient", "recipient_email", "student_email", "parent_email",
+    "student_name", "parent_name", "recipient_name",
+}
+
+
+def _redact_string(value: str) -> str:
+    value = _EMAIL_RE.sub(
+        lambda m: f"redacted-{hashlib.sha256(m.group(0).encode('utf-8')).hexdigest()[:12]}@redacted",
+        value,
+    )
+    return _CONSENT_URL_RE.sub(r"\1[redacted]", value)
+
+
+def redact_pii(obj):
+    """Recursively redact PII from a JSON-serialisable object.
+
+    Email addresses become deterministic ``redacted-<hash12>@redacted`` tokens,
+    consent magic-link URLs lose their token, and well-known PII keys
+    (``signature``, ``recipient_email``, ...) are collapsed to ``[redacted]``.
+    """
+    if isinstance(obj, dict):
+        out = {}
+        for key, value in obj.items():
+            if key in _REDACT_KEYS and isinstance(value, (str,)):
+                out[key] = _redact_string(value) if _EMAIL_RE.search(value) else "[redacted]"
+            else:
+                out[key] = redact_pii(value)
+        return out
+    if isinstance(obj, list):
+        return [redact_pii(item) for item in obj]
+    if isinstance(obj, str):
+        return _redact_string(obj)
+    return obj
 
 
 # ── Signed consent tokens (HMAC-SHA256 + 32-byte nonce) ──────────────

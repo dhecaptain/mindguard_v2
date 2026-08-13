@@ -229,9 +229,8 @@ export interface RosterDispatchSummary {
   checked: number
   created: number
   dispatched: number
-  email_sent: number
-  email_failed: number
-  courtesy_sent: number
+  email_queued: number
+  courtesy_queued: number
   skipped_live: number
   skipped_no_parent: number
   users_created?: number

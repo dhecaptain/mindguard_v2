@@ -11,15 +11,18 @@ Valid transitions:
   ACCEPTED -> REVOKED (revoked)
   ACCEPTED -> RENEWAL_DUE (auto on expiry)
 """
+import hmac
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 from backend.database import (
     create_consent,
     create_consent_event,
     create_user,
+    enqueue_email,
     get_consent_by_id,
     get_consent_events,
     get_consents_by_student,
@@ -27,6 +30,7 @@ from backend.database import (
     get_user_by_id,
     get_all_consents,
     get_institution_id_for_consent,
+    get_institution_by_id,
     get_active_consent_template,
     mark_analyses_consent_withdrawn,
     set_student_current_consent,
@@ -52,6 +56,54 @@ logger = logging.getLogger(__name__)
 # Maximum portal page loads a single consent link allows (Delivery Brief §5).
 MAX_CONSENT_VIEWS = 20
 
+# Bulk roster dispatch runs with a write-ahead outbox: consent/courtesy emails
+# are enqueued (fast, durable) and delivered by the background worker instead of
+# blocking the request on per-recipient ESP round-trips (Remediation P1-1).
+_bulk_enqueue = False
+
+
+@contextmanager
+def bulk_enqueue_mode():
+    """Context where consent emails are enqueued instead of sent synchronously."""
+    global _bulk_enqueue
+    previous = _bulk_enqueue
+    _bulk_enqueue = True
+    try:
+        yield
+    finally:
+        _bulk_enqueue = previous
+
+
+def _dispatch_email(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    related_type: str | None = None,
+    related_id: str | None = None,
+    metadata: dict | None = None,
+) -> tuple[bool, str]:
+    """Route a message through the outbox: enqueue-only during bulk, else sync.
+
+    Under ``bulk_enqueue_mode`` the message is persisted to ``email_outbox`` and
+    returned as accepted — delivery happens in the background worker. Otherwise
+    it is sent synchronously via ``send_html_email`` (write-ahead + immediate
+    attempt, with an ``email_events`` trail).
+    """
+    if _bulk_enqueue:
+        try:
+            enqueue_email(
+                to_email, subject, body_html,
+                related_type=related_type, related_id=related_id, metadata=metadata,
+            )
+        except Exception as exc:
+            logger.warning("outbox enqueue failed for %s: %s", to_email, exc)
+            return False, str(exc)
+        return True, ""
+    return send_html_email(
+        to_email, subject, body_html,
+        related_type=related_type, related_id=related_id, metadata=metadata,
+    )
+
 CONSENT_TRANSITIONS = {
     "DRAFT":       ["PENDING"],
     "PENDING":     ["VIEWED", "ACCEPTED", "DECLINED", "EXPIRED", "INVALID"],
@@ -73,15 +125,20 @@ def _consent_url(token: str) -> str:
 def verify_consent_token(consent: dict, token: str) -> bool:
     """Validate a portal token against the consent record.
 
-    Signed tokens (``v1.``) are verified with the HMAC; legacy plain-UUID
-    tokens are accepted for backwards compatibility with pre-M3 records.
+    Signed tokens (``v1.``) are verified by HMAC signature and must match the
+    stored SHA-256 hash (the raw token is never persisted; a re-dispatch
+    invalidates earlier links). Legacy plain-UUID tokens are accepted for
+    backwards compatibility with pre-M3 records.
     """
     token = str(token or "")
-    if not token or consent.get("magic_token") != token:
+    if not token:
         return False
     if token.startswith("v1."):
-        return verify_signed_token(token, consent["id"])
-    return len(token) == 36  # legacy uuid4 magic token
+        if not verify_signed_token(token, consent["id"]):
+            return False
+        expected = consent.get("signed_token_hash") or ""
+        return bool(expected) and hmac.compare_digest(hash_token(token), expected)
+    return consent.get("magic_token") == token and len(token) == 36  # legacy uuid4 magic token
 
 
 def view_count(consent_id: str) -> int:
@@ -94,14 +151,14 @@ def remaining_views(consent_id: str) -> int:
     return max(0, MAX_CONSENT_VIEWS - view_count(consent_id))
 
 
-def _send_consent_email(consent: dict, reminder: bool = False) -> tuple[bool, str, str]:
+def _send_consent_email(consent: dict, reminder: bool = False, token: str | None = None) -> tuple[bool, str, str]:
     """Send a consent request email, honouring the institution's active template.
 
     When the consent's institution has an active ``consent_templates`` row the
     stored HTML is used (with context tokens substituted); otherwise the
     built-in §4.1/§4.2 template is used. Returns (ok, error, url).
     """
-    token = consent.get("magic_token") or ""
+    token = token or consent.get("magic_token") or ""
     url = _consent_url(token)
     institution_id = get_institution_id_for_consent(consent["id"])
     template = get_active_consent_template(institution_id)
@@ -133,7 +190,7 @@ def _send_consent_email(consent: dict, reminder: bool = False) -> tuple[bool, st
         subject, body_html = student_consent_request(context)
     subject = subject_prefix + subject
 
-    ok, error = send_html_email(
+    ok, error = _dispatch_email(
         consent["recipient_email"],
         subject,
         body_html,
@@ -196,13 +253,13 @@ def dispatch_consent(consent_id: str, actor_id: str, ip: str | None = None) -> d
     updated = update_consent_status(
         consent_id,
         "PENDING",
-        magic_token=token,
         signed_token_hash=hash_token(token),
         magic_token_expires_at=(now + timedelta(days=CONSENT_EXPIRY_DAYS)).isoformat(),
         expires_at=(now + timedelta(days=CONSENT_EXPIRY_DAYS)).isoformat(),
         template_version=CONSENT_TEMPLATE_VERSION,
         dispatched_at=now.isoformat(),
     )
+    updated["magic_token"] = token
     write_audit(
         actor_id,
         "counsellor",
@@ -236,7 +293,12 @@ def remind_consent(consent_id: str, actor_id: str, ip: str | None = None) -> dic
     if consent["status"] not in ("PENDING", "VIEWED"):
         raise ValueError(f"Cannot send reminder for consent in status {consent['status']}")
 
-    email_sent, email_error, url = _send_consent_email(consent, reminder=True)
+    token = create_signed_token(consent_id)
+    consent = update_consent_status(
+        consent_id, consent["status"], signed_token_hash=hash_token(token),
+    ) or consent
+
+    email_sent, email_error, url = _send_consent_email(consent, reminder=True, token=token)
     write_audit(
         actor_id,
         "counsellor",
@@ -275,6 +337,7 @@ def accept_consent(
     ip: str,
     platforms: list | None = None,
     user_agent: str | None = None,
+    token: str | None = None,
 ) -> dict:
     """Transition PENDING/VIEWED -> ACCEPTED with signature and optional platform list."""
     consent = get_consent_by_id(consent_id)
@@ -313,11 +376,11 @@ def accept_consent(
     )
     create_consent_event(consent_id, "accepted", actor_type="recipient",
                          metadata={"signature": signature_name, "ip": ip, "user_agent": user_agent})
-    _notify_consent_response(updated, accepted=True)
+    _notify_consent_response(updated, accepted=True, token=token)
     return updated
 
 
-def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | None = None) -> dict:
+def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | None = None, token: str | None = None) -> dict:
     """Transition PENDING/VIEWED -> DECLINED."""
     consent = get_consent_by_id(consent_id)
     if not consent:
@@ -333,7 +396,7 @@ def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | No
     write_audit(None, "recipient", "CONSENT_DECLINED", "consent", consent_id, ip=ip)
     create_consent_event(consent_id, "declined", actor_type="recipient",
                          metadata={"ip": ip, "user_agent": user_agent})
-    _notify_consent_response(updated, accepted=False)
+    _notify_consent_response(updated, accepted=False, token=token)
     return updated
 
 
@@ -428,17 +491,16 @@ def dispatch_consents_for_students(
     Students that already carry a live consent (ACCEPTED and unexpired, or
     PENDING/VIEWED) are skipped so re-runs never double-send.
 
-    Returns a summary dict: {checked, created, dispatched, email_sent,
-    email_failed, courtesy_sent, skipped_live, skipped_no_parent, routing_errors}
+    Returns a summary dict: {checked, created, dispatched, email_queued,
+    courtesy_queued, skipped_live, skipped_no_parent, routing_errors}
     """
     platforms = platforms or DEFAULT_BULK_PLATFORMS
     summary: dict = {
         "checked": len(students),
         "created": 0,
         "dispatched": 0,
-        "email_sent": 0,
-        "email_failed": 0,
-        "courtesy_sent": 0,
+        "email_queued": 0,
+        "courtesy_queued": 0,
         "skipped_live": 0,
         "skipped_no_parent": 0,
         "users_created": 0,
@@ -447,65 +509,71 @@ def dispatch_consents_for_students(
     now = datetime.now(timezone.utc)
     _created_user_ids: set = set()
 
-    for student in students:
-        sid = student["id"]
+    # Bulk dispatch runs in enqueue mode: consent/courtesy emails are persisted
+    # to the outbox and delivered by the background worker, so a large roster
+    # upload returns without blocking on per-recipient ESP round-trips.
+    with bulk_enqueue_mode():
+        for student in students:
+            sid = student["id"]
 
-        # Consents FK to users(id); roster students live in the students table,
-        # so resolve (or create) the matching user account for each student.
-        user_id = _resolve_student_user(student)
-        if user_id is None:
-            summary["routing_errors"].append(
-                {"student_id": sid, "reason": "could not resolve user account"}
-            )
-            continue
-        if user_id not in _created_user_ids:
-            _created_user_ids.add(user_id)
-            summary["users_created"] += 1
-
-        # Skip students that already have a live consent (no double-send).
-        existing = get_consents_by_student(user_id) or []
-        live = [c for c in existing if c["status"] in ("PENDING", "VIEWED")]
-        live += [c for c in existing if c["status"] == "ACCEPTED" and c.get("expires_at", "9999") > now.isoformat()]
-        if live:
-            summary["skipped_live"] += 1
-            continue
-
-        student_email = decrypt_pii(student["email_encrypted"])
-        is_minor = bool(student["is_minor"])
-
-        if is_minor:
-            parent_email = ""
-            if student.get("parent_email_encrypted"):
-                parent_email = decrypt_pii(student["parent_email_encrypted"])
-            if not parent_email:
-                summary["skipped_no_parent"] += 1
+            # Consents FK to users(id); roster students live in the students table,
+            # so resolve (or create) the matching user account for each student.
+            user_id = _resolve_student_user(student)
+            if user_id is None:
                 summary["routing_errors"].append(
-                    {"student_id": sid, "reason": "minor without parent_email"}
+                    {"student_id": sid, "reason": "could not resolve user account"}
                 )
                 continue
-            consent = create_consent(user_id, actor_id, parent_email, "parent", platforms, mode="ON_DEMAND")
-        else:
-            consent = create_consent(user_id, actor_id, student_email, "student", platforms, mode="ON_DEMAND")
+            if user_id not in _created_user_ids:
+                _created_user_ids.add(user_id)
+                summary["users_created"] += 1
 
-        try:
-            dispatched = dispatch_consent(consent["id"], actor_id, ip=ip)
-        except ValueError as exc:
-            summary["routing_errors"].append({"student_id": sid, "reason": str(exc)})
-            continue
+            # Skip students that already have a live consent (no double-send).
+            existing = get_consents_by_student(user_id) or []
+            live = [c for c in existing if c["status"] in ("PENDING", "VIEWED")]
+            live += [c for c in existing if c["status"] == "ACCEPTED" and c.get("expires_at", "9999") > now.isoformat()]
+            if live:
+                summary["skipped_live"] += 1
+                continue
 
-        set_student_current_consent(sid, consent["id"])
+            student_email = decrypt_pii(student["email_encrypted"])
+            is_minor = bool(student["is_minor"])
 
-        summary["created"] += 1
-        summary["dispatched"] += 1
-        if dispatched.get("email_sent"):
-            summary["email_sent"] += 1
-        else:
-            summary["email_failed"] += 1
+            if is_minor:
+                parent_email = ""
+                if student.get("parent_email_encrypted"):
+                    parent_email = decrypt_pii(student["parent_email_encrypted"])
+                if not parent_email:
+                    summary["skipped_no_parent"] += 1
+                    summary["routing_errors"].append(
+                        {"student_id": sid, "reason": "minor without parent_email"}
+                    )
+                    continue
+                consent = create_consent(user_id, actor_id, parent_email, "parent", platforms, mode="ON_DEMAND")
+            else:
+                consent = create_consent(user_id, actor_id, student_email, "student", platforms, mode="ON_DEMAND")
 
-        if is_minor:
-            ok = _send_courtesy_copy(student, consent, dispatched["magic_token"])
-            if ok:
-                summary["courtesy_sent"] += 1
+            try:
+                dispatched = dispatch_consent(consent["id"], actor_id, ip=ip)
+            except ValueError as exc:
+                summary["routing_errors"].append({"student_id": sid, "reason": str(exc)})
+                continue
+
+            set_student_current_consent(sid, consent["id"])
+
+            summary["created"] += 1
+            summary["dispatched"] += 1
+            if dispatched.get("email_sent"):
+                summary["email_queued"] += 1
+            else:
+                summary["routing_errors"].append(
+                    {"student_id": sid, "reason": dispatched.get("email_error") or "consent email enqueue failed"}
+                )
+
+            if is_minor:
+                ok = _send_courtesy_copy(student, consent, dispatched["magic_token"])
+                if ok:
+                    summary["courtesy_queued"] += 1
 
     return summary
 
@@ -543,7 +611,7 @@ def _send_courtesy_copy(student: dict, consent: dict, token: str) -> bool:
     }
     context.update(_footer_urls(token))
     subject, html = student_courtesy_copy(context)
-    ok, err = send_html_email(
+    ok, err = _dispatch_email(
         student_email,
         subject,
         html,
@@ -564,14 +632,14 @@ def _footer_urls(token: str) -> dict:
     }
 
 
-def _reminder_context(consent: dict) -> dict:
+def _reminder_context(consent: dict, token: str) -> dict:
     ctx = {
         "institution_name": consent.get("notes") or "your school",
         "student_first_name": consent.get("student_name") or "there",
         "counsellor_email": "counsellor@mindguard.app",
-        "consent_url": _consent_url(consent["magic_token"]),
+        "consent_url": _consent_url(token),
     }
-    ctx.update(_footer_urls(consent["magic_token"]))
+    ctx.update(_footer_urls(token))
     return ctx
 
 
@@ -617,14 +685,14 @@ def _tracker_url() -> str:
     return f"{base}/#consent-tracker"
 
 
-def _notify_consent_response(consent: dict, accepted: bool) -> None:
+def _notify_consent_response(consent: dict, accepted: bool, token: str | None = None) -> None:
     """Send the §4.5 confirmation + §4.6 admin notification after a response.
 
     Never raises: a failed email must not undo an already-recorded decision.
     The recipient always receives the confirmation; the admin notification is
     sent to the consent's initiating counsellor when that account resolves.
     """
-    token = consent.get("magic_token") or ""
+    token = token or consent.get("magic_token") or ""
     status = "ACCEPTED" if accepted else "DECLINED"
     context = {
         "student_first_name": _student_first_name(consent),
@@ -635,7 +703,7 @@ def _notify_consent_response(consent: dict, accepted: bool) -> None:
     context.update(_footer_urls(token))
 
     subject, html = consent_confirmation(context, accepted=accepted)
-    ok, err = send_html_email(
+    ok, err = _dispatch_email(
         consent["recipient_email"],
         subject,
         html,
@@ -652,7 +720,7 @@ def _notify_consent_response(consent: dict, accepted: bool) -> None:
         logger.warning("no admin user for consent %s; skipping admin notification", consent["id"])
         return
     subject, html = admin_consent_notification(context)
-    ok, err = send_html_email(
+    ok, err = _dispatch_email(
         admin_email,
         subject,
         html,
@@ -689,14 +757,39 @@ def process_expired_consents() -> int:
     return changed
 
 
+def _reminder_days_for_consent(consent: dict) -> list[int]:
+    """Effective reminder schedule for a consent.
+
+    Honors the institution's ``consent_reminder_days`` override (stored as a JSON
+    array string, e.g. ``"[3,7]"``); falls back to the global
+    ``CONSENT_REMINDER_DAYS`` when unset, unparsable, or empty.
+    """
+    inst_id = get_institution_id_for_consent(consent["id"])
+    if inst_id:
+        inst = get_institution_by_id(inst_id)
+        raw = (inst or {}).get("consent_reminder_days")
+        if raw:
+            try:
+                parsed = json.loads(raw)
+            except (ValueError, TypeError):
+                parsed = None
+            if (
+                isinstance(parsed, list)
+                and parsed
+                and all(isinstance(d, int) and d > 0 for d in parsed)
+            ):
+                return sorted(parsed)
+    return sorted(CONSENT_REMINDER_DAYS)
+
+
 def process_consent_reminders(now: datetime | None = None) -> dict:
     """Send day-3/day-7 reminders for pending consents. Returns a summary.
 
     Reminder n is sent when ``dispatched_at`` is at least ``CONSENT_REMINDER_DAYS[n]``
-    days old and fewer than n+1 reminders have already been sent.
+    days old and fewer than n+1 reminders have already been sent. The effective
+    schedule is per-institution when that institution overrides the default.
     """
     now = now or datetime.now(timezone.utc)
-    days = sorted(CONSENT_REMINDER_DAYS)
     sent, failed = [], []
     for consent in get_all_consents():
         if consent["status"] not in ("PENDING", "VIEWED"):
@@ -708,6 +801,7 @@ def process_consent_reminders(now: datetime | None = None) -> dict:
             elapsed = (now - datetime.fromisoformat(dispatched)).days
         except (ValueError, TypeError):
             continue
+        days = _reminder_days_for_consent(consent)
         already = int(consent.get("reminders_sent") or 0)
         for index, target_day in enumerate(days):
             if elapsed >= target_day and already <= index:
@@ -718,8 +812,12 @@ def process_consent_reminders(now: datetime | None = None) -> dict:
 
 
 def _send_reminder_for(consent: dict, day: int, new_count: int) -> tuple[bool, str]:
-    subject, html = consent_reminder(_reminder_context(consent), day=day)
-    ok, err = send_html_email(
+    token = create_signed_token(consent["id"])
+    consent = update_consent_status(
+        consent["id"], consent["status"], signed_token_hash=hash_token(token),
+    ) or consent
+    subject, html = consent_reminder(_reminder_context(consent, token), day=day)
+    ok, err = _dispatch_email(
         consent["recipient_email"],
         subject,
         html,

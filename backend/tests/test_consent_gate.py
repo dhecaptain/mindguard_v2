@@ -37,9 +37,13 @@ def test_verify_token_rejects_tampering(db):
 
 def test_verify_token_accepts_legacy_uuid(db):
     s = _seed(db)
-    consent = s["consent"]  # created with plain-uuid magic_token
-    assert consent["magic_token"].startswith("v1.") is False
-    assert consent_service.verify_consent_token(consent, consent["magic_token"])
+    legacy_token = "12345678-1234-5678-1234-567812345678"
+    legacy = database.update_consent_status(
+        s["consent"]["id"], "PENDING", magic_token=legacy_token,
+    )
+    assert legacy["magic_token"].startswith("v1.") is False
+    assert consent_service.verify_consent_token(legacy, legacy["magic_token"])
+    assert not consent_service.verify_consent_token(legacy, "12345678-1234-5678-1234-567812345679")
 
 
 def test_accept_extends_expiry(db):
@@ -202,3 +206,67 @@ def test_process_reminders_day7_after_day3(monkeypatch, db):
     assert summary["sent"] == 1
     assert database.get_consent_by_id(updated["id"])["reminders_sent"] == 2
     assert "Last few days" in sent[0]
+
+
+def test_process_reminders_honors_institution_override(monkeypatch, db):
+    counsellor = db.create_user("c@school.edu", "Counsellor", "x", role_type="counsellor")
+    inst = db.create_institution("Override School")
+    conn = db.get_db()
+    conn.execute("UPDATE institutions SET consent_reminder_days = ? WHERE id = ?", ("[14]", inst["id"]))
+    conn.commit()
+    conn.close()
+    roster_student = db.create_student(
+        inst["id"], "roster-hash-1", "enc-first", "enc-email", "enc-dob", False, counsellor["id"],
+    )
+    # Consents FK to users(id); roster students map to a user row via email.
+    user = db.create_user("a@school.edu", "Student A", "x", role_type="student")
+    consent = db.create_consent(user["id"], counsellor["id"], "a@school.edu", "student", ["reddit"])
+    db.set_student_current_consent(roster_student["id"], consent["id"])
+    updated = consent_service.dispatch_consent(consent["id"], counsellor["id"])
+
+    sent = []
+
+    def fake_send(to, subject, body, **kwargs):
+        sent.append(subject)
+        return True, ""
+
+    monkeypatch.setattr(consent_service, "send_html_email", fake_send)
+    now = datetime.now(timezone.utc)
+
+    # 3 days elapsed: global default would remind, institution says day 14.
+    database.update_consent_status(
+        updated["id"], "PENDING", dispatched_at=(now - timedelta(days=3)).isoformat()
+    )
+    assert consent_service.process_consent_reminders(now=now)["sent"] == 0
+
+    # 14 days elapsed: institution schedule now fires.
+    database.update_consent_status(
+        updated["id"], "PENDING", dispatched_at=(now - timedelta(days=14)).isoformat()
+    )
+    assert consent_service.process_consent_reminders(now=now)["sent"] == 1
+    assert database.get_consent_by_id(updated["id"])["reminders_sent"] == 1
+
+
+def test_dispatch_persists_only_token_hash(db):
+    s = _seed(db)
+    updated = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    stored = database.get_consent_by_id(s["consent"]["id"])
+    assert stored["magic_token"] is None
+    assert stored["signed_token_hash"] == crypto.hash_token(updated["magic_token"])
+
+
+def test_portal_token_lookup_and_redispatch_invalidation(db):
+    s = _seed(db)
+    updated = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    token = updated["magic_token"]
+
+    found = database.get_consent_by_token(token)
+    assert found and found["id"] == s["consent"]["id"]
+    assert consent_service.verify_consent_token(found, token)
+
+    # Re-dispatch from DECLINED issues a new signed token; the old link is dead.
+    consent_service.decline_consent(s["consent"]["id"], "1.2.3.4")
+    red = consent_service.dispatch_consent(s["consent"]["id"], s["counsellor"]["id"])
+    assert red["magic_token"] != token
+    assert database.get_consent_by_token(token) is None
+    assert database.get_consent_by_token(red["magic_token"])["id"] == s["consent"]["id"]

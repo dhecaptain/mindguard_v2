@@ -45,6 +45,13 @@ export interface StudentDetail {
     label: string
     created_at: string
   }>
+  consent_status?: {
+    enforced: boolean
+    active: boolean
+    consent_id?: string | null
+    expires_at?: string | null
+    expiry_days?: number
+  }
 }
 
 export interface StudentAnalysisResult {

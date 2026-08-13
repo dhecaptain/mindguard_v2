@@ -207,9 +207,8 @@ export default function RosterPanel() {
           <div className="mt-[10px] rounded-[10px] bg-[#eff6ff] border border-[#bfdbfe] px-[14px] py-[10px] text-[0.82rem] text-[#1e40af]">
             <div className="font-bold mb-[2px]">Consent dispatch</div>
             <div>
-              {dispatch.dispatched} request(s) dispatched · {dispatch.email_sent} email(s) sent ·{' '}
-              {dispatch.courtesy_sent} courtesy copy/copies
-              {dispatch.email_failed ? ` · ${dispatch.email_failed} email(s) failed` : ''}
+              {dispatch.dispatched} request(s) dispatched · {dispatch.email_queued} email(s) queued ·{' '}
+              {dispatch.courtesy_queued} courtesy copy/copies
             </div>
             <div className="mt-[2px] text-[0.76rem] text-[#64748b]">
               {dispatch.skipped_live} already consented · {dispatch.skipped_no_parent} minor(s) without parent email

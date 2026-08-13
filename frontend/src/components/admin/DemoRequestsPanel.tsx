@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DEMO_STATUSES, getDemoRequests, updateDemoRequest } from '../../api/admin'
+import api from '../../api/client'
 import type { DemoRequest } from '../../types'
+
+interface AssignableUser {
+  id: string
+  name: string
+  email: string
+  role_type: string
+}
 
 const STATUS_STYLE: Record<string, string> = {
   new: 'bg-[#dbeafe] text-[#1e40af]',
@@ -16,6 +24,7 @@ export default function DemoRequestsPanel() {
   const [filter, setFilter] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [assignees, setAssignees] = useState<AssignableUser[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -31,6 +40,15 @@ export default function DemoRequestsPanel() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    api.get('/admin/users')
+      .then(({ data }) => {
+        const list: AssignableUser[] = Array.isArray(data) ? data : []
+        setAssignees(list.filter((u) => u.role_type === 'admin' || u.role_type === 'counsellor'))
+      })
+      .catch(() => {})
+  }, [])
+
   const handleStatus = async (id: string, status: string) => {
     try {
       const updated = await updateDemoRequest(id, { status: status as DemoRequest['status'] })
@@ -43,6 +61,15 @@ export default function DemoRequestsPanel() {
   const handleNotes = async (id: string, notes: string) => {
     try {
       const updated = await updateDemoRequest(id, { notes })
+      setRequests((rs) => rs.map((r) => (r.id === id ? { ...r, ...updated } : r)))
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  const handleAssignment = async (id: string, userId: string) => {
+    try {
+      const updated = await updateDemoRequest(id, { assigned_to: userId || null })
       setRequests((rs) => rs.map((r) => (r.id === id ? { ...r, ...updated } : r)))
     } catch (e: any) {
       setError(e.message)
@@ -109,6 +136,7 @@ export default function DemoRequestsPanel() {
                 <th className="text-left py-[10px] px-[20px]">Organisation</th>
                 <th className="text-left py-[10px] px-[20px]">Type</th>
                 <th className="text-left py-[10px] px-[20px]">Status</th>
+                <th className="text-left py-[10px] px-[20px]">Assigned to</th>
                 <th className="text-left py-[10px] px-[20px]">Notes</th>
                 <th className="text-left py-[10px] px-[20px]">Submitted</th>
               </tr>
@@ -145,6 +173,20 @@ export default function DemoRequestsPanel() {
                     >
                       {DEMO_STATUSES.map((s) => (
                         <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-[12px] px-[20px]">
+                    <select
+                      value={r.assigned_to || ''}
+                      onChange={(e) => handleAssignment(r.id, e.target.value)}
+                      className="rounded-[7px] border border-[#e5e7eb] px-[8px] py-[4px] text-[0.72rem] text-[#374151] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+                    >
+                      <option value="">Unassigned</option>
+                      {assignees.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.role_type})
+                        </option>
                       ))}
                     </select>
                   </td>

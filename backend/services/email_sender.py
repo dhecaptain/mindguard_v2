@@ -5,7 +5,14 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from backend.database import create_email_event
+from backend.database import (
+    bump_email_outbox_attempts,
+    create_email_event,
+    enqueue_email,
+    fetch_due_email_outbox,
+    mark_email_outbox_failed,
+    mark_email_outbox_sent,
+)
 from backend.secrets_manager import get_secret
 
 logger = logging.getLogger(__name__)
@@ -103,6 +110,19 @@ def _send_resend(to_email: str, subject: str, body_html: str) -> tuple[bool, str
         return False, str(exc), ""
 
 
+def _deliver(to_email: str, subject: str, body_html: str) -> tuple[bool, str, str]:
+    """Attempt transport (Resend preferred, SMTP fallback). No side effects."""
+    ok, err, esp_message_id = False, "", ""
+
+    if is_resend_configured():
+        ok, err, esp_message_id = _send_resend(to_email, subject, body_html)
+
+    if not ok:
+        ok, err = _send_smtp(to_email, subject, body_html)
+
+    return ok, err, esp_message_id
+
+
 def send_html_email(
     to_email: str,
     subject: str,
@@ -111,20 +131,28 @@ def send_html_email(
     related_id: str | None = None,
     metadata: dict | None = None,
 ) -> tuple[bool, str]:
-    """Send an HTML email, preferring Resend and falling back to SMTP.
+    """Send an HTML email through the write-ahead outbox (Remediation P1-1).
 
-    When ``related_type``/``related_id`` are provided, delivery is logged to the
-    ``email_events`` table (append-only deliverability trail, Brief §9).
+    The message is persisted to ``email_outbox`` first (crash-safe), then
+    delivered synchronously (Resend primary, SMTP fallback). The outbox row is
+    marked ``sent``/``failed`` and, when ``related_type``/``related_id`` are
+    provided, delivery is logged to the ``email_events`` table (append-only
+    deliverability trail, Brief §9). Rows that fail and are left ``queued``
+    (process crash mid-send) are retried by the background worker.
 
     Returns ``(ok, error)`` — on success the error slot is empty.
     """
-    ok, err, esp_message_id = False, "", ""
+    outbox_id = enqueue_email(
+        to_email, subject, body_html,
+        related_type=related_type, related_id=related_id, metadata=metadata,
+    )
+    ok, err, esp_message_id = _deliver(to_email, subject, body_html)
 
-    if is_resend_configured():
-        ok, err, esp_message_id = _send_resend(to_email, subject, body_html)
-
-    if not ok:
-        ok, err = _send_smtp(to_email, subject, body_html)
+    if ok:
+        mark_email_outbox_sent(outbox_id, esp_message_id)
+    else:
+        bump_email_outbox_attempts(outbox_id)
+        mark_email_outbox_failed(outbox_id, err)
 
     if related_type:
         create_email_event(
@@ -137,3 +165,55 @@ def send_html_email(
         )
 
     return ok, err
+
+
+def process_email_outbox(batch_size: int = 50, max_attempts: int = 5) -> dict:
+    """Worker: drain queued outbox rows, retrying failed ones with backoff.
+
+    Rows are delivered at most ``max_attempts`` times total; each failed
+    attempt schedules the next retry roughly ``2^attempts`` minutes out. Every
+    attempt writes a ``sent``/``failed`` ``email_events`` row (the append-only
+    trail) when ``related_type`` is set.
+
+    Returns ``{"processed", "sent", "failed"}`` for logging/health checks.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    sent = failed = 0
+    rows = fetch_due_email_outbox(batch_size=batch_size, max_attempts=max_attempts)
+    for row in rows:
+        outbox_id = row["id"]
+        to_email = row["to_email"]
+        ok, err, esp_message_id = _deliver(to_email, row["subject"], row["body_html"])
+        if ok:
+            mark_email_outbox_sent(outbox_id, esp_message_id)
+            sent += 1
+        else:
+            attempts = int(row.get("attempts") or 0) + 1
+            bump_email_outbox_attempts(outbox_id)
+            retry_at = (
+                datetime.now(timezone.utc) + timedelta(seconds=min(2**attempts, 300) * 60)
+            ).isoformat()
+            mark_email_outbox_failed(outbox_id, err, retry_at=retry_at)
+            failed += 1
+        if row.get("related_type"):
+            create_email_event(
+                related_type=row["related_type"],
+                related_id=row["related_id"],
+                event="sent" if ok else "failed",
+                esp_message_id=esp_message_id or None,
+                recipient_email=to_email,
+                metadata={
+                    **((row.get("metadata_json") or {}) if isinstance(row.get("metadata_json"), dict) else {}),
+                    **({"error": err} if not ok else {}),
+                    "via": "outbox-worker",
+                },
+            )
+        if ok:
+            logger.info("outbox: delivered %s (%s) via worker", outbox_id, row.get("related_type"))
+        else:
+            logger.warning("outbox: delivery failed for %s (attempt %s): %s",
+                           outbox_id, int(row.get("attempts") or 0) + 1, err)
+    if rows:
+        logger.info("outbox worker pass: processed=%s sent=%s failed=%s", len(rows), sent, failed)
+    return {"processed": len(rows), "sent": sent, "failed": failed}
