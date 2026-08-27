@@ -26,7 +26,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import (
@@ -3254,14 +3254,53 @@ h1{font-size:1.8rem;margin-bottom:1rem}h2{font-size:1.2rem;margin-top:1.5rem}p{m
 </body></html>"""
 
 
-@app.get("/privacy", response_class=Response)
-async def privacy_page():
-    return Response(content=_PRIVACY_HTML, media_type="text/html")
+_LANDING_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MindGuard — Student Wellbeing Monitoring</title>
+<meta name="description" content="MindGuard is an AI-assisted mental-health risk screening platform for schools and universities.">
+<style>body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:0;color:#1f2937;background:#f8fafc}
+.hero{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center;padding:2rem}
+.hero h1{font-size:2.8rem;font-weight:800;margin:0 0 .5rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{font-size:1.15rem;color:#475569;max-width:520px;margin:0 0 2rem}
+.hero a{display:inline-block;padding:.8rem 2rem;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:1rem}
+.hero a:hover{background:#4f46e5}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;max-width:800px;margin:0 auto;padding:2rem}
+.feature{background:#fff;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.feature h3{margin:0 0 .4rem;font-size:1.05rem}.feature p{margin:0;color:#64748b;font-size:.9rem}
+footer{text-align:center;padding:2rem;color:#94a3b8;font-size:.85rem}
+a{color:#6366f1}</style></head>
+<body>
+<div class="hero">
+  <h1>MindGuard</h1>
+  <p>AI-assisted mental-health risk screening for educational institutions. Consent-first, privacy-preserving, built for schools.</p>
+  <a href="/dashboard">Open Dashboard</a>
+</div>
+<div class="features">
+  <div class="feature"><h3>Consent First</h3><p>No analysis runs without explicit, revocable consent from students or guardians.</p></div>
+  <div class="feature"><h3>Privacy by Design</h3><p>Student PII is encrypted at rest. Access is limited to authorised counsellors and admins.</p></div>
+  <div class="feature"><h3>Risk Screening</h3><p>AI-assisted analysis flags potential mental-health risks for early intervention.</p></div>
+</div>
+<footer>MindGuard &copy; 2026 &middot; <a href="/privacy">Privacy Policy</a> &middot; <a href="/terms">Terms of Service</a></footer>
+</body></html>"""
+
+_ROBOTS_TXT = "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /auth\n"
+
+_PUBLIC_PATHS = {"/", "/robots.txt", "/privacy", "/terms"}
 
 
-@app.get("/terms", response_class=Response)
-async def terms_page():
-    return Response(content=_TERMS_HTML, media_type="text/html")
+@app.middleware("http")
+async def _public_pages_middleware(request: Request, call_next):
+    path = request.url.path
+    if path in _PUBLIC_PATHS:
+        if path == "/":
+            return HTMLResponse(_LANDING_HTML)
+        if path == "/privacy":
+            return HTMLResponse(_PRIVACY_HTML)
+        if path == "/terms":
+            return HTMLResponse(_TERMS_HTML)
+        if path == "/robots.txt":
+            return Response(content=_ROBOTS_TXT, media_type="text/plain")
+    return await call_next(request)
 
 
 _frontend_dir = os.getenv("FRONTEND_DIR", "")
