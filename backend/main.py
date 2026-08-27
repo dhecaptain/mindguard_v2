@@ -26,7 +26,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import (
@@ -3254,16 +3254,6 @@ h1{font-size:1.8rem;margin-bottom:1rem}h2{font-size:1.2rem;margin-top:1.5rem}p{m
 </body></html>"""
 
 
-@app.get("/privacy", response_class=Response)
-async def privacy_page():
-    return Response(content=_PRIVACY_HTML, media_type="text/html")
-
-
-@app.get("/terms", response_class=Response)
-async def terms_page():
-    return Response(content=_TERMS_HTML, media_type="text/html")
-
-
 _LANDING_HTML = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MindGuard — Student Wellbeing Monitoring</title>
@@ -3293,16 +3283,24 @@ a{color:#6366f1}</style></head>
 <footer>MindGuard &copy; 2026 &middot; <a href="/privacy">Privacy Policy</a> &middot; <a href="/terms">Terms of Service</a></footer>
 </body></html>"""
 
+_ROBOTS_TXT = "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /auth\n"
 
-@app.get("/", response_class=Response)
-async def landing_page():
-    return Response(content=_LANDING_HTML, media_type="text/html")
+_PUBLIC_PATHS = {"/", "/robots.txt", "/privacy", "/terms"}
 
 
-@app.get("/robots.txt", response_class=Response)
-async def robots_txt():
-    content = "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /auth\n"
-    return Response(content=content, media_type="text/plain")
+@app.middleware("http")
+async def _public_pages_middleware(request: Request, call_next):
+    path = request.url.path
+    if path in _PUBLIC_PATHS:
+        if path == "/":
+            return HTMLResponse(_LANDING_HTML)
+        if path == "/privacy":
+            return HTMLResponse(_PRIVACY_HTML)
+        if path == "/terms":
+            return HTMLResponse(_TERMS_HTML)
+        if path == "/robots.txt":
+            return Response(content=_ROBOTS_TXT, media_type="text/plain")
+    return await call_next(request)
 
 
 _frontend_dir = os.getenv("FRONTEND_DIR", "")
