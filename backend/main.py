@@ -3210,6 +3210,60 @@ async def get_frontend_config():
     }
 
 
+_PRIVACY_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy — MindGuard</title>
+<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:2rem auto;padding:0 1.5rem;color:#1f2937;line-height:1.7}
+h1{font-size:1.8rem;margin-bottom:1rem}h2{font-size:1.2rem;margin-top:1.5rem}p{margin:.6rem 0}</style></head>
+<body>
+<h1>Privacy Policy</h1>
+<p><em>Last updated: August 2026</em></p>
+<p>MindGuard is a student-wellbeing monitoring platform for schools and universities. This policy explains how we handle personal data.</p>
+<h2>Consent Before Analysis</h2>
+<p>No student content is analysed until consent has been given — by the student if they are an adult, or by a parent or guardian if they are a minor. Consent is recorded, time-stamped and can be revoked at any time.</p>
+<h2>Data We Hold</h2>
+<p>We hold roster information (name, email, date of birth), consent records, and analysis events. Student PII is encrypted at rest, and access is limited to the counsellors and admins your institution authorises.</p>
+<h2>Data Retention</h2>
+<p>We retain data only as long as necessary to provide the service. You may request deletion at any time.</p>
+<h2>Your Rights</h2>
+<p>You may request access to, correction of, or deletion of your data at any time by contacting us below.</p>
+<h2>Contact</h2>
+<p>Email: privacy@mindguardai.me</p>
+</body></html>"""
+
+
+_TERMS_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms of Service — MindGuard</title>
+<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:2rem auto;padding:0 1.5rem;color:#1f2937;line-height:1.7}
+h1{font-size:1.8rem;margin-bottom:1rem}h2{font-size:1.2rem;margin-top:1.5rem}p{margin:.6rem 0}</style></head>
+<body>
+<h1>Terms of Service</h1>
+<p><em>Last updated: August 2026</em></p>
+<p>Welcome to MindGuard. By using our platform, you agree to these terms.</p>
+<h2>Service Description</h2>
+<p>MindGuard provides AI-assisted mental-health risk screening for educational institutions. It is not a substitute for professional clinical assessment.</p>
+<h2>Consent</h2>
+<p>Analysis of student content requires explicit, informed consent. Users may revoke consent at any time.</p>
+<h2>Acceptable Use</h2>
+<p>You agree to use MindGuard only for lawful, authorised purposes within your institution.</p>
+<h2>Limitation of Liability</h2>
+<p>MindGuard is provided "as is." We are not liable for decisions made based on AI-generated risk scores.</p>
+<h2>Contact</h2>
+<p>Email: terms@mindguardai.me</p>
+</body></html>"""
+
+
+@app.get("/privacy", response_class=Response)
+async def privacy_page():
+    return Response(content=_PRIVACY_HTML, media_type="text/html")
+
+
+@app.get("/terms", response_class=Response)
+async def terms_page():
+    return Response(content=_TERMS_HTML, media_type="text/html")
+
+
 _frontend_dir = os.getenv("FRONTEND_DIR", "")
 if _frontend_dir and Path(_frontend_dir).is_dir():
     app.mount("/", SPAStaticFiles(directory=_frontend_dir, html=True), name="frontend")
