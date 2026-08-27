@@ -328,6 +328,17 @@ def update_student_status(student_id: str, status: str) -> bool:
     return ok
 
 
+def ensure_user_approved(user_id: str) -> None:
+    """Approve a user if they are still pending (used by bootstrap promotion)."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE users SET status = 'approved' WHERE id = ? AND status = 'pending'",
+        (user_id,),
+    )
+    conn.commit()
+    conn.close()
+
+
 def save_analysis(user_id: str, platform: str, text: str | None, prob: float, label: str):
     aid = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
