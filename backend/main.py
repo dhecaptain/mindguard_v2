@@ -51,6 +51,7 @@ from backend.services.predictor import predict_one, predict_batch
 from backend.utils import clean_text, risk_label, detect_socioeconomic, calibrate_risk_score, RESOURCES, US_STATE_RESOURCES, TEAM_MEMBERS
 from backend.database import (
     init_db, seed_defaults,
+    ensure_user_approved,
     get_user_by_email, get_user_by_id, create_user,
     get_students, update_student_status,
     save_analysis, get_analytics,
@@ -394,7 +395,7 @@ def _bootstrap_admins() -> None:
     """
     raw = os.getenv("MINDGUARD_BOOTSTRAP_ADMIN_EMAIL", "")
     emails = [e.strip().lower() for e in raw.split(",") if e.strip()]
-    if not emails:
+    if len(emails) == 0:
         return
     for email in emails:
         user = get_user_by_email(email)
@@ -404,10 +405,12 @@ def _bootstrap_admins() -> None:
                 email,
             )
             continue
+        ensure_user_approved(user["id"])
         if user["role_type"] == "admin":
             logger.info("bootstrap admin: %s is already an admin", email)
             continue
         update_user_role(user["id"], "admin")
+        ensure_user_approved(user["id"])
         write_audit(
             user["id"], "admin", "USER_PROMOTED",
             "user", user["id"],
