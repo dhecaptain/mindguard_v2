@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import SignInPage from './SignInPage'
+import SignInPage from '../components/auth/SignInPage'
 
 export default function LandingPage() {
   const [showSignIn, setShowSignIn] = useState(false)
