@@ -187,11 +187,12 @@ export default function App() {
   const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
-    initSupabase()
-    const token = getToken()
-    if (token) {
-      getMe()
-        .then((user) => {
+    const boot = async () => {
+      await initSupabase()
+      const token = getToken()
+      if (token) {
+        try {
+          const user = await getMe()
           setAuth(user)
           setTermsAccepted(Boolean(user.terms_accepted))
           if (user.role_type?.toLowerCase() === 'counsellor' || user.role_type?.toLowerCase() === 'school_admin') {
@@ -199,17 +200,14 @@ export default function App() {
           } else if (user.role_type?.toLowerCase() === 'admin') {
             setPage('admin')
           }
-          setInitialized(true)
-        })
-        .catch(() => {
+        } catch {
           clearToken()
-          setLoading(false)
-          setInitialized(true)
-        })
-    } else {
+        }
+      }
       setLoading(false)
       setInitialized(true)
     }
+    boot()
   }, [])
 
   if (!initialized || loading) {
