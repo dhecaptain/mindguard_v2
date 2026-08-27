@@ -26,7 +26,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import (
@@ -154,7 +154,15 @@ async def inference_unavailable_handler(request: Request, exc: InferenceUnavaila
 
 
 class SPAStaticFiles(StaticFiles):
+    _PUBLIC = {
+        "/robots.txt": ("text/plain", b"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /auth\n"),
+    }
+
     async def get_response(self, path: str, scope):
+        if path in self._PUBLIC:
+            ct, body = self._PUBLIC[path]
+            from starlette.responses import Response
+            return Response(content=body, media_type=ct)
         try:
             return await super().get_response(path, scope)
         except Exception as exc:
@@ -3208,99 +3216,6 @@ async def get_frontend_config():
         "supabase_url": SUPABASE_URL or "",
         "supabase_anon_key": SUPABASE_ANON_KEY or "",
     }
-
-
-_PRIVACY_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Privacy Policy — MindGuard</title>
-<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:2rem auto;padding:0 1.5rem;color:#1f2937;line-height:1.7}
-h1{font-size:1.8rem;margin-bottom:1rem}h2{font-size:1.2rem;margin-top:1.5rem}p{margin:.6rem 0}</style></head>
-<body>
-<h1>Privacy Policy</h1>
-<p><em>Last updated: August 2026</em></p>
-<p>MindGuard is a student-wellbeing monitoring platform for schools and universities. This policy explains how we handle personal data.</p>
-<h2>Consent Before Analysis</h2>
-<p>No student content is analysed until consent has been given — by the student if they are an adult, or by a parent or guardian if they are a minor. Consent is recorded, time-stamped and can be revoked at any time.</p>
-<h2>Data We Hold</h2>
-<p>We hold roster information (name, email, date of birth), consent records, and analysis events. Student PII is encrypted at rest, and access is limited to the counsellors and admins your institution authorises.</p>
-<h2>Data Retention</h2>
-<p>We retain data only as long as necessary to provide the service. You may request deletion at any time.</p>
-<h2>Your Rights</h2>
-<p>You may request access to, correction of, or deletion of your data at any time by contacting us below.</p>
-<h2>Contact</h2>
-<p>Email: privacy@mindguardai.me</p>
-</body></html>"""
-
-
-_TERMS_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Terms of Service — MindGuard</title>
-<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:2rem auto;padding:0 1.5rem;color:#1f2937;line-height:1.7}
-h1{font-size:1.8rem;margin-bottom:1rem}h2{font-size:1.2rem;margin-top:1.5rem}p{margin:.6rem 0}</style></head>
-<body>
-<h1>Terms of Service</h1>
-<p><em>Last updated: August 2026</em></p>
-<p>Welcome to MindGuard. By using our platform, you agree to these terms.</p>
-<h2>Service Description</h2>
-<p>MindGuard provides AI-assisted mental-health risk screening for educational institutions. It is not a substitute for professional clinical assessment.</p>
-<h2>Consent</h2>
-<p>Analysis of student content requires explicit, informed consent. Users may revoke consent at any time.</p>
-<h2>Acceptable Use</h2>
-<p>You agree to use MindGuard only for lawful, authorised purposes within your institution.</p>
-<h2>Limitation of Liability</h2>
-<p>MindGuard is provided "as is." We are not liable for decisions made based on AI-generated risk scores.</p>
-<h2>Contact</h2>
-<p>Email: terms@mindguardai.me</p>
-</body></html>"""
-
-
-_LANDING_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MindGuard — Student Wellbeing Monitoring</title>
-<meta name="description" content="MindGuard is an AI-assisted mental-health risk screening platform for schools and universities.">
-<style>body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:0;color:#1f2937;background:#f8fafc}
-.hero{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center;padding:2rem}
-.hero h1{font-size:2.8rem;font-weight:800;margin:0 0 .5rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hero p{font-size:1.15rem;color:#475569;max-width:520px;margin:0 0 2rem}
-.hero a{display:inline-block;padding:.8rem 2rem;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:1rem}
-.hero a:hover{background:#4f46e5}
-.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;max-width:800px;margin:0 auto;padding:2rem}
-.feature{background:#fff;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.feature h3{margin:0 0 .4rem;font-size:1.05rem}.feature p{margin:0;color:#64748b;font-size:.9rem}
-footer{text-align:center;padding:2rem;color:#94a3b8;font-size:.85rem}
-a{color:#6366f1}</style></head>
-<body>
-<div class="hero">
-  <h1>MindGuard</h1>
-  <p>AI-assisted mental-health risk screening for educational institutions. Consent-first, privacy-preserving, built for schools.</p>
-  <a href="/dashboard">Open Dashboard</a>
-</div>
-<div class="features">
-  <div class="feature"><h3>Consent First</h3><p>No analysis runs without explicit, revocable consent from students or guardians.</p></div>
-  <div class="feature"><h3>Privacy by Design</h3><p>Student PII is encrypted at rest. Access is limited to authorised counsellors and admins.</p></div>
-  <div class="feature"><h3>Risk Screening</h3><p>AI-assisted analysis flags potential mental-health risks for early intervention.</p></div>
-</div>
-<footer>MindGuard &copy; 2026 &middot; <a href="/privacy">Privacy Policy</a> &middot; <a href="/terms">Terms of Service</a></footer>
-</body></html>"""
-
-_ROBOTS_TXT = "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /dashboard\nDisallow: /auth\n"
-
-_PUBLIC_PATHS = {"/", "/robots.txt", "/privacy", "/terms"}
-
-
-@app.middleware("http")
-async def _public_pages_middleware(request: Request, call_next):
-    path = request.url.path
-    if path in _PUBLIC_PATHS:
-        if path == "/":
-            return HTMLResponse(_LANDING_HTML)
-        if path == "/privacy":
-            return HTMLResponse(_PRIVACY_HTML)
-        if path == "/terms":
-            return HTMLResponse(_TERMS_HTML)
-        if path == "/robots.txt":
-            return Response(content=_ROBOTS_TXT, media_type="text/plain")
-    return await call_next(request)
 
 
 _frontend_dir = os.getenv("FRONTEND_DIR", "")

@@ -34,6 +34,7 @@ import ConsentTrackerPage from './pages/ConsentTrackerPage'
 import AuditLogPage from './pages/AuditLogPage'
 import AdminPage from './pages/AdminPage'
 import NotificationPreferencesPage from './pages/NotificationPreferencesPage'
+import LandingPage from './pages/LandingPage'
 
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000   // 15 minutes
 const IDLE_WARNING_MS = 60 * 1000         // warn 1 minute before
@@ -236,6 +237,9 @@ export default function App() {
   }
 
   if (!authenticated) {
+    if (window.location.pathname === '/' || window.location.pathname === '') {
+      return <LandingPage />
+    }
     return <SignInPage onSuccess={() => {}} />
   }
 
