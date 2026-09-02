@@ -57,7 +57,7 @@ export function Card({
   children: ReactNode
 }) {
   return (
-    <div className="bg-white border border-[#eef2f6] rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+    <div className="h-full bg-white border border-[#eef2f6] rounded-2xl p-6 shadow-sm hover:shadow-lg hover:shadow-teal-900/5 hover:border-teal-100 hover:-translate-y-1 transition-all duration-300">
       {icon && <div className="text-2xl mb-4">{icon}</div>}
       <h3 className="font-bold text-ink mb-2">{title}</h3>
       <div className="text-sm text-slate leading-relaxed">{children}</div>
@@ -75,11 +75,11 @@ export function CtaButton({
   variant?: 'primary' | 'ghost'
 }) {
   const base =
-    'inline-block px-6 py-3 rounded-xl font-semibold transition-colors'
+    'inline-block px-6 py-3 rounded-xl font-semibold transition-all'
   const styles =
     variant === 'primary'
-      ? 'bg-teal-600 text-white hover:bg-teal-700'
-      : 'border border-[#e5e7eb] text-ink hover:bg-white'
+      ? 'bg-teal-600 text-white hover:bg-teal-700 hover:shadow-lg hover:shadow-teal-600/20 hover:-translate-y-[1px]'
+      : 'border border-[#e5e7eb] text-ink hover:bg-white hover:border-teal-200 hover:-translate-y-[1px]'
   return (
     <Link href={href} className={`${base} ${styles}`}>
       {children}
