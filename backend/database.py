@@ -28,10 +28,7 @@ def get_db() -> sqlite3.Connection:
 def _decrypt_field(value) -> str | None:
     """Decrypt a `gcm1:` PII blob; leave legacy plaintext (and non-str) untouched."""
     if isinstance(value, str) and value.startswith("gcm1:"):
-        try:
-            return decrypt_pii(value)
-        except ValueError:
-            return value
+        return decrypt_pii(value)
     return value
 
 
@@ -615,12 +612,27 @@ def mark_notification_read(nid: str, user_id: str):
 
 def get_counsellor_dashboard(counsellor_id: str):
     conn = get_db()
-    total_students = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student'").fetchone()[0]
-    pending = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending'").fetchone()[0]
+    counsellor = conn.execute("SELECT institution_id FROM users WHERE id = ?", (counsellor_id,)).fetchone()
+    inst_id = counsellor["institution_id"] if counsellor and counsellor["institution_id"] else None
+    if inst_id:
+        total_students = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND institution_id = ?", (inst_id,)
+        ).fetchone()[0]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending' AND institution_id = ?", (inst_id,)
+        ).fetchone()[0]
+        crisis_flags = conn.execute(
+            "SELECT COUNT(*) FROM analyses a JOIN users u ON a.user_id = u.id "
+            "WHERE a.prob >= 0.75 AND a.created_at >= datetime('now', '-7 days') AND u.institution_id = ?",
+            (inst_id,),
+        ).fetchone()[0]
+    else:
+        total_students = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student'").fetchone()[0]
+        pending = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending'").fetchone()[0]
+        crisis_flags = conn.execute(
+            "SELECT COUNT(*) FROM analyses WHERE prob >= 0.75 AND created_at >= datetime('now', '-7 days')"
+        ).fetchone()[0]
     open_referrals = conn.execute("SELECT COUNT(*) FROM referrals WHERE counsellor_id = ? AND status = 'open'", (counsellor_id,)).fetchone()[0]
-    crisis_flags = conn.execute(
-        "SELECT COUNT(*) FROM analyses WHERE prob >= 0.75 AND created_at >= datetime('now', '-7 days')"
-    ).fetchone()[0]
     recent_referrals = conn.execute(
         "SELECT r.*, u.name as student_name FROM referrals r JOIN users u ON r.student_id = u.id "
         "WHERE r.counsellor_id = ? ORDER BY r.created_at DESC LIMIT 5",
@@ -1107,20 +1119,26 @@ def write_audit(
 def get_audit_log(counsellor_id: str, limit: int = 100) -> list:
     """Return audit entries where actor is the counsellor or target is one of their students.
 
-    Consent workflow entries (CONSENT_DISPATCHED / CONSENT_ACCEPTED / CONSENT_DECLINED /
-    CONSENT_REVOKED / TERMS_ACCEPTED, ...) are authored by the system/recipient with
-    ``target_type = 'consent'``, so they are matched by extending the query to any
-    consent whose ``counsellor_id`` is this user (Delivery Brief §2.8: "Admin sees
-    revocation events in the Audit Log"; §1.1: practitioner-agreement acceptance is
-    part of the consent audit trail).
+    Scoped to the counsellor's institution to avoid leaking cross-institution data.
+    Consent workflow entries are matched via consents owned by this counsellor.
     """
     conn = get_db()
-    student_ids = [
-        r["id"] for r in conn.execute(
-            "SELECT id FROM users WHERE role_type = 'student'",
-        ).fetchall()
-    ]
-    # Build a query that returns entries where actor is the counsellor or target_id is a student
+    counsellor = conn.execute("SELECT institution_id FROM users WHERE id = ?", (counsellor_id,)).fetchone()
+    inst_id = counsellor["institution_id"] if counsellor and counsellor["institution_id"] else None
+    if inst_id:
+        student_ids = [
+            r["id"] for r in conn.execute(
+                "SELECT id FROM users WHERE role_type = 'student' AND institution_id = ?", (inst_id,)
+            ).fetchall()
+        ]
+    else:
+        student_ids = [
+            r["id"] for r in conn.execute(
+                "SELECT id FROM users WHERE role_type = 'student' LIMIT 500",
+            ).fetchall()
+        ]
+    if len(student_ids) > 500:
+        student_ids = student_ids[:500]
     placeholders = ",".join("?" * len(student_ids)) if student_ids else "''"
     query = f"""
         SELECT * FROM audit_log
@@ -1416,12 +1434,15 @@ def mark_group_message_read(message_id: str, user_id: str) -> None:
 def mark_all_group_messages_read(group_id: str, user_id: str) -> None:
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
-    conn.execute(
-        """INSERT OR IGNORE INTO group_message_read (id, message_id, user_id, read_at)
-           SELECT ?, gm.id, ?, ? FROM group_messages gm
-           WHERE gm.group_id = ? AND gm.sender_id != ?""",
-        (str(uuid.uuid4()), user_id, now, group_id, user_id),
-    )
+    rows = conn.execute(
+        "SELECT id FROM group_messages WHERE group_id = ? AND sender_id != ?",
+        (group_id, user_id),
+    ).fetchall()
+    for r in rows:
+        conn.execute(
+            "INSERT OR IGNORE INTO group_message_read (id, message_id, user_id, read_at) VALUES (?, ?, ?, ?)",
+            (str(uuid.uuid4()), r["id"], user_id, now),
+        )
     conn.commit()
     conn.close()
 

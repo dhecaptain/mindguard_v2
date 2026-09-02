@@ -6,6 +6,7 @@ let _available = false
 export async function initSupabase(): Promise<void> {
   try {
     const res = await fetch('/api/config')
+    if (!res.ok) return
     const { supabase_url, supabase_anon_key } = await res.json()
     if (supabase_url && supabase_anon_key) {
       _client = createClient(supabase_url, supabase_anon_key)

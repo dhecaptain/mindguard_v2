@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuthStore, useUiStore } from './store'
 import { getMe, logout as apiLogout } from './api/auth'
 import { initSupabase } from './lib/supabase'
@@ -138,7 +138,7 @@ function AuthenticatedApp() {
   const { logout } = useAuthStore()
   const [showWarning, setShowWarning] = useState(false)
   const [countdown, setCountdown] = useState(60)
-  const countdownRef = { current: null as ReturnType<typeof setInterval> | null }
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const handleLogout = useCallback(async () => {
     setShowWarning(false)
@@ -221,8 +221,8 @@ export default function App() {
     )
   }
 
-  if (window.location.pathname.startsWith('/auth/callback') && !authenticated) {
-    return <AuthCallbackPage />
+  if (window.location.pathname === '/auth/callback' || window.location.pathname.startsWith('/auth/callback/')) {
+    if (!authenticated) return <AuthCallbackPage />
   }
 
   if (window.location.pathname.startsWith('/consent/')) {
@@ -230,7 +230,7 @@ export default function App() {
     return <ConsentPortalPage token={token} />
   }
 
-  if (window.location.pathname.startsWith('/demo')) {
+  if (window.location.pathname === '/demo' || window.location.pathname === '/demo/') {
     return <DemoRequestPage />
   }
 

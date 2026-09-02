@@ -241,11 +241,13 @@ Set these in the Railway service dashboard (Variables):
 | `MINDGUARD_DB_DIR` | **`/app/data`** — keeps `mindguard.db` + `.encryption_key` on the persistent volume |
 | `ENCRYPTION_KEY` | 64-hex secret — `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `JWT_SECRET` | rotate before launch — `secrets.token_hex(32)` |
-| `APP_BASE_URL` | `https://<your-app>.up.railway.app` (consent/demo email links) |
-| `EMAIL_FROM` | `MindGuard <noreply@mindguard.ai>` (must match the ESP sender domain) |
+| `APP_BASE_URL` | `https://app.mindguardai.me` (consent/demo email links — Railway app domain) |
+| `EMAIL_FROM` | `MindGuard <noreply@mindguardai.me>` (must match the ESP sender domain) |
 | `DEMO_NOTIFY_EMAIL` | inbox for demo-request notifications |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Google OAuth (returned by `/api/config`) |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,https://<marketing-domain>` |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,https://app.mindguardai.me,https://www.mindguardai.me` |
+| `MINDGUARD_ENV` | `production` on Railway — prevents seeding demo `password` accounts |
+| `MINDGUARD_DB_DIR` | `/app/data` (persistent volume) |
 | `MINDGUARD_CSP` | leave unset (`true`); set `false` only if a proxy sets CSP |
 | `HF_CACHE_DIR` | `/tmp/huggingface` (already set in Dockerfile) |
 | `LOG_LEVEL` | `INFO` |

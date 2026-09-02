@@ -8,7 +8,7 @@ the repo root so it picks up the root `.env`:
 
 ```bash
 cp .env.example .env
-# fill in JWT_SECRET and ENCRYPTION_KEY (generate with python -c "import secrets; print(secrets.token_urlsafe(32))")
+# fill in JWT_SECRET and ENCRYPTION_KEY (generate with python -c "import secrets; print(secrets.token_hex(32))")
 ```
 
 `JWT_SECRET` is required at startup (boot fails without it). The file is

@@ -113,9 +113,16 @@ from backend.logging_setup import (
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Error monitoring (Remediation P2-2): report server exceptions to Sentry when
-# SENTRY_DSN is set. Initialised before app creation so startup failures are
-# captured; sampling is a no-op when the DSN is absent.
+def _sentry_before_send(event, hint):
+    """Never upload PII: drop request bodies and recipient emails from reports."""
+    for key in ("request",):
+        event.pop(key, None)
+    for key in list(event.get("extra", {})):
+        if "email" in key.lower() or "recipient" in key.lower():
+            event["extra"].pop(key, None)
+    return event
+
+
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
 if _SENTRY_DSN:
     import sentry_sdk
@@ -128,16 +135,6 @@ if _SENTRY_DSN:
         before_send=lambda event, hint: _sentry_before_send(event, hint),
     )
     logger.info("Sentry initialised (env=%s)", os.getenv("SENTRY_ENVIRONMENT", "production"))
-
-
-def _sentry_before_send(event, hint):
-    """Never upload PII: drop request bodies and recipient emails from reports."""
-    for key in ("request",):
-        event.pop(key, None)
-    for key in list(event.get("extra", {})):
-        if "email" in key.lower() or "recipient" in key.lower():
-            event["extra"].pop(key, None)
-    return event
 
 
 app = FastAPI(title="MindGuard API", version="2.0.0")
@@ -482,6 +479,10 @@ def _check_rate_limit(key: str, max_requests: int = _AUTH_RATE_MAX, window: int 
     if len(_rate_store[key]) >= max_requests:
         raise HTTPException(429, "Too many requests. Please try again later.")
     _rate_store[key].append(now)
+    if len(_rate_store) > 10000:
+        oldest = sorted(_rate_store, key=lambda k: _rate_store[k][-1] if _rate_store[k] else 0)[:1000]
+        for k in oldest:
+            del _rate_store[k]
 
 
 def _check_analysis_rate_limit(user_id: str):
@@ -511,7 +512,7 @@ def _safe_notify(user_id: str, title: str, message: str, ntype: str = "general")
 
 
 _PRIVATE_HOST_PATTERNS = re.compile(
-    r"^(localhost|127\.|0\.0\.0\.0|::1|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)",
+    r"^(localhost|127\.|0\.0\.0\.0|0x7f\.|2130706433|::1|169\.254\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)",
     re.IGNORECASE,
 )
 

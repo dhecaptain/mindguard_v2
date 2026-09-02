@@ -33,8 +33,11 @@ export async function acceptTerms(): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  clearToken()
-  await api.post('/auth/logout')
+  try {
+    await api.post('/auth/logout')
+  } finally {
+    clearToken()
+  }
 }
 
 export async function googleLogin(supabaseToken: string, email?: string, name?: string): Promise<UserInfo & { access_token: string }> {
