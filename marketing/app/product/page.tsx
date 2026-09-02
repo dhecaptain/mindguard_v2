@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, Card, Check, CtaBand, CtaButton } from '@/components/ui'
+import { PageHero, SectionHeading, Card, Check, CtaButton } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
+import { Icons } from '@/components/icons'
 
 export const metadata: Metadata = {
   title: 'Product — MindGuard',
@@ -44,22 +46,22 @@ const PLATFORMS = [
 
 const COMMITMENTS = [
   {
-    icon: '🛡️',
+    icon: <Icons.Shield />,
     title: 'Consent-first',
     text: 'No content is analysed until consent is given — by the student if adult, by a parent or guardian if minor. Consent can be withdrawn with one click, and withdrawal stops analysis immediately.',
   },
   {
-    icon: '🧑‍⚕️',
+    icon: <Icons.Users />,
     title: 'Human-in-the-loop',
     text: 'MindGuard is decision support, not a decision maker. It surfaces signals and suggests crisis resources; a trained counsellor reviews every output before any action.',
   },
   {
-    icon: '🏫',
+    icon: <Icons.School />,
     title: 'FERPA / COPPA aware',
     text: 'Built for the regulatory reality of schools: student records are protected, minors are routed through parental consent, and institutions stay in control of their data.',
   },
   {
-    icon: '🗑️',
+    icon: <Icons.Trash />,
     title: 'Data minimisation',
     text: 'Only content a student explicitly shares is analysed. PII is encrypted at rest, the analysed content is not stored between sessions, and data is never sold or shared outside the school.',
   },
@@ -74,104 +76,124 @@ export default function ProductPage() {
         subtitle="MindGuard helps trained practitioners identify early signs of distress in consented digital content — powered by Mental-RoBERTa, reviewed by humans, built for trust."
       />
 
-      {/* How it works */}
-      <section className="py-20">
+      <section className="relative py-20 overflow-hidden">
+        <FloatingOrb className="bg-teal-100 opacity-40 -top-20 -right-20" size={360} />
         <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading title="How it works" />
-          <div className="grid md:grid-cols-2 gap-6">
+          <Reveal>
+            <SectionHeading title="How it works" />
+          </Reveal>
+          <Stagger className="grid md:grid-cols-2 gap-6">
             {HOW_IT_WORKS.map((s) => (
-              <div key={s.step} className="relative bg-white border border-[#eef2f6] rounded-2xl p-6">
-                <div className="text-5xl font-extrabold text-teal-50 mb-4">{s.step}</div>
-                <h3 className="font-bold text-ink mb-2">{s.title}</h3>
-                <p className="text-sm text-slate leading-relaxed">{s.text}</p>
-              </div>
+              <StaggerItem key={s.step}>
+                <div className="relative bg-white border border-[#eef2f6] rounded-2xl p-6">
+                  <div className="text-5xl font-extrabold text-teal-50 mb-4">{s.step}</div>
+                  <h3 className="font-bold text-ink mb-2">{s.title}</h3>
+                  <p className="text-sm text-slate leading-relaxed">{s.text}</p>
+                </div>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
 
-      {/* Platforms */}
-      <section className="py-20 bg-[#f7f9fb]">
+      <section className="relative py-20 bg-[#f7f9fb] overflow-hidden">
+        <FloatingOrb className="bg-sky-100 opacity-30 -bottom-20 -left-20" size={400} duration={22} />
         <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading
-            title="One wellbeing view across the platforms students actually use"
-            subtitle="Analyse content across nine platforms and file formats in a single session."
-          />
-          <div className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto">
+          <Reveal>
+            <SectionHeading
+              title="One wellbeing view across the platforms students actually use"
+              subtitle="Analyse content across nine platforms and file formats in a single session."
+            />
+          </Reveal>
+          <Stagger className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto">
             {PLATFORMS.map((p) => (
-              <span
-                key={p}
-                className="rounded-full border border-[#e5e7eb] bg-white px-5 py-2 text-sm font-semibold text-ink"
-              >
-                {p}
-              </span>
+              <StaggerItem key={p}>
+                <span className="rounded-full border border-[#e5e7eb] bg-white px-5 py-2 text-sm font-semibold text-ink">
+                  {p}
+                </span>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
 
-      {/* Four commitments */}
       <section className="py-20">
         <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading
-            title="Our commitment — in four parts"
-            subtitle="Everything MindGuard does is governed by four safeguards we will not compromise."
-          />
-          <div className="grid sm:grid-cols-2 gap-6">
+          <Reveal>
+            <SectionHeading
+              title="Our commitment — in four parts"
+              subtitle="Everything MindGuard does is governed by four safeguards we will not compromise."
+            />
+          </Reveal>
+          <Stagger className="grid sm:grid-cols-2 gap-6">
             {COMMITMENTS.map((c) => (
-              <Card key={c.title} icon={c.icon} title={c.title}>
-                {c.text}
-              </Card>
+              <StaggerItem key={c.title}>
+                <HoverLift>
+                  <Card icon={c.icon} title={c.title}>
+                    {c.text}
+                  </Card>
+                </HoverLift>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
 
-      {/* What it is / is not */}
       <section className="py-20 bg-[#f7f9fb]">
         <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
-          <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-            <h3 className="text-xl font-bold text-ink mb-6">What MindGuard is</h3>
-            <ul className="flex flex-col gap-4">
-              <Check>An early-signal tool that helps counsellors prioritise follow-ups</Check>
-              <Check>A consent-first workflow with a full audit trail</Check>
-              <Check>A structured, evidence-based starting point for conversations</Check>
-              <Check>A 4-tier risk view (low / moderate / high / critical) with crisis resources</Check>
-            </ul>
-          </div>
-          <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-            <h3 className="text-xl font-bold text-ink mb-6">What MindGuard is not</h3>
-            <ul className="flex flex-col gap-4">
-              <Check>Not a diagnosis tool — it never labels a student</Check>
-              <Check>Not a monitoring wiretap — only explicitly shared content is analysed</Check>
-              <Check>Not an automated decision maker — every output needs human review</Check>
-              <Check>Not a replacement for counsellors, crisis services, or clinical care</Check>
-            </ul>
-          </div>
+          <Reveal>
+            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
+              <h3 className="text-xl font-bold text-ink mb-6">What MindGuard is</h3>
+              <ul className="flex flex-col gap-4">
+                <Check>An early-signal tool that helps counsellors prioritise follow-ups</Check>
+                <Check>A consent-first workflow with a full audit trail</Check>
+                <Check>A structured, evidence-based starting point for conversations</Check>
+                <Check>A 4-tier risk view (low / moderate / high / critical) with crisis resources</Check>
+              </ul>
+            </div>
+          </Reveal>
+          <Reveal delay={0.12}>
+            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
+              <h3 className="text-xl font-bold text-ink mb-6">What MindGuard is not</h3>
+              <ul className="flex flex-col gap-4">
+                <Check>Not a diagnosis tool — it never labels a student</Check>
+                <Check>Not a monitoring wiretap — only explicitly shared content is analysed</Check>
+                <Check>Not an automated decision maker — every output needs human review</Check>
+                <Check>Not a replacement for counsellors, crisis services, or clinical care</Check>
+              </ul>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* Under the hood */}
       <section className="py-20">
         <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading
-            title="Under the hood"
-            subtitle="A purpose-trained model, reviewed by humans."
-          />
-          <div className="grid sm:grid-cols-3 gap-6">
-            <Card title="Mental-RoBERTa">
-              A transformer pre-trained on millions of mental-health domain posts and
-              fine-tuned on 12,656 annotated examples. ROC-AUC 0.9813, 92.5% accuracy.
-            </Card>
-            <Card title="Human-reviewed outputs">
-              Risk scores surface as summaries for counsellors — the human keeps the
-              decision. No automated escalation, no un-reviewed flags.
-            </Card>
-            <Card title="Session-only analysis">
-              Analysed content is not stored between sessions. Roster PII is encrypted at
-              rest and access is limited to institution-authorised staff.
-            </Card>
-          </div>
+          <Reveal>
+            <SectionHeading
+              title="Under the hood"
+              subtitle="A purpose-trained model, reviewed by humans."
+            />
+          </Reveal>
+          <Stagger className="grid sm:grid-cols-3 gap-6">
+            <StaggerItem>
+              <Card title="Mental-RoBERTa">
+                A transformer pre-trained on millions of mental-health domain posts and
+                fine-tuned on 12,656 annotated examples. ROC-AUC 0.9813, 92.5% accuracy.
+              </Card>
+            </StaggerItem>
+            <StaggerItem>
+              <Card title="Human-reviewed outputs">
+                Risk scores surface as summaries for counsellors — the human keeps the
+                decision. No automated escalation, no un-reviewed flags.
+              </Card>
+            </StaggerItem>
+            <StaggerItem>
+              <Card title="Session-only analysis">
+                Analysed content is not stored between sessions. Roster PII is encrypted at
+                rest and access is limited to institution-authorised staff.
+              </Card>
+            </StaggerItem>
+          </Stagger>
         </div>
       </section>
 

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { PageHero, SectionHeading, CtaButton } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
 import Faq from '@/components/Faq'
 
 export const metadata: Metadata = {
@@ -80,105 +81,118 @@ const FAQS = [
 
 export default function PricingPage() {
   return (
-    <div>
+    <div className="overflow-hidden">
       <PageHero
         eyebrow="Pricing"
         title="Simple pricing, serious support"
         subtitle="Start free with a pilot. Scale to a whole district or campus when you are ready."
       />
 
-      {/* Tiers */}
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid md:grid-cols-3 gap-6 items-stretch">
+      <section className="py-20 relative overflow-hidden">
+        <FloatingOrb className="bg-teal-100/30 -top-10 -right-10" size={400} duration={18} />
+        <FloatingOrb className="bg-emerald-100/20 top-40 -left-20" size={350} duration={16} />
+        <div className="relative max-w-6xl mx-auto px-6">
+          <Stagger className="grid md:grid-cols-3 gap-6 items-stretch">
             {TIERS.map((t) => (
-              <div
-                key={t.name}
-                className={`relative bg-white border rounded-2xl p-8 flex flex-col ${
-                  t.featured ? 'border-teal-600 shadow-lg' : 'border-[#eef2f6]'
-                }`}
-              >
-                {t.featured && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-teal-600 px-4 py-1 text-xs font-semibold text-white">
-                    Most popular
-                  </span>
-                )}
-                <h3 className="text-lg font-bold text-ink">{t.name}</h3>
-                <div className="mt-4">
-                  <div className="text-2xl font-extrabold text-ink">{t.price}</div>
-                  <div className="text-xs text-slate mt-1">{t.cadence}</div>
-                </div>
-                <p className="mt-4 text-sm text-slate">{t.blurb}</p>
-                <ul className="mt-6 flex flex-col gap-3 text-sm text-slate flex-1">
-                  {t.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                          <path d="M2 6.5 4.5 9 10 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </span>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-8">
-                  <a
-                    href="/demo"
-                    className={`block text-center px-6 py-3 rounded-xl font-semibold transition-colors ${
-                      t.featured
-                        ? 'bg-teal-600 text-white hover:bg-teal-700'
-                        : 'border border-[#e5e7eb] text-ink hover:bg-white'
+              <StaggerItem key={t.name} className="flex">
+                <HoverLift className="flex-1 flex">
+                  <div
+                    className={`relative bg-white border rounded-2xl p-8 flex flex-col w-full ${
+                      t.featured ? 'border-teal-600 shadow-lg' : 'border-[#eef2f6]'
                     }`}
                   >
-                    {t.cta}
-                  </a>
-                </div>
-              </div>
+                    {t.featured && (
+                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-teal-600 px-4 py-1 text-xs font-semibold text-white">
+                        Most popular
+                      </span>
+                    )}
+                    <h3 className="text-lg font-bold text-ink">{t.name}</h3>
+                    <div className="mt-4">
+                      <div className="text-2xl font-extrabold text-ink">{t.price}</div>
+                      <div className="text-xs text-slate mt-1">{t.cadence}</div>
+                    </div>
+                    <p className="mt-4 text-sm text-slate">{t.blurb}</p>
+                    <ul className="mt-6 flex flex-col gap-3 text-sm text-slate flex-1">
+                      {t.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2">
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                              <path d="M2 6.5 4.5 9 10 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </span>
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-8">
+                      <a
+                        href="/demo"
+                        className={`block text-center px-6 py-3 rounded-xl font-semibold transition-colors ${
+                          t.featured
+                            ? 'bg-teal-600 text-white hover:bg-teal-700'
+                            : 'border border-[#e5e7eb] text-ink hover:bg-white'
+                        }`}
+                      >
+                        {t.cta}
+                      </a>
+                    </div>
+                  </div>
+                </HoverLift>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
 
-      {/* Comparison */}
-      <section className="py-20 bg-[#f7f9fb]">
-        <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading
-            title="Feature comparison"
-            subtitle="The same consent-first foundation across every tier."
-          />
-          <div className="overflow-x-auto rounded-2xl border border-[#eef2f6] bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#eef2f6] text-left">
-                  <th className="px-6 py-4 font-semibold text-ink">Feature</th>
-                  <th className="px-6 py-4 font-semibold text-ink">Pilot</th>
-                  <th className="px-6 py-4 font-semibold text-teal-700 bg-teal-50">School</th>
-                  <th className="px-6 py-4 font-semibold text-ink">District / University</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON.map((row) => (
-                  <tr key={row.feature} className="border-b border-[#eef2f6] last:border-0">
-                    <td className="px-6 py-4 font-medium text-ink">{row.feature}</td>
-                    <td className="px-6 py-4 text-slate">{row.pilot}</td>
-                    <td className="px-6 py-4 text-slate bg-teal-50/60">{row.school}</td>
-                    <td className="px-6 py-4 text-slate">{row.enterprise}</td>
+      <section className="py-20 bg-[#f7f9fb] relative overflow-hidden">
+        <FloatingOrb className="bg-teal-100/20 -bottom-10 right-10" size={300} duration={20} />
+        <div className="relative max-w-6xl mx-auto px-6">
+          <Reveal>
+            <SectionHeading
+              title="Feature comparison"
+              subtitle="The same consent-first foundation across every tier."
+            />
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="overflow-x-auto rounded-2xl border border-[#eef2f6] bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#eef2f6] text-left">
+                    <th className="px-6 py-4 font-semibold text-ink">Feature</th>
+                    <th className="px-6 py-4 font-semibold text-ink">Pilot</th>
+                    <th className="px-6 py-4 font-semibold text-teal-700 bg-teal-50">School</th>
+                    <th className="px-6 py-4 font-semibold text-ink">District / University</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {COMPARISON.map((row) => (
+                    <tr key={row.feature} className="border-b border-[#eef2f6] last:border-0">
+                      <td className="px-6 py-4 font-medium text-ink">{row.feature}</td>
+                      <td className="px-6 py-4 text-slate">{row.pilot}</td>
+                      <td className="px-6 py-4 text-slate bg-teal-50/60">{row.school}</td>
+                      <td className="px-6 py-4 text-slate">{row.enterprise}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* FAQ */}
       <section className="py-20">
         <div className="max-w-3xl mx-auto px-6">
-          <SectionHeading title="Frequently asked questions" />
-          <Faq items={FAQS} />
-          <div className="mt-12 text-center">
-            <CtaButton href="/demo">Request a demo</CtaButton>
-          </div>
+          <Reveal>
+            <SectionHeading title="Frequently asked questions" />
+          </Reveal>
+          <Reveal delay={0.1}>
+            <Faq items={FAQS} />
+          </Reveal>
+          <Reveal delay={0.15}>
+            <div className="mt-12 text-center">
+              <CtaButton href="/demo">Request a demo</CtaButton>
+            </div>
+          </Reveal>
         </div>
       </section>
     </div>

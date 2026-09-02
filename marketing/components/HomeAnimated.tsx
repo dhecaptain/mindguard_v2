@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { CtaButton, TrustBadge, Card, CtaBand, SectionHeading } from '@/components/ui'
+import { Icons } from '@/components/icons'
 
 const TRUST_ORGS = [
   { name: 'GVSU', note: 'Grand Valley State University' },
@@ -15,15 +16,15 @@ const PROBLEM = [
   { stat: '90%', title: 'Reactive, not preventive', text: 'An estimated 90% of at-risk youth show warning signs — but a sign no one sees in time is not a sign.' },
 ]
 const SOLUTION = [
-  { icon: '📋', title: 'Consent workflow that runs itself', text: 'Upload your roster, and MindGuard routes signed consent requests to the right person — parents for minors, students for adults — with reminders, expiry and a full audit trail.' },
-  { icon: '🧠', title: 'ML risk detection, human-reviewed', text: 'A purpose-trained model (Mental-RoBERTa, ROC-AUC 0.98) surfaces early signs of distress across platforms. Every output is a summary for a counsellor to review.' },
-  { icon: '🔔', title: 'A rolling risk view for follow-up', text: 'Counsellors get a prioritised, four-tier risk view of consented students, with crisis resources one click away — a structured starting point for real conversations.' },
+  { icon: <Icons.Clipboard />, title: 'Consent workflow that runs itself', text: 'Upload your roster, and MindGuard routes signed consent requests to the right person — parents for minors, students for adults — with reminders, expiry and a full audit trail.' },
+  { icon: <Icons.Brain />, title: 'ML risk detection, human-reviewed', text: 'A purpose-trained model (Mental-RoBERTa, ROC-AUC 0.98) surfaces early signs of distress across platforms. Every output is a summary for a counsellor to review.' },
+  { icon: <Icons.Heart />, title: 'A rolling risk view for follow-up', text: 'Counsellors get a prioritised, four-tier risk view of consented students, with crisis resources one click away — a structured starting point for real conversations.' },
 ]
 const COMMITMENTS = [
-  { icon: '🛡️', title: 'Consent-first', text: 'No analysis without consent. One-click withdrawal, effective immediately.' },
-  { icon: '🧑‍⚕️', title: 'Human-in-the-loop', text: 'Supports counsellors — never replaces them, never automates a decision.' },
-  { icon: '🏫', title: 'FERPA / COPPA aware', text: 'Student records protected; minors routed through parental consent.' },
-  { icon: '🗑️', title: 'Data minimisation', text: 'Only explicitly shared content is analysed; nothing stored between sessions.' },
+  { icon: <Icons.Shield />, title: 'Consent-first', text: 'No analysis without consent. One-click withdrawal, effective immediately.' },
+  { icon: <Icons.Users />, title: 'Human-in-the-loop', text: 'Supports counsellors — never replaces them, never automates a decision.' },
+  { icon: <Icons.School />, title: 'FERPA / COPPA aware', text: 'Student records protected; minors routed through parental consent.' },
+  { icon: <Icons.Trash />, title: 'Data minimisation', text: 'Only explicitly shared content is analysed; nothing stored between sessions.' },
 ]
 const AWARDS = [
   { title: 'DeepTech Runner-Up', event: 'Grand Rapids DeepTech' },
@@ -126,7 +127,7 @@ export default function HomeAnimated() {
             <div className="bg-white border border-[#eef2f6] rounded-2xl p-8 shadow-sm">
               <h3 className="text-lg font-bold text-ink mb-6">Recognition</h3>
               <Stagger className="flex flex-col gap-4">
-                {AWARDS.map((a) => (<StaggerItem key={a.title}><motion.div whileHover={{ x: 4 }} className="flex items-center gap-4 rounded-xl border border-[#eef2f6] p-4 hover:shadow-md transition-shadow"><span className="text-2xl">🏆</span><div><div className="font-semibold text-ink text-sm">{a.title}</div><div className="text-xs text-slate">{a.event}</div></div></motion.div></StaggerItem>))}
+                {AWARDS.map((a) => (<StaggerItem key={a.title}><motion.div whileHover={{ x: 4 }} className="flex items-center gap-4 rounded-xl border border-[#eef2f6] p-4 hover:shadow-md transition-shadow"><Icons.Trophy /><div><div className="font-semibold text-ink text-sm">{a.title}</div><div className="text-xs text-slate">{a.event}</div></div></motion.div></StaggerItem>))}
               </Stagger>
             </div>
           </Reveal>
