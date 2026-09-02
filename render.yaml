@@ -1,9 +1,11 @@
+# DEPRECATED — Railway is the primary deploy (railway.toml + Dockerfile.railway).
+# This file is kept for reference only; do not deploy to Render.
 services:
   - type: web
     name: mindguard
     env: docker
     dockerfilePath: ./Dockerfile.render
-    healthCheckPath: /api/health
+    healthCheckPath: /api/v1/healthz
     envVars:
       - key: JWT_SECRET
         generateValue: true

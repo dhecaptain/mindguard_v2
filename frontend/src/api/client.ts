@@ -17,12 +17,20 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+let _reloading401 = false
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
-      clearToken()
-      window.location.reload()
+    if (err.response?.status === 401 && !_reloading401) {
+      const onAuthRoute =
+        window.location.pathname.startsWith('/auth/') ||
+        window.location.pathname.startsWith('/consent/') ||
+        window.location.pathname === '/demo'
+      if (!onAuthRoute) {
+        _reloading401 = true
+        clearToken()
+        window.location.href = '/'
+      }
     }
     const msg = err.response?.data?.detail || err.message || 'Request failed'
     return Promise.reject(new Error(msg))

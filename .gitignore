@@ -2,7 +2,6 @@
 mindguard_best_weights.pt
 mindguard_model_local/
 mindguard_tokenizer/
-mindguard_model_config.json
 mindguard_tokenizer.zip
 mindguard_onnx/
 
@@ -19,6 +18,7 @@ mindguard_unified_report*.txt
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 .env
 *.env
 
@@ -28,7 +28,6 @@ save_model_local.py
 # Adds
 streamlit
 upload_to_hf.py
-mindguard_best_weights.pt
 
 # Secrets & auth — never commit
 streamlit/
@@ -48,17 +47,31 @@ checkpoints/
 *.db
 *.db-shm
 *.db-wal
-mindguard.db
 
 # Binary / generated files
 *.docx
+*.html
 mindguard_dashboard_preview.html
 
 # Delivery brief — never commit
 MindGuard_Development_Delivery_Brief.docx
 
+# Node / frontend / marketing
+node_modules/
+dist/
+.next/
+.turbo/
+frontend/dist/
+frontend/.e2e-db/
+frontend/test-results/
+frontend/playwright-report/
+marketing/.next/
+coverage/
+
 # IDE
 .cursor/
+.vscode/
+.idea/
 
 # Internal dev docs — not for public repo
 CLAUDE.md

@@ -23,8 +23,7 @@ export default function AuthCallbackPage() {
         const user = await googleLogin(supabaseToken, email, name)
         setAuth(user)
         setTermsAccepted(Boolean(user.terms_accepted))
-
-        window.location.href = '/'
+        window.location.replace('/')
       } catch (err: any) {
         setError(err.message || 'Authentication failed')
       }

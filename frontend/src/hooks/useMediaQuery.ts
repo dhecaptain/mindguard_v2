@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
+
+function subscribe(query: string, cb: () => void) {
+  const mql = window.matchMedia(query)
+  const handler = () => cb()
+  mql.addEventListener('change', handler)
+  return () => mql.removeEventListener('change', handler)
+}
 
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false)
-
-  useEffect(() => {
-    const mql = window.matchMedia(query)
-    setMatches(mql.matches)
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [query])
-
-  return matches
+  const getSnapshot = () => window.matchMedia(query).matches
+  const getServerSnapshot = () => false
+  return useSyncExternalStore(
+    (cb) => subscribe(query, cb),
+    getSnapshot,
+    getServerSnapshot,
+  )
 }

@@ -2,7 +2,7 @@
 dockerfilePath = "Dockerfile.railway"
 
 [deploy]
-healthcheckPath = "/api/health"
-healthcheckTimeout = 300
+healthcheckPath = "/api/v1/healthz"
+healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

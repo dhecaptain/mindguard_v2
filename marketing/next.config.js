@@ -18,7 +18,7 @@ const nextConfig = {
     const scriptSrc = dev
       ? "'self' 'unsafe-inline' 'unsafe-eval'"
       : "'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com"
-    const connectSrc = dev ? "'self' ws: wss:" : "'self' https://www.google.com"
+    const connectSrc = dev ? "'self' ws: wss:" : "'self' https://www.google.com https://www.gstatic.com"
     return [
       {
         source: '/:path*',
@@ -39,10 +39,11 @@ const nextConfig = {
             value:
               "default-src 'self'; " +
               `script-src ${scriptSrc}; ` +
-              "style-src 'self' 'unsafe-inline'; " +
-              "img-src 'self' data:; " +
-              "font-src 'self' data:; " +
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+              "img-src 'self' data: blob:; " +
+              "font-src 'self' data: https://fonts.gstatic.com; " +
               `connect-src ${connectSrc}; ` +
+              "object-src 'none'; " +
               "base-uri 'self'; " +
               "form-action 'self'; " +
               "frame-ancestors 'none'",

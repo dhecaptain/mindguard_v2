@@ -57,16 +57,20 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
     return () => { active = false }
   }, [consentId])
 
+  const safeParse = (s: string | null | undefined) => {
+    if (!s) return null
+    try { return JSON.parse(s) } catch { return null }
+  }
   const renderEvent = (e: ConsentEvent) => {
     let label = EVENT_LABEL[e.event_type] ?? e.event_type.replace(/_/g, ' ')
-    const meta = e.metadata_json ? JSON.parse(e.metadata_json) : null
+    const meta = safeParse(e.metadata_json)
     if (e.event_type === 'reminder' && meta?.day) label = `Reminder sent (day ${meta.day})`
     return { label, meta, actor: e.actor_type, at: e.created_at }
   }
 
   const renderAudit = (a: ConsentAuditEntry) => {
     let label = AUDIT_LABEL[a.action] ?? a.action.replace(/_/g, ' ')
-    const payload = a.payload_json ? JSON.parse(a.payload_json) : null
+    const payload = safeParse(a.payload_json)
     return { label, payload, actor: a.actor_role ?? a.actor_id, ip: a.ip, at: a.occurred_at }
   }
 
@@ -163,7 +167,7 @@ export default function ConsentDetailDrawer({ consentId, onClose }: ConsentDetai
                 <div>
                   <div className="text-[0.68rem] uppercase tracking-wider text-[#9ca3af] font-semibold">Platforms</div>
                   <div className="text-[#1f2937]">
-                    {JSON.parse(c.platforms_json || '[]').join(', ') || '—'}
+                    {(() => { try { return (JSON.parse(c.platforms_json || '[]') as string[]).join(', ') || '—' } catch { return '—' } })()}
                   </div>
                 </div>
               </div>
