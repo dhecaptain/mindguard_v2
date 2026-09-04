@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { PageHero, SectionHeading, Card, Check, CtaBand } from '@/components/ui'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { Icons } from '@/components/icons'
+import { SecurityDiagram } from '@/components/SecurityDiagram'
 
 export const metadata: Metadata = {
   title: 'Security & compliance — MindGuard',
@@ -44,11 +45,11 @@ const CONTROLS = [
 
 const COMPLIANCE = [
   {
-    title: 'FERPA',
+    title: 'FERPA Compliance',
     text: 'Student education records are treated with the confidentiality FERPA requires. Institutions stay in control of their data and who can access it.',
   },
   {
-    title: 'COPPA',
+    title: 'COPPA Verified',
     text: 'Minors only participate with verifiable parental consent. The age-of-majority threshold is configurable per institution, and parent emails are required for minors on the roster.',
   },
   {
@@ -56,7 +57,7 @@ const COMPLIANCE = [
     text: 'A DPA template is available for your records and can be tailored to your institution before you go live.',
   },
   {
-    title: 'SOC 2 roadmap',
+    title: 'SOC 2 Readiness Roadmap',
     text: 'We operate with SOC 2 principles in mind — least privilege, encryption, audit logging, incident response — and are on a roadmap to formal SOC 2 readiness.',
   },
 ]
@@ -70,18 +71,26 @@ const RESPONSE = [
 
 export default function SecurityPage() {
   return (
-    <div>
+    <div className="bg-[#FAFAFA]">
       <PageHero
-        eyebrow="Security & compliance"
+        eyebrow="Security & Compliance Infrastructure"
         title="Built for institutions that take data seriously"
         subtitle="Encryption, consent integrity, audit trails and regulatory awareness — engineered in from the start, not bolted on."
       />
 
-      <section className="relative py-20 overflow-hidden">
-        <FloatingOrb className="bg-teal-100 opacity-40 -top-20 -right-20" size={360} />
+      {/* INTERACTIVE DATA PIPELINE DIAGRAM */}
+      <section className="py-20 bg-slate-950 text-white relative overflow-hidden bg-grid-pattern">
+        <div className="max-w-6xl mx-auto px-6">
+          <SecurityDiagram />
+        </div>
+      </section>
+
+      {/* SECURITY CONTROLS */}
+      <section className="relative py-24 overflow-hidden">
+        <FloatingOrb className="bg-emerald-200 opacity-30 -top-20 -right-20" size={400} />
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>
-            <SectionHeading title="Security controls" />
+            <SectionHeading title="Security Controls & Auditing" subtitle="Institutional-grade safeguards protecting student identity and data." />
           </Reveal>
           <Stagger className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {CONTROLS.map((c) => (
@@ -97,17 +106,18 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-[#f7f9fb]">
+      {/* COMPLIANCE STANDARDS */}
+      <section className="py-24 bg-slate-50 border-y border-emerald-500/10">
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>
-            <SectionHeading title="Compliance" subtitle="Designed for the regulatory reality of education." />
+            <SectionHeading title="Compliance Standards" subtitle="Designed for the regulatory reality of education." />
           </Reveal>
           <Stagger className="grid md:grid-cols-2 gap-6">
             {COMPLIANCE.map((c) => (
               <StaggerItem key={c.title}>
-                <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-                  <h3 className="text-xl font-bold text-ink mb-4">{c.title}</h3>
-                  <p className="text-sm text-slate leading-relaxed">{c.text}</p>
+                <div className="bg-white/90 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-8 shadow-sm hover:border-emerald-500/40 transition-all">
+                  <h3 className="text-xl font-bold text-slate-900 mb-4">{c.title}</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">{c.text}</p>
                 </div>
               </StaggerItem>
             ))}
@@ -115,13 +125,14 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <section className="py-20">
+      {/* INCIDENT RESPONSE */}
+      <section className="py-24">
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>
-            <SectionHeading title="Incident response & transparency" />
+            <SectionHeading title="Incident Response & Transparency" />
           </Reveal>
           <Reveal delay={0.1}>
-            <div className="max-w-3xl mx-auto bg-white border border-[#eef2f6] rounded-2xl p-8">
+            <div className="max-w-3xl mx-auto bg-white border border-emerald-500/20 rounded-2xl p-8 shadow-sm">
               <ul className="flex flex-col gap-4">
                 {RESPONSE.map((r) => (
                   <Check key={r}>{r}</Check>
@@ -132,7 +143,8 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      <CtaBand title="Want the details for your security review?" subtitle="We&apos;ll walk your IT and legal teams through architecture, controls and the DPA." />
+      <CtaBand title="Want the details for your security review?" subtitle="We'll walk your IT and legal teams through architecture, controls and the DPA." />
     </div>
   )
 }
+

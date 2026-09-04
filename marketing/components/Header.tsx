@@ -2,7 +2,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { Shield, Sparkles } from 'lucide-react'
+import { Shield, Sparkles, ExternalLink } from 'lucide-react'
+
 
 const NAV_LINKS = [
   { href: '/product', label: 'Product' },
@@ -76,16 +77,27 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Header Action Button */}
+          {/* Header Action Buttons */}
           <div className="flex items-center gap-3">
+            <a
+              href="https://app.mindguardai.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative group overflow-hidden px-4 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 text-white rounded-xl text-xs font-bold shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] transition-all duration-300 hover:-translate-y-[1px] flex items-center gap-1.5 btn-emerald-shine"
+            >
+              <span>Launch App</span>
+              <ExternalLink className="w-3.5 h-3.5 text-emerald-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </a>
+
             <Link
               href="/demo"
-              className="relative group overflow-hidden px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] transition-all duration-300 hover:-translate-y-[1px] flex items-center gap-1.5"
+              className="hidden sm:flex px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold border border-slate-700 transition-all hover:-translate-y-[1px] items-center gap-1.5"
             >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-200 animate-pulse" />
-              <span>Request a demo</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Request demo</span>
             </Link>
           </div>
+
 
         </div>
       </header>

@@ -142,7 +142,7 @@ export function CtaBand({
   subtitle?: string
 }) {
   return (
-    <section className="relative py-20 bg-slate-900 bg-grid-pattern text-white overflow-hidden">
+    <section className="relative py-20 bg-slate-900 bg-grid-pattern text-white overflow-hidden border-t border-emerald-500/20">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-emerald-500/15 rounded-full blur-[100px] pointer-events-none" />
       <div className="relative max-w-4xl mx-auto px-6 text-center z-10">
         <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4 tracking-tight">
@@ -150,13 +150,22 @@ export function CtaBand({
         </h2>
         {subtitle && <p className="text-slate-300 text-base sm:text-lg mb-8 max-w-xl mx-auto leading-relaxed">{subtitle}</p>}
         <div className="flex flex-wrap items-center justify-center gap-4">
-          <CtaButton href="/demo">Request a demo</CtaButton>
-          <CtaButton href="/contact" variant="ghost">Talk to our team</CtaButton>
+          <a
+            href="https://app.mindguardai.me"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] hover:-translate-y-[2px] transition-all duration-300 btn-emerald-shine"
+          >
+            <span>Launch App (app.mindguardai.me)</span>
+            <span className="font-mono text-xs opacity-80">&rarr;</span>
+          </a>
+          <CtaButton href="/demo" variant="ghost">Request a demo</CtaButton>
         </div>
       </div>
     </section>
   )
 }
+
 
 export function Stat({ value, label }: { value: string; label: string }) {
   return (

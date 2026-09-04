@@ -109,15 +109,21 @@ export default function HomeAnimated() {
             transition={{ duration: 0.6, delay: 0.24 }}
             className="mt-9 flex flex-wrap items-center justify-center gap-4"
           >
-            <CtaButton href="/demo">
-              <span>Request a demo</span>
-              <ArrowRight className="w-4 h-4" />
-            </CtaButton>
+            <a
+              href="https://app.mindguardai.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] hover:-translate-y-[2px] transition-all duration-300 btn-emerald-shine group"
+            >
+              <span>Launch App (app.mindguardai.me)</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </a>
 
-            <CtaButton href="/product" variant="ghost">
-              <span>See how it works</span>
+            <CtaButton href="/demo" variant="ghost">
+              <span>Request a demo</span>
             </CtaButton>
           </motion.div>
+
 
           {/* Interactive 3D Pseudo-Glass Matrix Widget */}
           <motion.div
