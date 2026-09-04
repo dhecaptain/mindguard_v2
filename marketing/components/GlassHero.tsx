@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { FloatingOrb, Reveal } from '@/components/motion'
-import { ArrowRight, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { RiskSignalMatrix } from '@/components/RiskSignalMatrix'
 
 export function GlassHero() {
@@ -27,9 +27,11 @@ export function GlassHero() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          Live — Consent-First Student Distress Detection Matrix
-          <span className="ml-1 hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
-            <Sparkles className="w-3 h-3" /> ROC-AUC 0.98
+          <span className="text-white/90">Live</span>
+          <span className="h-1 w-1 rounded-full bg-white/20" aria-hidden />
+          <span className="text-white/70">Consent First Student Distress Detection Matrix</span>
+          <span className="ml-1 hidden sm:inline-flex items-center px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/60 text-[10px] font-mono tracking-wider">
+            ROC AUC 0.98
           </span>
         </motion.div>
 
@@ -39,7 +41,7 @@ export function GlassHero() {
           transition={{ duration: 0.6, delay: 0.08 }}
           className="text-4xl sm:text-6xl md:text-7xl font-extrabold leading-[1.05] tracking-tight max-w-5xl mx-auto"
         >
-          <span className="text-white">Catch the signals of distress —</span>{' '}
+          <span className="text-white">Catch the signals of distress</span>{' '}
           <span className="relative inline-block">
             <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x">
               before a crisis.
@@ -105,9 +107,9 @@ export function GlassHero() {
         </motion.div>
 
         <Reveal delay={0.1} y={16} className="mt-8 flex flex-wrap items-center justify-center gap-3 text-xs text-white/35">
-          <span>Trusted for consent-first architecture</span>
+          <span>Trusted for consent first architecture</span>
           <span className="h-3 w-px bg-white/10 hidden sm:block" />
-          <span>Human-in-the-loop • Zero automated decisions</span>
+          <span>Human in the loop · Zero automated decisions</span>
         </Reveal>
       </div>
     </section>
