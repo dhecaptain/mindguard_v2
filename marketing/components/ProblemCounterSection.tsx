@@ -30,16 +30,17 @@ const PROBLEM_ITEMS = [
     title: 'Signals missed until it is too late',
     text: 'An estimated 90% of youth experiencing crisis show warning signs. But a signal no human has the capacity to see in time is not a signal — it is a missed opportunity.',
     icon: EyeOff,
-    accent: 'from-rose-500/20 via-emerald-500/10 to-transparent',
-    glowColor: 'group-hover:border-rose-500/40',
+    accent: 'from-teal-500/20 via-emerald-500/10 to-transparent',
+    glowColor: 'group-hover:border-teal-500/40',
   },
 ]
 
 export function ProblemCounterSection() {
   return (
-    <section className="relative py-24 bg-slate-900 bg-grid-pattern text-white overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
+    <section className="relative py-24 bg-[#0a0d14] text-white overflow-hidden border-y border-white/[0.06]">
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0d14] via-[#0e1a14]/50 to-[#0a0d14]" />
+      <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: `linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)`, backgroundSize: '72px 72px' }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-emerald-500/8 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-6 text-center z-10">
         
@@ -90,23 +91,20 @@ export function ProblemCounterSection() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: idx * 0.12 }}
                 whileHover={{ y: -6, scale: 1.02 }}
-                className="group relative rounded-2xl bg-slate-950/80 border border-slate-800 p-8 text-left transition-all duration-300 shadow-xl overflow-hidden glass-panel-dark"
+                className="group relative rounded-2xl bg-white/[0.04] backdrop-blur-[16px] border border-white/[0.06] p-8 text-left transition-all duration-300 shadow-[0_24px_64px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)] overflow-hidden hover:bg-white/[0.06] hover:border-white/[0.1]"
               >
-                {/* Top Glowing Ambient Radial */}
-                <div className={`absolute -top-16 -right-16 w-40 h-40 bg-gradient-to-br ${item.accent} rounded-full blur-2xl opacity-60 group-hover:opacity-100 transition-opacity`} />
-
-                {/* Card Icon */}
+                <div className={`absolute -top-16 -right-16 w-40 h-40 bg-gradient-to-br ${item.accent} rounded-full blur-2xl opacity-40 group-hover:opacity-70 transition-opacity`} />
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
                 <div className="flex items-center justify-between mb-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 border border-emerald-500/20 text-emerald-400 group-hover:border-emerald-500/50 group-hover:scale-110 transition-all">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-emerald-400 group-hover:border-emerald-500/20 group-hover:scale-110 transition-all backdrop-blur">
                     <Icon className="h-6 w-6" />
                   </div>
-                  <span className="text-[10px] font-mono font-bold text-slate-500 group-hover:text-emerald-400 transition-colors uppercase tracking-widest">
+                  <span className="text-[10px] font-mono font-bold text-white/30 group-hover:text-emerald-400 transition-colors uppercase tracking-widest">
                     Metric 0{idx + 1}
                   </span>
                 </div>
 
-                {/* Animated Stat Counter */}
-                <div className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-sans text-emerald-400 group-hover:text-emerald-300 transition-colors">
+                <div className="text-4xl sm:text-5xl font-extrabold tracking-tight font-mono text-white group-hover:text-emerald-300 transition-colors">
                   <CountUp value={item.stat} />
                 </div>
 
@@ -114,14 +112,12 @@ export function ProblemCounterSection() {
                 <h3 className="mt-4 font-bold text-lg text-white group-hover:text-emerald-300 transition-colors">
                   {item.title}
                 </h3>
-                <p className="mt-3 text-sm text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+                <p className="mt-3 text-sm text-white/50 leading-relaxed group-hover:text-white/70 transition-colors">
                   {item.text}
                 </p>
-
-                {/* Bottom Card Border Highlight */}
-                <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
+                <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-white/30">
                   <span>Audited Signal Data</span>
-                  <span className="text-emerald-400 font-mono">Verified ✓</span>
+                  <span className="text-emerald-400 font-mono">Verified</span>
                 </div>
               </motion.div>
             )
