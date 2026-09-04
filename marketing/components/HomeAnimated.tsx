@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { CtaButton, Card, CtaBand, SectionHeading } from '@/components/ui'
 import { Icons } from '@/components/icons'
-import { RiskSignalMatrix } from '@/components/RiskSignalMatrix'
+import { GlassHero } from '@/components/GlassHero'
 import { TrustMarquee } from '@/components/TrustMarquee'
 import { ProblemCounterSection } from '@/components/ProblemCounterSection'
 import { ShieldCheck, Heart, ClipboardCheck, Brain, Lock, Users, Activity, Award, ArrowRight } from 'lucide-react'
@@ -60,85 +60,7 @@ const AWARDS = [
 export default function HomeAnimated() {
   return (
     <div className="overflow-hidden bg-[#FAFAFA]">
-      
-      {/* HERO SECTION */}
-      <section className="relative overflow-hidden pt-16 pb-20 mesh-gradient-bg border-b border-emerald-500/10">
-        
-        {/* Ambient Animated Orbs */}
-        <FloatingOrb className="bg-emerald-300/30 -top-24 -right-24" size={550} duration={22} />
-        <FloatingOrb className="bg-teal-300/25 top-60 -left-36" size={450} duration={18} />
-
-        <div className="relative max-w-6xl mx-auto px-6 text-center z-10">
-          
-          {/* Status Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 border border-emerald-500/30 text-emerald-700 text-xs font-bold shadow-sm mb-8 backdrop-blur-md"
-          >
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Live — Consent-First Student Distress Detection Matrix
-          </motion.div>
-
-          {/* Main Title */}
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.08 }}
-            className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 leading-[1.1] tracking-tight max-w-5xl mx-auto"
-          >
-            Catch the signals of distress —{' '}
-            <span className="bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x">
-              before a crisis.
-            </span>
-          </motion.h1>
-
-          {/* Subtitle */}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.16 }}
-            className="mt-6 text-lg sm:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed"
-          >
-            Consent-first AI decision support for school and university counsellors. Powered by Mental-RoBERTa, reviewed by humans, built for institutional trust.
-          </motion.p>
-
-          {/* Action CTAs */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.24 }}
-            className="mt-9 flex flex-wrap items-center justify-center gap-4"
-          >
-            <a
-              href="https://app.mindguardai.me"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] hover:-translate-y-[2px] transition-all duration-300 btn-emerald-shine group"
-            >
-              <span>Launch App (app.mindguardai.me)</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </a>
-
-            <CtaButton href="/demo" variant="ghost">
-              <span>Request a demo</span>
-            </CtaButton>
-          </motion.div>
-
-
-          {/* Interactive 3D Pseudo-Glass Matrix Widget */}
-          <motion.div
-            initial={{ opacity: 0, y: 35, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-12"
-          >
-            <RiskSignalMatrix />
-          </motion.div>
-
-        </div>
-      </section>
+      <GlassHero />
 
       {/* CONTINUOUS TRUST MARQUEE STRIP */}
       <TrustMarquee />

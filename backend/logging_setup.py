@@ -80,10 +80,20 @@ def setup_logging(level: str | int | None = None) -> None:
     root = logging.getLogger()
     root.setLevel(numeric)
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(StructuredFormatter())
-    handler.addFilter(RequestContextFilter())
+    handlers: list[logging.Handler] = []
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(StructuredFormatter())
+    sh.addFilter(RequestContextFilter())
+    handlers.append(sh)
+    try:
+        fh = logging.FileHandler("logs/dev.log")
+        fh.setFormatter(StructuredFormatter())
+        fh.addFilter(RequestContextFilter())
+        handlers.append(fh)
+    except Exception:
+        pass
 
     for existing in list(root.handlers):
         root.removeHandler(existing)
-    root.addHandler(handler)
+    for h in handlers:
+        root.addHandler(h)

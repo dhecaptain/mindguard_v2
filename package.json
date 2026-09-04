@@ -1,0 +1,31 @@
+{
+  "name": "mindguard-root",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "husky",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "tsc --noEmit --project frontend/tsconfig.app.json && tsc --noEmit --project marketing/tsconfig.json",
+    "test": "cd backend && PYTHONPATH=..:. python3 -m pytest -q",
+    "test:watch": "cd backend && PYTHONPATH=..:. python3 -m pytest --watch -q 2>&1 | tee ../logs/dev.log",
+    "e2e": "cd frontend && npx playwright test",
+    "agent:eyes": "node scripts/agent-eyes.mjs"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "tsc --noEmit --project frontend/tsconfig.app.json"
+    ],
+    "marketing/**/*.{ts,tsx,js,jsx}": [
+      "eslint --fix"
+    ],
+    "backend/**/*.py": [
+      "ruff check --fix",
+      "ruff format"
+    ]
+  }
+}
