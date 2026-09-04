@@ -32,10 +32,11 @@ const CONTROLS = [
     text: 'Every consent state change — created, sent, delivered, opened, accepted, declined, expired, revoked, bounced — writes an append-only audit log entry.',
   },
   {
-    icon: <Icons.Sparkles />,
+    icon: <Icons.ShieldCheck />,
     title: 'Data minimisation',
     text: 'Only content a student explicitly shares is analysed, and analysed content is not stored between sessions. CSV validators read only whitelisted columns; extra columns are never stored.',
   },
+
   {
     icon: <Icons.Lock />,
     title: 'Access control',
