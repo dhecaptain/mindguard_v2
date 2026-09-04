@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import { PageHero, SectionHeading, Card, CtaButton } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
+import { Icons } from '@/components/icons'
 
 export const metadata: Metadata = {
   title: 'About — MindGuard',
@@ -32,85 +34,113 @@ const AWARDS = [
 
 export default function AboutPage() {
   return (
-    <div>
+    <div className="overflow-hidden">
       <PageHero
         eyebrow="About"
         title="Why we built MindGuard"
         subtitle="A decision-support tool that helps counsellors catch the signals of distress earlier — without ever crossing the line into surveillance."
       />
 
-      {/* Mission */}
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading
-            title="Our mission"
-            subtitle="Around 720,000 people die by suicide every year. Most showed warning signs first. The signals are there — counsellors just need the tools to see them in time."
-          />
-          <div className="max-w-3xl mx-auto text-center text-lg text-slate leading-relaxed">
-            <p>
-              MindGuard exists to give school and university counsellors an earlier warning —
-              powered by a purpose-trained model, governed by consent, and always reviewed by
-              a human. We build for trust because nothing else works in a counselling room.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Story */}
-      <section className="py-20 bg-[#f7f9fb]">
-        <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading title="From research to product" />
-          <div className="grid md:grid-cols-3 gap-6">
-            {MILESTONES.map((m) => (
-              <Card key={m.year} title={m.title}>
-                <div className="mb-3 text-xs font-bold uppercase tracking-wide text-teal-600">{m.year}</div>
-                {m.text}
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Recognition */}
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading title="Recognition" />
-          <div className="grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
-            {AWARDS.map((a) => (
-              <div key={a.title} className="bg-white border border-[#eef2f6] rounded-2xl p-8 text-center">
-                <div className="text-3xl mb-3">🏆</div>
-                <h3 className="text-lg font-bold text-ink">{a.title}</h3>
-                <p className="text-sm text-slate mt-1">{a.event}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Team */}
-      <section className="py-20 bg-[#f7f9fb]">
-        <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading title="The team" />
-          <div className="max-w-xl mx-auto bg-white border border-[#eef2f6] rounded-2xl p-8 text-center">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-teal-600 text-2xl font-bold text-white">
-              DO
+      <section className="py-20 relative overflow-hidden">
+        <FloatingOrb className="bg-teal-100/40 -top-20 -right-20" size={400} duration={18} />
+        <div className="relative max-w-6xl mx-auto px-6">
+          <Reveal>
+            <SectionHeading
+              title="Our mission"
+              subtitle="Around 720,000 people die by suicide every year. Most showed warning signs first. The signals are there — counsellors just need the tools to see them in time."
+            />
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="max-w-3xl mx-auto text-center text-lg text-slate leading-relaxed">
+              <p>
+                MindGuard exists to give school and university counsellors an earlier warning —
+                powered by a purpose-trained model, governed by consent, and always reviewed by
+                a human. We build for trust because nothing else works in a counselling room.
+              </p>
             </div>
-            <h3 className="text-lg font-bold text-ink">Diana Opiyo</h3>
-            <p className="text-sm text-teal-700 font-semibold mt-1">
-              Founder, Lead Developer &amp; ML Engineer
-            </p>
-            <p className="mt-4 text-sm text-slate leading-relaxed">
-              Diana built MindGuard from research to production — training Mental-RoBERTa,
-              designing the consent-first product, and leading the engineering that ships it.
-            </p>
-          </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="py-20 bg-[#f7f9fb] relative overflow-hidden">
+        <FloatingOrb className="bg-emerald-100/40 -bottom-20 left-10" size={350} duration={16} />
+        <div className="relative max-w-6xl mx-auto px-6">
+          <Reveal>
+            <SectionHeading title="From research to product" />
+          </Reveal>
+          <Stagger className="grid md:grid-cols-3 gap-6">
+            {MILESTONES.map((m) => (
+              <StaggerItem key={m.year}>
+                <HoverLift className="h-full">
+                  <Card title={m.title}>
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wide text-teal-600">{m.year}</div>
+                    {m.text}
+                  </Card>
+                </HoverLift>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      <section className="py-20 relative overflow-hidden">
+        <FloatingOrb className="bg-amber-100/30 top-10 right-20" size={300} duration={20} />
+        <div className="relative max-w-6xl mx-auto px-6">
+          <Reveal>
+            <SectionHeading title="Recognition" />
+          </Reveal>
+          <Stagger className="grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
+            {AWARDS.map((a) => (
+              <StaggerItem key={a.title}>
+                <HoverLift>
+                  <div className="bg-white border border-[#eef2f6] rounded-2xl p-8 text-center">
+                    <div className="flex justify-center">
+                      <Icons.Trophy />
+                    </div>
+                    <h3 className="text-lg font-bold text-ink">{a.title}</h3>
+                    <p className="text-sm text-slate mt-1">{a.event}</p>
+                  </div>
+                </HoverLift>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      <section className="py-20 bg-[#f7f9fb] relative overflow-hidden">
+        <FloatingOrb className="bg-teal-100/30 -bottom-10 -right-10" size={350} duration={17} />
+        <div className="relative max-w-6xl mx-auto px-6">
+          <Reveal>
+            <SectionHeading title="The team" />
+          </Reveal>
+          <Reveal delay={0.1}>
+            <HoverLift className="max-w-xl mx-auto">
+              <div className="bg-white border border-[#eef2f6] rounded-2xl p-8 text-center">
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-teal-600 text-2xl font-bold text-white">
+                  DO
+                </div>
+                <h3 className="text-lg font-bold text-ink">Diana Opiyo</h3>
+                <p className="text-sm text-teal-700 font-semibold mt-1">
+                  Founder, Lead Developer &amp; ML Engineer
+                </p>
+                <p className="mt-4 text-sm text-slate leading-relaxed">
+                  Diana built MindGuard from research to production — training Mental-RoBERTa,
+                  designing the consent-first product, and leading the engineering that ships it.
+                </p>
+              </div>
+            </HoverLift>
+          </Reveal>
         </div>
       </section>
 
       <section className="py-20">
         <div className="max-w-6xl mx-auto px-6 text-center">
-          <h2 className="text-3xl font-bold text-ink mb-8">Work with us</h2>
-          <CtaButton href="/demo">Request a demo</CtaButton>
+          <Reveal>
+            <h2 className="text-3xl font-bold text-ink mb-8">Work with us</h2>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <CtaButton href="/demo">Request a demo</CtaButton>
+          </Reveal>
         </div>
       </section>
     </div>

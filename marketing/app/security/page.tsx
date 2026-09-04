@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import { PageHero, SectionHeading, Card, Check, CtaBand } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
+import { Icons } from '@/components/icons'
 
 export const metadata: Metadata = {
   title: 'Security & compliance — MindGuard',
@@ -9,32 +11,32 @@ export const metadata: Metadata = {
 
 const CONTROLS = [
   {
-    icon: '🔐',
+    icon: <Icons.Lock />,
     title: 'Encryption at rest',
     text: 'Student PII — names, emails, dates of birth — is encrypted at the column level with AES-256-GCM. Keys are managed separately from the data and never shipped in code or images.',
   },
   {
-    icon: '🔑',
+    icon: <Icons.Key />,
     title: 'Signed, single-use consent tokens',
     text: 'Consent links use HMAC-SHA256 tokens with a random nonce. They are single-use, verified server-side, and hashed at rest so a database leak does not enable replay.',
   },
   {
-    icon: '🚦',
+    icon: <Icons.ShieldCheck />,
     title: 'Rate limiting',
     text: 'Login and registration are limited per IP, demo submissions are limited to 5 per hour per IP, and each consent page is limited to 20 loads per token.',
   },
   {
-    icon: '📜',
+    icon: <Icons.DocCheck />,
     title: 'Immutable audit trail',
     text: 'Every consent state change — created, sent, delivered, opened, accepted, declined, expired, revoked, bounced — writes an append-only audit log entry.',
   },
   {
-    icon: '🧹',
+    icon: <Icons.Sparkles />,
     title: 'Data minimisation',
     text: 'Only content a student explicitly shares is analysed, and analysed content is not stored between sessions. CSV validators read only whitelisted columns; extra columns are never stored.',
   },
   {
-    icon: '🔒',
+    icon: <Icons.Lock />,
     title: 'Access control',
     text: 'Role-based permissions gate every action — roster uploads, consent management, analysis and the audit log. Access is limited to institution-authorised staff.',
   },
@@ -75,46 +77,58 @@ export default function SecurityPage() {
         subtitle="Encryption, consent integrity, audit trails and regulatory awareness — engineered in from the start, not bolted on."
       />
 
-      {/* Controls */}
-      <section className="py-20">
+      <section className="relative py-20 overflow-hidden">
+        <FloatingOrb className="bg-teal-100 opacity-40 -top-20 -right-20" size={360} />
         <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading title="Security controls" />
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Reveal>
+            <SectionHeading title="Security controls" />
+          </Reveal>
+          <Stagger className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {CONTROLS.map((c) => (
-              <Card key={c.title} icon={c.icon} title={c.title}>
-                {c.text}
-              </Card>
+              <StaggerItem key={c.title}>
+                <HoverLift>
+                  <Card icon={c.icon} title={c.title}>
+                    {c.text}
+                  </Card>
+                </HoverLift>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
 
-      {/* Compliance */}
       <section className="py-20 bg-[#f7f9fb]">
         <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading title="Compliance" subtitle="Designed for the regulatory reality of education." />
-          <div className="grid md:grid-cols-2 gap-6">
+          <Reveal>
+            <SectionHeading title="Compliance" subtitle="Designed for the regulatory reality of education." />
+          </Reveal>
+          <Stagger className="grid md:grid-cols-2 gap-6">
             {COMPLIANCE.map((c) => (
-              <div key={c.title} className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-                <h3 className="text-xl font-bold text-ink mb-4">{c.title}</h3>
-                <p className="text-sm text-slate leading-relaxed">{c.text}</p>
-              </div>
+              <StaggerItem key={c.title}>
+                <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
+                  <h3 className="text-xl font-bold text-ink mb-4">{c.title}</h3>
+                  <p className="text-sm text-slate leading-relaxed">{c.text}</p>
+                </div>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
 
-      {/* Incident response */}
       <section className="py-20">
         <div className="max-w-6xl mx-auto px-6">
-          <SectionHeading title="Incident response & transparency" />
-          <div className="max-w-3xl mx-auto bg-white border border-[#eef2f6] rounded-2xl p-8">
-            <ul className="flex flex-col gap-4">
-              {RESPONSE.map((r) => (
-                <Check key={r}>{r}</Check>
-              ))}
-            </ul>
-          </div>
+          <Reveal>
+            <SectionHeading title="Incident response & transparency" />
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="max-w-3xl mx-auto bg-white border border-[#eef2f6] rounded-2xl p-8">
+              <ul className="flex flex-col gap-4">
+                {RESPONSE.map((r) => (
+                  <Check key={r}>{r}</Check>
+                ))}
+              </ul>
+            </div>
+          </Reveal>
         </div>
       </section>
 

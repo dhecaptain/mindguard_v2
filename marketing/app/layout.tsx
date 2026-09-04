@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Script from 'next/script'
+import Header from '@/components/Header'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -16,16 +17,7 @@ export const metadata: Metadata = {
   },
 }
 
-const NAV_LINKS = [
-  { href: '/product', label: 'Product' },
-  { href: '/for-schools', label: 'For schools' },
-  { href: '/for-universities', label: 'For universities' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/docs', label: 'Docs' },
-  { href: '/security', label: 'Security' },
-  { href: '/about', label: 'About' },
-  { href: '/blog', label: 'Blog' },
-]
+
 
 const FOOTER_COLS: { title: string; links: { href: string; label: string }[] }[] = [
   {
@@ -75,62 +67,43 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       )}
       <body className="min-h-screen flex flex-col">
-        <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-[#eef2f6]">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold">
-                M
-              </span>
-              <span className="text-lg font-bold text-ink">MindGuard</span>
-            </Link>
-            <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate">
-              {NAV_LINKS.map((l) => (
-                <Link key={l.href} href={l.href} className="hover:text-teal-700">
-                  {l.label}
-                </Link>
-              ))}
-              <Link
-                href="/demo"
-                className="px-4 py-2 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors"
-              >
-                Request a demo
-              </Link>
-            </nav>
-            <Link
-              href="/demo"
-              className="lg:hidden px-4 py-2 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors text-sm"
-            >
-              Request a demo
-            </Link>
-          </div>
-        </header>
+        <Header />
 
         <main className="flex-1">{children}</main>
 
-        <footer className="border-t border-[#eef2f6] bg-[#f7f9fb]">
-          <div className="max-w-6xl mx-auto px-6 py-12">
+        <footer className="relative bg-[#0B1D17] bg-grid-pattern text-slate-300 border-t border-emerald-500/20 overflow-hidden">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+          <div className="max-w-6xl mx-auto px-6 py-16 relative z-10">
             <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white font-extrabold shadow-md shadow-emerald-500/20 border border-emerald-400/30">
                     M
                   </span>
-                  <span className="text-lg font-bold text-ink">MindGuard</span>
+                  <span className="text-xl font-extrabold text-white tracking-tight">MindGuard</span>
                 </div>
-                <p className="text-xs text-slate leading-relaxed max-w-xs">
+                <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
                   Consent-first AI decision support for school and university counsellors.
                   Powered by Mental-RoBERTa, reviewed by humans, built for trust.
                 </p>
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
+                    HIPAA & FERPA Compliant
+                  </span>
+                </div>
               </div>
               {FOOTER_COLS.map((col) => (
                 <div key={col.title}>
-                  <h3 className="text-xs font-bold text-ink uppercase tracking-wide mb-4">
+                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4">
                     {col.title}
                   </h3>
-                  <ul className="flex flex-col gap-3 text-sm text-slate">
+                  <ul className="flex flex-col gap-3 text-sm text-slate-300">
                     {col.links.map((l) => (
                       <li key={l.href}>
-                        <Link href={l.href} className="hover:text-teal-700">
+                        <Link
+                          href={l.href}
+                          className="hover:text-emerald-400 transition-colors duration-200 hover:translate-x-1 inline-block"
+                        >
                           {l.label}
                         </Link>
                       </li>
@@ -139,13 +112,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               ))}
             </div>
-            <div className="mt-10 pt-6 border-t border-[#eef2f6] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate">
-              <div>&copy; {new Date().getFullYear()} MindGuard. Student wellbeing, consented.</div>
-              <div className="flex items-center gap-4">
-                <Link href="/privacy" className="hover:text-teal-700">Privacy</Link>
-                <Link href="/terms" className="hover:text-teal-700">Terms</Link>
-                <Link href="/dpa" className="hover:text-teal-700">DPA</Link>
-                <Link href="/contact" className="hover:text-teal-700">Contact</Link>
+            <div className="mt-14 pt-8 border-t border-emerald-500/15 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+              <div>&copy; {new Date().getFullYear()} MindGuard AI Inc. Student wellbeing, consented.</div>
+              <div className="flex items-center gap-5">
+                <Link href="/privacy" className="hover:text-emerald-400 transition-colors">Privacy</Link>
+                <Link href="/terms" className="hover:text-emerald-400 transition-colors">Terms</Link>
+                <Link href="/dpa" className="hover:text-emerald-400 transition-colors">DPA</Link>
+                <Link href="/contact" className="hover:text-emerald-400 transition-colors">Contact</Link>
               </div>
             </div>
           </div>
@@ -154,3 +127,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   )
 }
+

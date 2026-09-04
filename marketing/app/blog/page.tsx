@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { PageHero } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
@@ -34,28 +35,35 @@ const POSTS = [
 
 export default function BlogPage() {
   return (
-    <div>
+    <div className="overflow-hidden">
       <PageHero
         eyebrow="Blog"
         title="Ideas on consent-first wellbeing tech"
         subtitle="Essays from the team on building technology that schools can trust."
       />
-      <section className="py-20">
-        <div className="max-w-3xl mx-auto px-6 flex flex-col gap-6">
-          {POSTS.map((p) => (
-            <Link
-              key={p.href}
-              href={p.href}
-              className="group bg-white border border-[#eef2f6] rounded-2xl p-8 hover:shadow-md transition-shadow"
-            >
-              <div className="text-xs font-semibold text-teal-600 uppercase tracking-wide">{p.date}</div>
-              <h2 className="mt-2 text-xl font-bold text-ink group-hover:text-teal-700">
-                {p.title}
-              </h2>
-              <p className="mt-3 text-sm text-slate leading-relaxed">{p.excerpt}</p>
-              <div className="mt-4 text-sm font-semibold text-teal-700">Read more →</div>
-            </Link>
-          ))}
+      <section className="py-20 relative overflow-hidden">
+        <FloatingOrb className="bg-teal-100/20 -top-10 -right-10" size={400} duration={18} />
+        <FloatingOrb className="bg-violet-100/20 top-40 -left-20" size={300} duration={16} />
+        <div className="relative max-w-3xl mx-auto px-6 flex flex-col gap-6">
+          <Stagger className="flex flex-col gap-6">
+            {POSTS.map((p) => (
+              <StaggerItem key={p.href}>
+                <HoverLift>
+                  <Link
+                    href={p.href}
+                    className="group block bg-white border border-[#eef2f6] rounded-2xl p-8 hover:shadow-md transition-shadow"
+                  >
+                    <div className="text-xs font-semibold text-teal-600 uppercase tracking-wide">{p.date}</div>
+                    <h2 className="mt-2 text-xl font-bold text-ink group-hover:text-teal-700">
+                      {p.title}
+                    </h2>
+                    <p className="mt-3 text-sm text-slate leading-relaxed">{p.excerpt}</p>
+                    <div className="mt-4 text-sm font-semibold text-teal-700">Read more →</div>
+                  </Link>
+                </HoverLift>
+              </StaggerItem>
+            ))}
+          </Stagger>
         </div>
       </section>
     </div>

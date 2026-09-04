@@ -35,9 +35,18 @@ export async function adminAuth(
 
 export async function loginAsAdmin(page: Page): Promise<void> {
   await page.goto('/')
-  await page.getByPlaceholder('you@example.com').fill(ADMIN.email)
+  const emailInput = page.getByPlaceholder('you@example.com')
+  try {
+    await emailInput.waitFor({ state: 'visible', timeout: 4000 })
+  } catch {
+    const landingSignIn = page.getByRole('button', { name: 'Sign In' }).first()
+    if (await landingSignIn.isVisible()) await landingSignIn.click()
+    await emailInput.waitFor({ state: 'visible', timeout: 8000 })
+  }
+  await emailInput.fill(ADMIN.email)
   await page.getByPlaceholder('••••••••').fill(ADMIN.password)
-  await page.getByRole('button', { name: 'Sign In' }).nth(1).click()
+  const submitBtn = page.getByRole('button', { name: 'Sign In', exact: true }).last()
+  await submitBtn.click()
   try {
     await page.getByRole('button', { name: 'I Consent and Continue' }).waitFor({ timeout: 8000 })
     await page.getByRole('checkbox', { name: /I have read and agree/ }).check()

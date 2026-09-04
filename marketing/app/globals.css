@@ -7,7 +7,97 @@
 }
 
 body {
-  background-color: #ffffff;
-  color: #1f2937;
+  background-color: #FAFAFA;
+  color: #0F172A;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow-x: hidden;
 }
+
+/* Glassmorphism utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  box-shadow: 0 10px 30px -10px rgba(15, 81, 50, 0.05);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 12px 30px -5px rgba(16, 185, 129, 0.15);
+  transform: translateY(-4px);
+}
+
+/* Dynamic Mesh Fluid Canvas Background */
+.mesh-gradient-bg {
+  background: radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.15) 0%, transparent 40%),
+              radial-gradient(circle at 80% 30%, rgba(15, 81, 50, 0.12) 0%, transparent 45%),
+              radial-gradient(circle at 40% 80%, rgba(20, 184, 166, 0.15) 0%, transparent 50%),
+              radial-gradient(circle at 90% 90%, rgba(16, 185, 129, 0.08) 0%, transparent 35%);
+  background-size: 140% 140%;
+}
+
+/* Grid line background for dark sections */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(16, 185, 129, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.07) 1px, transparent 1px);
+}
+
+/* CTA Sweep & Shine effect */
+.btn-emerald-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-emerald-shine::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 70%
+  );
+  transform: rotate(30deg);
+  animation: shine 4s ease-in-out infinite;
+}
+
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 6s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
