@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, Card, Check, Stat, CtaButton } from '@/components/ui'
+import { PageHero, SectionHeading, Card, Check, Stat, CtaButton, CtaBand } from '@/components/ui'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { Icons } from '@/components/icons'
+
 
 export const metadata: Metadata = {
   title: 'For schools (K-12) — MindGuard',
@@ -136,20 +137,11 @@ export default function ForSchoolsPage() {
         </div>
       </section>
 
-      <div className="max-w-6xl mx-auto px-6 pb-20">
-        <Reveal>
-          <div className="rounded-2xl bg-teal-600 text-white p-10 text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-4">
-              Give your counselling team an earlier warning
-            </h2>
-            <p className="text-teal-50 mb-8 max-w-xl mx-auto">
-              See how the consent workflow, tracker and risk view work with your school&apos;s
-              data in mind.
-            </p>
-            <CtaButton href="/demo">Request a demo</CtaButton>
-          </div>
-        </Reveal>
-      </div>
+      <CtaBand
+        title="Give your counselling team an earlier warning"
+        subtitle="See how the consent workflow, tracker and risk view work with your school's data in mind."
+      />
     </div>
   )
 }
+

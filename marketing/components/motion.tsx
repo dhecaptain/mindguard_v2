@@ -16,7 +16,7 @@ export function Reveal({ children, delay = 0, y = 24, className = '' }: { childr
   )
 }
 
-export function Stagger({ children, stagger = 0.1, className = '' }: { children: React.ReactNode; stagger?: number; className?: string }) {
+export function Stagger({ children, stagger = 0.08, className = '' }: { children: React.ReactNode; stagger?: number; className?: string }) {
   return (
     <motion.div
       initial="hidden"
@@ -108,7 +108,12 @@ export function FloatingOrb({ className, size = 400, duration = 18 }: { classNam
 
 export function HoverLift({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <motion.div whileHover={{ y: -6, scale: 1.01 }} whileTap={{ scale: 0.99 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} className={className}>
+    <motion.div
+      whileHover={{ y: -4, scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+      className={className}
+    >
       {children}
     </motion.div>
   )

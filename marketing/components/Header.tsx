@@ -1,6 +1,8 @@
 'use client'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { motion, useScroll, useTransform } from 'framer-motion'
+import { Shield, Sparkles } from 'lucide-react'
 
 const NAV_LINKS = [
   { href: '/product', label: 'Product' },
@@ -14,44 +16,80 @@ const NAV_LINKS = [
 ]
 
 export default function Header() {
+  const pathname = usePathname()
   const { scrollYProgress } = useScroll()
   const scaleX = useTransform(scrollYProgress, [0, 1], [0, 1])
 
   return (
     <>
-      <motion.div className="fixed top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-teal-600 via-emerald-500 to-teal-600 origin-left z-[60]" style={{ scaleX }} />
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-[#eef2f6]">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 group">
-            <motion.span
+      {/* Scroll Progress Bar */}
+      <motion.div
+        className="fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-600 via-teal-400 to-emerald-500 origin-left z-[60] shadow-sm shadow-emerald-500/50"
+        style={{ scaleX }}
+      />
+
+      <header className="sticky top-0 z-50 bg-white/85 backdrop-blur-xl border-b border-emerald-500/15 shadow-sm transition-all">
+        <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between">
+          
+          {/* Brand Logo */}
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <motion.div
               whileHover={{ rotate: 12, scale: 1.08 }}
               transition={{ type: 'spring', stiffness: 300 }}
-              className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold"
+              className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-extrabold shadow-md shadow-emerald-600/30 border border-emerald-400/30"
             >
-              M
-            </motion.span>
-            <span className="text-lg font-bold text-ink group-hover:text-teal-700 transition-colors">MindGuard</span>
-          </Link>
-          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate">
-            {NAV_LINKS.map((l, i) => (
-              <motion.div key={l.href} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.4 }}>
-                <Link href={l.href} className="hover:text-teal-700 transition-colors relative group/link">
-                  {l.label}
-                  <span className="absolute -bottom-1 left-0 w-0 h-[2px] bg-teal-600 group-hover/link:w-full transition-all duration-300" />
-                </Link>
-              </motion.div>
-            ))}
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }}>
-              <Link href="/demo" className="px-4 py-2 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-all hover:shadow-lg hover:shadow-teal-600/20 hover:-translate-y-[1px]">
-                Request a demo
-              </Link>
+              <Shield className="w-5 h-5 text-white" />
             </motion.div>
-          </nav>
-          <Link href="/demo" className="lg:hidden px-4 py-2 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors text-sm">
-            Request a demo
+            <div className="flex flex-col">
+              <span className="text-lg font-extrabold text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tight flex items-center gap-1">
+                MindGuard
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </span>
+              <span className="text-[10px] font-semibold text-slate-500 -mt-1 tracking-wider uppercase">
+                AI Wellbeing
+              </span>
+            </div>
           </Link>
+
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-600">
+            {NAV_LINKS.map((l) => {
+              const isActive = pathname === l.href
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={`relative py-1.5 transition-colors duration-200 ${
+                    isActive ? 'text-emerald-700 font-semibold' : 'hover:text-emerald-600 text-slate-600'
+                  }`}
+                >
+                  {l.label}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeNavIndicator"
+                      className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-emerald-600 to-teal-500 rounded-full"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* Header Action Button */}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/demo"
+              className="relative group overflow-hidden px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] transition-all duration-300 hover:-translate-y-[1px] flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-200 animate-pulse" />
+              <span>Request a demo</span>
+            </Link>
+          </div>
+
         </div>
       </header>
     </>
   )
 }
+

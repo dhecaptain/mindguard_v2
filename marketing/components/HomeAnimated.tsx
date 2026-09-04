@@ -2,139 +2,276 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
-import { CtaButton, TrustBadge, Card, CtaBand, SectionHeading } from '@/components/ui'
+import { CtaButton, Card, CtaBand, SectionHeading } from '@/components/ui'
 import { Icons } from '@/components/icons'
+import { RiskSignalMatrix } from '@/components/RiskSignalMatrix'
+import { TrustMarquee } from '@/components/TrustMarquee'
+import { ProblemCounterSection } from '@/components/ProblemCounterSection'
+import { ShieldCheck, Heart, ClipboardCheck, Brain, Lock, Users, Sparkles, Award, ArrowRight } from 'lucide-react'
 
-const TRUST_ORGS = [
-  { name: 'GVSU', note: 'Grand Valley State University' },
-  { name: 'Grand Rapids DeepTech', note: 'DeepTech accelerator' },
-  { name: 'Hugging Face', note: 'Model hosting' },
-]
-const PROBLEM = [
-  { stat: '720k+', title: 'Lives lost every year', text: 'Around 720,000 people die by suicide annually worldwide. Most showed warning signs first.' },
-  { stat: '1:400', title: 'Counsellor-to-student ratio', text: 'A single school counsellor can be responsible for hundreds of students. Meaningful check-ins with everyone is mathematically impossible.' },
-  { stat: '90%', title: 'Reactive, not preventive', text: 'An estimated 90% of at-risk youth show warning signs — but a sign no one sees in time is not a sign.' },
-]
 const SOLUTION = [
-  { icon: <Icons.Clipboard />, title: 'Consent workflow that runs itself', text: 'Upload your roster, and MindGuard routes signed consent requests to the right person — parents for minors, students for adults — with reminders, expiry and a full audit trail.' },
-  { icon: <Icons.Brain />, title: 'ML risk detection, human-reviewed', text: 'A purpose-trained model (Mental-RoBERTa, ROC-AUC 0.98) surfaces early signs of distress across platforms. Every output is a summary for a counsellor to review.' },
-  { icon: <Icons.Heart />, title: 'A rolling risk view for follow-up', text: 'Counsellors get a prioritised, four-tier risk view of consented students, with crisis resources one click away — a structured starting point for real conversations.' },
+  {
+    icon: <ClipboardCheck className="w-6 h-6 text-emerald-600" />,
+    title: 'Consent workflow that runs itself',
+    text: 'Upload your roster once. MindGuard routes signed consent requests to the right person — parents for minors, students for adults — with automated reminders, expiry logic and an immutable audit trail.',
+  },
+  {
+    icon: <Brain className="w-6 h-6 text-emerald-600" />,
+    title: 'ML risk detection, human-reviewed',
+    text: 'A purpose-trained model (Mental-RoBERTa, ROC-AUC 0.98) surfaces early signs of distress across digital content. Outputs are formatted exclusively as summaries for human counsellors to review.',
+  },
+  {
+    icon: <Heart className="w-6 h-6 text-emerald-600" />,
+    title: 'Structured risk view for check-ins',
+    text: 'Counsellors get a prioritised, four-tier risk view of consented students (Low, Moderate, High, Critical), with direct crisis resources available in one click to ground empathetic conversations.',
+  },
 ]
+
 const COMMITMENTS = [
-  { icon: <Icons.Shield />, title: 'Consent-first', text: 'No analysis without consent. One-click withdrawal, effective immediately.' },
-  { icon: <Icons.Users />, title: 'Human-in-the-loop', text: 'Supports counsellors — never replaces them, never automates a decision.' },
-  { icon: <Icons.School />, title: 'FERPA / COPPA aware', text: 'Student records protected; minors routed through parental consent.' },
-  { icon: <Icons.Trash />, title: 'Data minimisation', text: 'Only explicitly shared content is analysed; nothing stored between sessions.' },
+  {
+    icon: <Lock className="w-6 h-6 text-emerald-600" />,
+    title: 'Consent-first architecture',
+    text: 'No analysis occurs without explicit, verified consent. One-click withdrawal takes effect immediately across all system layers.',
+  },
+  {
+    icon: <Users className="w-6 h-6 text-emerald-600" />,
+    title: 'Human-in-the-loop decisions',
+    text: 'Designed specifically to empower counsellors — never replaces human judgment, never automates an institutional decision.',
+  },
+  {
+    icon: <ShieldCheck className="w-6 h-6 text-emerald-600" />,
+    title: 'FERPA & COPPA compliant',
+    text: 'Student records protected as education records; minors routed through verified parental consent flows.',
+  },
+  {
+    icon: <Sparkles className="w-6 h-6 text-emerald-600" />,
+    title: 'Strict data minimisation',
+    text: 'Only explicitly shared, consented content is processed. Zero data is retained or stored between analysis sessions.',
+  },
 ]
+
 const AWARDS = [
-  { title: 'DeepTech Runner-Up', event: 'Grand Rapids DeepTech' },
-  { title: 'Innovation Day Winner', event: 'GVSU Innovation Day' },
+  { title: 'Grand Rapids DeepTech Runner-Up', note: 'Top-tier Midwest AI innovation accelerator' },
+  { title: 'GVSU Innovation Day Winner', note: 'Recognised for ethics in student mental health technology' },
 ]
 
 export default function HomeAnimated() {
   return (
-    <div className="overflow-hidden">
-      <section className="relative bg-gradient-to-b from-teal-50 via-white to-white overflow-hidden">
-        <FloatingOrb className="bg-teal-200/40 -top-20 -right-20" size={500} duration={20} />
-        <FloatingOrb className="bg-emerald-200/30 top-40 -left-32" size={400} duration={16} />
-        <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-teal-200 text-teal-700 text-xs font-semibold shadow-sm mb-6">
+    <div className="overflow-hidden bg-[#FAFAFA]">
+      
+      {/* HERO SECTION */}
+      <section className="relative overflow-hidden pt-16 pb-20 mesh-gradient-bg border-b border-emerald-500/10">
+        
+        {/* Ambient Animated Orbs */}
+        <FloatingOrb className="bg-emerald-300/30 -top-24 -right-24" size={550} duration={22} />
+        <FloatingOrb className="bg-teal-300/25 top-60 -left-36" size={450} duration={18} />
+
+        <div className="relative max-w-6xl mx-auto px-6 text-center z-10">
+          
+          {/* Status Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 border border-emerald-500/30 text-emerald-700 text-xs font-bold shadow-sm mb-8 backdrop-blur-md"
+          >
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Live — consent-first, human-in-the-loop
+            Live — Consent-First Student Distress Detection Matrix
           </motion.div>
-          <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }} className="text-4xl sm:text-6xl font-extrabold text-ink leading-tight max-w-4xl mx-auto">
+
+          {/* Main Title */}
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.08 }}
+            className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 leading-[1.1] tracking-tight max-w-5xl mx-auto"
+          >
             Catch the signals of distress —{' '}
-            <span className="bg-gradient-to-r from-teal-600 via-emerald-500 to-teal-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x">before a crisis.</span>
+            <span className="bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x">
+              before a crisis.
+            </span>
           </motion.h1>
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="mt-6 text-lg text-slate max-w-2xl mx-auto">
-            Consent-first AI decision support for school and university counsellors. Powered by Mental-RoBERTa, reviewed by humans, built for trust.
+
+          {/* Subtitle */}
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.16 }}
+            className="mt-6 text-lg sm:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed"
+          >
+            Consent-first AI decision support for school and university counsellors. Powered by Mental-RoBERTa, reviewed by humans, built for institutional trust.
           </motion.p>
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.3 }} className="mt-8 flex items-center justify-center gap-4">
-            <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.98 }}><CtaButton href="/demo">Request a demo</CtaButton></motion.div>
-            <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.98 }}><CtaButton href="/product" variant="ghost">See how it works</CtaButton></motion.div>
+
+          {/* Action CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.24 }}
+            className="mt-9 flex flex-wrap items-center justify-center gap-4"
+          >
+            <CtaButton href="/demo">
+              <span>Request a demo</span>
+              <ArrowRight className="w-4 h-4" />
+            </CtaButton>
+
+            <CtaButton href="/product" variant="ghost">
+              <span>See how it works</span>
+            </CtaButton>
           </motion.div>
-          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.5 }} className="mt-12 mx-auto max-w-3xl rounded-2xl border border-[#eef2f6] bg-white shadow-xl shadow-teal-900/5 p-3">
-            <div className="rounded-xl bg-gradient-to-br from-[#f7f9fb] to-white border border-[#eef2f6] p-6 flex items-center gap-4 text-left">
-              <div className="flex-1">
-                <div className="h-3 w-24 rounded bg-teal-100 mb-3" />
-                <div className="h-2 w-full rounded bg-slate-100 mb-2" />
-                <div className="h-2 w-3/4 rounded bg-slate-100" />
-              </div>
-              <div className="hidden sm:flex items-center gap-2">
-                <span className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">At-risk</span>
-                <span className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">Consented ✓</span>
-              </div>
-            </div>
+
+          {/* Interactive 3D Pseudo-Glass Matrix Widget */}
+          <motion.div
+            initial={{ opacity: 0, y: 35, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
+            className="mt-12"
+          >
+            <RiskSignalMatrix />
           </motion.div>
+
         </div>
       </section>
 
-      <section className="py-10 border-y border-[#eef2f6] bg-white">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col items-center gap-6">
+      {/* CONTINUOUS TRUST MARQUEE STRIP */}
+      <TrustMarquee />
+
+      {/* THE PROBLEM SECTION */}
+      <ProblemCounterSection />
+
+      {/* THE SOLUTION SECTION */}
+      <section className="py-24 relative overflow-hidden bg-white">
+        <div className="max-w-6xl mx-auto px-6">
           <Reveal>
-            <div className="flex flex-wrap items-center justify-center gap-8">
-              {TRUST_ORGS.map((org) => (<div key={org.name} className="flex flex-col items-center"><span className="text-lg font-extrabold text-slate/70">{org.name}</span><span className="text-xs text-slate/60">{org.note}</span></div>))}
-            </div>
+            <SectionHeading
+              title="The MindGuard Solution"
+              subtitle="Decision support that gives counsellors an earlier warning — without crossing into surveillance."
+            />
           </Reveal>
-          <Stagger className="flex flex-wrap items-center justify-center gap-3">
-            {['HIPAA-aligned', 'FERPA-compliant', 'COPPA-ready'].map((label) => (<StaggerItem key={label}><TrustBadge label={label} /></StaggerItem>))}
-          </Stagger>
-        </div>
-      </section>
-
-      <section className="py-20 bg-[#f7f9fb] relative overflow-hidden">
-        <FloatingOrb className="bg-teal-100/40 -bottom-20 right-10" size={350} duration={18} />
-        <div className="relative max-w-6xl mx-auto px-6">
-          <Reveal><SectionHeading title="The problem" subtitle="The signals are there. The capacity to see them in time is not." /></Reveal>
-          <Stagger stagger={0.12} className="grid gap-8 sm:grid-cols-3 max-w-4xl mx-auto text-center">
-            {PROBLEM.map((p) => (
-              <StaggerItem key={p.stat}><HoverLift><div className="bg-white rounded-2xl p-8 border border-[#eef2f6] shadow-sm"><motion.div initial={{ scale: 0.8 }} whileInView={{ scale: 1 }} viewport={{ once: true }} transition={{ type: 'spring', stiffness: 200, delay: 0.1 }} className="text-4xl font-extrabold text-teal-600">{p.stat}</motion.div><div className="mt-2 font-bold text-ink">{p.title}</div><p className="mt-3 text-sm text-slate leading-relaxed">{p.text}</p></div></HoverLift></StaggerItem>
+          <Stagger stagger={0.08} className="grid sm:grid-cols-3 gap-8">
+            {SOLUTION.map((s) => (
+              <StaggerItem key={s.title}>
+                <HoverLift className="h-full">
+                  <Card icon={s.icon} title={s.title}>
+                    {s.text}
+                  </Card>
+                </HoverLift>
+              </StaggerItem>
             ))}
           </Stagger>
         </div>
       </section>
 
-      <section className="py-20">
+      {/* ETHICAL SAFEGUARDS SECTION */}
+      <section className="py-24 bg-slate-50 border-y border-emerald-500/10">
         <div className="max-w-6xl mx-auto px-6">
-          <Reveal><SectionHeading title="The solution" subtitle="Decision support that gives counsellors an earlier warning — without crossing into surveillance." /></Reveal>
-          <Stagger stagger={0.12} className="grid sm:grid-cols-3 gap-6">
-            {SOLUTION.map((s) => (<StaggerItem key={s.title}><HoverLift className="h-full"><Card icon={s.icon} title={s.title}>{s.text}</Card></HoverLift></StaggerItem>))}
-          </Stagger>
-        </div>
-      </section>
-
-      <section className="py-20 bg-[#f7f9fb]">
-        <div className="max-w-6xl mx-auto px-6">
-          <Reveal><SectionHeading title="Our commitment" subtitle="Four ethical safeguards we will not compromise." /></Reveal>
+          <Reveal>
+            <SectionHeading
+              title="Ethical Safeguards by Design"
+              subtitle="Four core principles embedded directly into our codebase that we will not compromise."
+            />
+          </Reveal>
           <Stagger stagger={0.08} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {COMMITMENTS.map((c) => (<StaggerItem key={c.title}><HoverLift className="h-full"><Card icon={c.icon} title={c.title}>{c.text}</Card></HoverLift></StaggerItem>))}
+            {COMMITMENTS.map((c) => (
+              <StaggerItem key={c.title}>
+                <HoverLift className="h-full">
+                  <Card icon={c.icon} title={c.title}>
+                    {c.text}
+                  </Card>
+                </HoverLift>
+              </StaggerItem>
+            ))}
           </Stagger>
         </div>
       </section>
 
-      <section className="py-20">
+      {/* FOUNDER & RECOGNITION SECTION */}
+      <section className="py-24 bg-white relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
-          <Reveal><HoverLift>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8 text-center shadow-sm">
-              <motion.div initial={{ scale: 0.8, rotate: -5 }} whileInView={{ scale: 1, rotate: 0 }} viewport={{ once: true }} transition={{ type: 'spring', stiffness: 200 }} className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-teal-600 text-xl font-bold text-white">DO</motion.div>
-              <h3 className="text-lg font-bold text-ink">Diana Opiyo</h3>
-              <p className="text-sm text-teal-700 font-semibold mt-1">Founder, Lead Developer & ML Engineer</p>
-              <p className="mt-4 text-sm text-slate leading-relaxed">Built from research to production — training the model, designing the consent-first product, and shipping the platform.</p>
-              <Link href="/about" className="mt-6 inline-block text-sm font-semibold text-teal-700 hover:underline">About us →</Link>
-            </div>
-          </HoverLift></Reveal>
-          <Reveal delay={0.15}>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8 shadow-sm">
-              <h3 className="text-lg font-bold text-ink mb-6">Recognition</h3>
-              <Stagger className="flex flex-col gap-4">
-                {AWARDS.map((a) => (<StaggerItem key={a.title}><motion.div whileHover={{ x: 4 }} className="flex items-center gap-4 rounded-xl border border-[#eef2f6] p-4 hover:shadow-md transition-shadow"><Icons.Trophy /><div><div className="font-semibold text-ink text-sm">{a.title}</div><div className="text-xs text-slate">{a.event}</div></div></motion.div></StaggerItem>))}
-              </Stagger>
+          
+          {/* Founder Spotlight Card */}
+          <Reveal>
+            <HoverLift className="h-full">
+              <div className="relative rounded-3xl bg-slate-900 border border-emerald-500/30 p-8 sm:p-10 text-white shadow-2xl overflow-hidden glass-panel-dark">
+                {/* Ambient glow behind avatar */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="flex items-center gap-5 mb-6">
+                  <div className="relative p-1 rounded-full bg-gradient-to-tr from-emerald-500 via-teal-400 to-emerald-300 shadow-lg shadow-emerald-500/30">
+                    <div className="w-16 h-16 rounded-full bg-slate-950 flex items-center justify-center font-extrabold text-xl text-emerald-400 border border-slate-800">
+                      DO
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-extrabold text-white">Diana Opiyo</h3>
+                    <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mt-0.5">
+                      Founder, Lead Developer & ML Engineer
+                    </p>
+                    <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono">
+                      Creator of Mental-RoBERTa Pipeline
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  Built from academic research to production system — training the model, architecting the consent-first consent flow, and building a platform that counsellors can trust.
+                </p>
+
+                <div className="mt-8 pt-6 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">MindGuard Founder Spotlight</span>
+                  <Link href="/about" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                    Read Our Narrative &rarr;
+                  </Link>
+                </div>
+              </div>
+            </HoverLift>
+          </Reveal>
+
+          {/* Recognition Card */}
+          <Reveal delay={0.12}>
+            <div className="h-full rounded-3xl bg-white border border-emerald-500/20 p-8 sm:p-10 shadow-lg flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-6">
+                  <Award className="w-6 h-6 text-emerald-600" />
+                  <h3 className="text-xl font-bold text-slate-900">Institutional Recognition</h3>
+                </div>
+
+                <Stagger stagger={0.08} className="space-y-4">
+                  {AWARDS.map((a) => (
+                    <StaggerItem key={a.title}>
+                      <motion.div
+                        whileHover={{ x: 4 }}
+                        className="p-4 rounded-2xl bg-slate-50 border border-emerald-500/15 hover:border-emerald-500/40 hover:bg-emerald-50/40 transition-all flex items-start gap-4"
+                      >
+                        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 shrink-0">
+                          <Icons.Trophy />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">{a.title}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">{a.note}</p>
+                        </div>
+                      </motion.div>
+                    </StaggerItem>
+                  ))}
+                </Stagger>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <span>Audited Academic Credentials</span>
+                <span className="text-emerald-600 font-semibold">GVSU & DeepTech Verified</span>
+              </div>
             </div>
           </Reveal>
+
         </div>
       </section>
 
-      <CtaBand title="Ready to see MindGuard in action?" subtitle="We'll walk you through the consent workflow, the tracking dashboard and the multi-platform monitoring — with your school's data in mind." />
+      {/* HIGH IMPACT CTA BAND */}
+      <CtaBand
+        title="Ready to see MindGuard in action for your institution?"
+        subtitle="We'll walk your counselling and IT teams through the consent workflow, live telemetry tracking, and HIPAA/FERPA audit trail."
+      />
+
     </div>
   )
 }
+
