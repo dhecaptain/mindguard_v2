@@ -32,18 +32,10 @@ COPY --from=frontend /app/dist /app/frontend
 ENV FRONTEND_DIR=/app/frontend
 ENV PYTHONPATH=/app
 ENV API_HOST=0.0.0.0
-ENV PORT=8000
 ENV HF_CACHE_DIR=/tmp/huggingface
 
-EXPOSE 8000
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8000/api/v1/healthz', timeout=5).raise_for_status()"
+    CMD python -c "import os, httpx; port = os.getenv('PORT', '8000'); httpx.get(f'http://127.0.0.1:{port}/api/v1/healthz', timeout=5).raise_for_status()"
 
-CMD gunicorn backend.main:app \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --workers 1 \
-    --bind 0.0.0.0:8000 \
-    --timeout 180 \
-    --keep-alive 5 \
-    --log-level info
+CMD ["sh", "-c", "gunicorn backend.main:app --worker-class uvicorn.workers.UvicornWorker --workers 1 --bind 0.0.0.0:${PORT:-8000} --timeout 180 --keep-alive 5 --log-level info"]
+
