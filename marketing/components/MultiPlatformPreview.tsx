@@ -156,8 +156,12 @@ export function MultiPlatformPreview() {
 
           {/* Footer Privacy Guarantee */}
           <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
-            <span>🛡️ Safeguard Note: {current.privacyNote}</span>
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Safeguard Note: {current.privacyNote}</span>
+            </span>
             <a
+
               href="https://app.mindguardai.me"
               target="_blank"
               rel="noopener noreferrer"

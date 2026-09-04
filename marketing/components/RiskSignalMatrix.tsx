@@ -233,7 +233,8 @@ export function RiskSignalMatrix() {
                                 : 'bg-slate-700 text-slate-300 border-slate-600'
                             }`}
                           >
-                            {node.consentStatus === 'Consented' ? '✓ Consented' : '⏳ Parent Consent Pending'}
+                            {node.consentStatus === 'Consented' ? 'Consented' : 'Parent Consent Pending'}
+
                           </span>
 
                           <span className="text-xs text-slate-400 font-mono">

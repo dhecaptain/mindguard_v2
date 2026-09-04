@@ -453,16 +453,13 @@ async def _email_drain_loop() -> None:
 
 
 @app.get("/api/health")
-async def health():
-    return {"status": "ok", "version": "2.0.0"}
-
-
 @app.get("/api/v1/healthz")
 async def healthz():
     """Liveness/readiness probe (Delivery Brief §12) — includes a DB check."""
     db = health_check()
     ok = db.get("db") == "ok"
     return {"status": "ok" if ok else "degraded", "version": "2.0.0", "db": db}
+
 
 
 # ── Rate limiting ─────────────────────────────────────────────────────

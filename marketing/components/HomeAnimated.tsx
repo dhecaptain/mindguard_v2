@@ -7,7 +7,8 @@ import { Icons } from '@/components/icons'
 import { RiskSignalMatrix } from '@/components/RiskSignalMatrix'
 import { TrustMarquee } from '@/components/TrustMarquee'
 import { ProblemCounterSection } from '@/components/ProblemCounterSection'
-import { ShieldCheck, Heart, ClipboardCheck, Brain, Lock, Users, Sparkles, Award, ArrowRight } from 'lucide-react'
+import { ShieldCheck, Heart, ClipboardCheck, Brain, Lock, Users, Activity, Award, ArrowRight } from 'lucide-react'
+
 
 const SOLUTION = [
   {
@@ -44,10 +45,11 @@ const COMMITMENTS = [
     text: 'Student records protected as education records; minors routed through verified parental consent flows.',
   },
   {
-    icon: <Sparkles className="w-6 h-6 text-emerald-600" />,
+    icon: <Activity className="w-6 h-6 text-emerald-600" />,
     title: 'Strict data minimisation',
     text: 'Only explicitly shared, consented content is processed. Zero data is retained or stored between analysis sessions.',
   },
+
 ]
 
 const AWARDS = [

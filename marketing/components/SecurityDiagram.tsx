@@ -107,9 +107,11 @@ export function SecurityDiagram() {
               </span>
               <h4 className="text-lg font-extrabold text-white">{current.title}</h4>
             </div>
-            <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-mono">
-              🛡️ {current.guarantee}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-mono">
+              <Shield className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{current.guarantee}</span>
             </span>
+
           </div>
 
           <p className="text-sm text-slate-300 leading-relaxed mb-6">

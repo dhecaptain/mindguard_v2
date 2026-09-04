@@ -93,9 +93,10 @@ export default function Header() {
               href="/demo"
               className="hidden sm:flex px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold border border-slate-700 transition-all hover:-translate-y-[1px] items-center gap-1.5"
             >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <Shield className="w-3.5 h-3.5 text-emerald-400" />
               <span>Request demo</span>
             </Link>
+
           </div>
 
 
