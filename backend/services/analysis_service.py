@@ -124,6 +124,27 @@ def run_consented_student_analysis(
                 ip=ip,
             )
 
+            def _composio_triage_fastlane():
+                try:
+                    from backend.services.composio_fastlane import trigger_triage_fastlane
+                    trigger_triage_fastlane(
+                        student_id=student_id,
+                        rolling_score=rolling_score,
+                        platform=platform,
+                        actor=actor,
+                    )
+                except Exception as e:
+                    logger.warning("composio triage fastlane failed student=%s: %s", student_id, e)
+
+            try:
+                import asyncio as _asyncio
+                try:
+                    _asyncio.get_running_loop().create_task(_asyncio.to_thread(_composio_triage_fastlane))
+                except RuntimeError:
+                    _composio_triage_fastlane()
+            except Exception:
+                pass
+
     return {
         "student_id": student_id,
         "platform": platform,

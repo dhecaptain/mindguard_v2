@@ -2788,6 +2788,23 @@ async def v1_demo_request_create(data: DemoRequestCreate, request: Request):
         None, "public", "DEMO_REQUEST_CREATED", "demo_request", demo["id"],
         ip=client_ip,
     )
+
+    def _composio_demo_fastlane():
+        try:
+            from backend.services.composio_fastlane import trigger_demo_fastlane
+            trigger_demo_fastlane(demo)
+        except Exception as e:
+            logger.warning("composio demo fastlane failed for %s: %s", demo["id"], e)
+
+    try:
+        import asyncio as _asyncio
+        try:
+            _asyncio.get_running_loop().create_task(_asyncio.to_thread(_composio_demo_fastlane))
+        except RuntimeError:
+            _composio_demo_fastlane()
+    except Exception:
+        pass
+
     return {
         "id": demo["id"],
         "status": demo["status"],
