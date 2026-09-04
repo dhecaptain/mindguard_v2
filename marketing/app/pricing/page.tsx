@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, CtaButton } from '@/components/ui'
+import { PageHero, SectionHeading, CtaBand } from '@/components/ui'
 import { Reveal, Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
 import Faq from '@/components/Faq'
+import { PricingCalculator } from '@/components/PricingCalculator'
 
 export const metadata: Metadata = {
   title: 'Pricing — MindGuard',
@@ -15,26 +16,26 @@ const TIERS = [
     price: 'Free for 3 months',
     cadence: 'then $49 / month',
     blurb: 'A single school getting started with one counsellor.',
-    features: ['Up to 100 students', '1 counsellor', 'Consent workflow & tracker', 'Email delivery & templates', 'Onboarding and training included'],
+    features: ['Up to 100 students', '1 counsellor seat', 'Consent workflow & tracker', 'Email delivery & templates', 'Onboarding & training included'],
     cta: 'Start a pilot',
     featured: false,
   },
   {
-    name: 'School',
-    price: 'Contact for pricing',
-    cadence: 'annual licence',
-    blurb: 'A K-12 institution running a full wellbeing programme.',
-    features: ['Unlimited students', 'Up to 10 counsellors', 'Everything in Pilot', 'Bulk roster upload & CSV export', 'Reminders, expiry & audit trail', 'Dedicated onboarding'],
-    cta: 'Request pricing',
+    name: 'School / District',
+    price: 'Custom Licensing',
+    cadence: 'annual agreement',
+    blurb: 'A K-12 school or district running a full wellbeing program.',
+    features: ['Unlimited students', 'Up to 10 counsellors', 'Everything in Pilot', 'Bulk roster upload & CSV export', 'Automated reminders & audit trail', 'Dedicated onboarding manager'],
+    cta: 'Request proposal',
     featured: true,
   },
   {
-    name: 'District / University',
-    price: 'Contact for pricing',
-    cadence: 'enterprise agreement',
+    name: 'University Campus',
+    price: 'Institutional Plan',
+    cadence: 'campus agreement',
     blurb: 'Multi-school districts or university systems at scale.',
-    features: ['Multi-school / multi-campus', 'Unlimited counsellors', 'Everything in School', 'Full analytics', 'Data Processing Agreement', 'Dedicated success manager'],
-    cta: 'Talk to us',
+    features: ['Multi-school / multi-campus', 'Unlimited counsellors', 'Everything in School', 'Full analytics & audit log', 'Data Processing Agreement', 'Dedicated success manager'],
+    cta: 'Talk to sales',
     featured: false,
   },
 ]
@@ -81,43 +82,43 @@ const FAQS = [
 
 export default function PricingPage() {
   return (
-    <div className="overflow-hidden">
+    <div className="bg-[#FAFAFA] overflow-hidden">
       <PageHero
-        eyebrow="Pricing"
+        eyebrow="Transparent Institutional Pricing"
         title="Simple pricing, serious support"
         subtitle="Start free with a pilot. Scale to a whole district or campus when you are ready."
       />
 
+      {/* PRICING CARDS */}
       <section className="py-20 relative overflow-hidden">
-        <FloatingOrb className="bg-teal-100/30 -top-10 -right-10" size={400} duration={18} />
-        <FloatingOrb className="bg-emerald-100/20 top-40 -left-20" size={350} duration={16} />
+        <FloatingOrb className="bg-emerald-200/30 -top-10 -right-10" size={400} duration={18} />
         <div className="relative max-w-6xl mx-auto px-6">
           <Stagger className="grid md:grid-cols-3 gap-6 items-stretch">
             {TIERS.map((t) => (
               <StaggerItem key={t.name} className="flex">
                 <HoverLift className="flex-1 flex">
                   <div
-                    className={`relative bg-white border rounded-2xl p-8 flex flex-col w-full ${
-                      t.featured ? 'border-teal-600 shadow-lg' : 'border-[#eef2f6]'
+                    className={`relative bg-white/90 backdrop-blur-md border rounded-2xl p-8 flex flex-col w-full shadow-sm hover:shadow-xl transition-all ${
+                      t.featured ? 'border-emerald-500/60 ring-2 ring-emerald-500/20' : 'border-emerald-500/20'
                     }`}
                   >
                     {t.featured && (
-                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-teal-600 px-4 py-1 text-xs font-semibold text-white">
-                        Most popular
+                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 px-4 py-1 text-xs font-bold text-white shadow-md">
+                        Most popular for districts
                       </span>
                     )}
-                    <h3 className="text-lg font-bold text-ink">{t.name}</h3>
+                    <h3 className="text-xl font-extrabold text-slate-900">{t.name}</h3>
                     <div className="mt-4">
-                      <div className="text-2xl font-extrabold text-ink">{t.price}</div>
-                      <div className="text-xs text-slate mt-1">{t.cadence}</div>
+                      <div className="text-2xl font-extrabold text-slate-900 font-mono">{t.price}</div>
+                      <div className="text-xs text-slate-500 mt-1">{t.cadence}</div>
                     </div>
-                    <p className="mt-4 text-sm text-slate">{t.blurb}</p>
-                    <ul className="mt-6 flex flex-col gap-3 text-sm text-slate flex-1">
+                    <p className="mt-4 text-sm text-slate-600 leading-relaxed">{t.blurb}</p>
+                    <ul className="mt-6 flex flex-col gap-3 text-sm text-slate-600 flex-1">
                       {t.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+                        <li key={f} className="flex items-start gap-2.5">
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                              <path d="M2 6.5 4.5 9 10 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              <path d="M2 6.5 4.5 9 10 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </span>
                           <span>{f}</span>
@@ -127,13 +128,13 @@ export default function PricingPage() {
                     <div className="mt-8">
                       <a
                         href="/demo"
-                        className={`block text-center px-6 py-3 rounded-xl font-semibold transition-colors ${
+                        className={`block text-center px-6 py-3.5 rounded-xl font-bold text-xs transition-all ${
                           t.featured
-                            ? 'bg-teal-600 text-white hover:bg-teal-700'
-                            : 'border border-[#e5e7eb] text-ink hover:bg-white'
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md hover:shadow-lg'
+                            : 'border border-emerald-500/30 text-slate-800 hover:bg-emerald-50/50'
                         }`}
                       >
-                        {t.cta}
+                        {t.cta} &rarr;
                       </a>
                     </div>
                   </div>
@@ -144,8 +145,15 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-[#f7f9fb] relative overflow-hidden">
-        <FloatingOrb className="bg-teal-100/20 -bottom-10 right-10" size={300} duration={20} />
+      {/* INTERACTIVE CALCULATOR */}
+      <section className="py-20 bg-slate-900 text-white relative overflow-hidden bg-grid-pattern">
+        <div className="max-w-6xl mx-auto px-6">
+          <PricingCalculator />
+        </div>
+      </section>
+
+      {/* FEATURE COMPARISON TABLE */}
+      <section className="py-20 relative overflow-hidden">
         <div className="relative max-w-6xl mx-auto px-6">
           <Reveal>
             <SectionHeading
@@ -154,23 +162,23 @@ export default function PricingPage() {
             />
           </Reveal>
           <Reveal delay={0.1}>
-            <div className="overflow-x-auto rounded-2xl border border-[#eef2f6] bg-white">
+            <div className="overflow-x-auto rounded-2xl border border-emerald-500/20 bg-white shadow-sm">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#eef2f6] text-left">
-                    <th className="px-6 py-4 font-semibold text-ink">Feature</th>
-                    <th className="px-6 py-4 font-semibold text-ink">Pilot</th>
-                    <th className="px-6 py-4 font-semibold text-teal-700 bg-teal-50">School</th>
-                    <th className="px-6 py-4 font-semibold text-ink">District / University</th>
+                  <tr className="border-b border-emerald-500/15 text-left bg-slate-50">
+                    <th className="px-6 py-4 font-bold text-slate-900">Feature</th>
+                    <th className="px-6 py-4 font-bold text-slate-900">Pilot</th>
+                    <th className="px-6 py-4 font-bold text-emerald-700 bg-emerald-50">School</th>
+                    <th className="px-6 py-4 font-bold text-slate-900">District / University</th>
                   </tr>
                 </thead>
                 <tbody>
                   {COMPARISON.map((row) => (
-                    <tr key={row.feature} className="border-b border-[#eef2f6] last:border-0">
-                      <td className="px-6 py-4 font-medium text-ink">{row.feature}</td>
-                      <td className="px-6 py-4 text-slate">{row.pilot}</td>
-                      <td className="px-6 py-4 text-slate bg-teal-50/60">{row.school}</td>
-                      <td className="px-6 py-4 text-slate">{row.enterprise}</td>
+                    <tr key={row.feature} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                      <td className="px-6 py-4 font-semibold text-slate-900">{row.feature}</td>
+                      <td className="px-6 py-4 text-slate-600">{row.pilot}</td>
+                      <td className="px-6 py-4 text-slate-600 bg-emerald-50/40 font-semibold">{row.school}</td>
+                      <td className="px-6 py-4 text-slate-600">{row.enterprise}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -180,7 +188,8 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="py-20">
+      {/* FAQ SECTION */}
+      <section className="py-20 bg-slate-50 border-t border-emerald-500/10">
         <div className="max-w-3xl mx-auto px-6">
           <Reveal>
             <SectionHeading title="Frequently asked questions" />
@@ -188,13 +197,14 @@ export default function PricingPage() {
           <Reveal delay={0.1}>
             <Faq items={FAQS} />
           </Reveal>
-          <Reveal delay={0.15}>
-            <div className="mt-12 text-center">
-              <CtaButton href="/demo">Request a demo</CtaButton>
-            </div>
-          </Reveal>
         </div>
       </section>
+
+      <CtaBand
+        title="Ready to estimate for your school or campus?"
+        subtitle="Our team will scope your roster volume and prepare a formal compliance proposal."
+      />
     </div>
   )
 }
+

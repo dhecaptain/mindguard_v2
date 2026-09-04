@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, Card, Check, CtaButton } from '@/components/ui'
+import { PageHero, SectionHeading, Card, Check, CtaButton, CtaBand } from '@/components/ui'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { Icons } from '@/components/icons'
+import { MultiPlatformPreview } from '@/components/MultiPlatformPreview'
 
 export const metadata: Metadata = {
   title: 'Product — MindGuard',
@@ -32,18 +33,6 @@ const HOW_IT_WORKS = [
   },
 ]
 
-const PLATFORMS = [
-  'Reddit',
-  'Bluesky',
-  'Mastodon',
-  'YouTube',
-  'TikTok',
-  'Twitter / X',
-  'Facebook',
-  'WhatsApp exports',
-  'CSV & JSON archives',
-]
-
 const COMMITMENTS = [
   {
     icon: <Icons.Shield />,
@@ -69,26 +58,27 @@ const COMMITMENTS = [
 
 export default function ProductPage() {
   return (
-    <div>
+    <div className="bg-[#FAFAFA]">
       <PageHero
-        eyebrow="Product"
+        eyebrow="Product Architecture"
         title="Decision support your counsellors can defend"
         subtitle="MindGuard helps trained practitioners identify early signs of distress in consented digital content — powered by Mental-RoBERTa, reviewed by humans, built for trust."
       />
 
-      <section className="relative py-20 overflow-hidden">
-        <FloatingOrb className="bg-teal-100 opacity-40 -top-20 -right-20" size={360} />
+      {/* HOW IT WORKS */}
+      <section className="relative py-24 overflow-hidden">
+        <FloatingOrb className="bg-emerald-200 opacity-30 -top-20 -right-20" size={400} />
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>
-            <SectionHeading title="How it works" />
+            <SectionHeading title="How MindGuard Works" subtitle="A 4-stage consent and decision-support pipeline designed for school and university counsellors." />
           </Reveal>
           <Stagger className="grid md:grid-cols-2 gap-6">
             {HOW_IT_WORKS.map((s) => (
               <StaggerItem key={s.step}>
-                <div className="relative bg-white border border-[#eef2f6] rounded-2xl p-6">
-                  <div className="text-5xl font-extrabold text-teal-50 mb-4">{s.step}</div>
-                  <h3 className="font-bold text-ink mb-2">{s.title}</h3>
-                  <p className="text-sm text-slate leading-relaxed">{s.text}</p>
+                <div className="relative bg-white/90 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-7 shadow-sm hover:border-emerald-500/40 transition-all">
+                  <div className="text-5xl font-extrabold text-emerald-500/20 mb-4 font-mono">{s.step}</div>
+                  <h3 className="font-bold text-slate-900 text-lg mb-2">{s.title}</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">{s.text}</p>
                 </div>
               </StaggerItem>
             ))}
@@ -96,28 +86,21 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <section className="relative py-20 bg-[#f7f9fb] overflow-hidden">
-        <FloatingOrb className="bg-sky-100 opacity-30 -bottom-20 -left-20" size={400} duration={22} />
+      {/* INTERACTIVE MULTI-PLATFORM PREVIEW */}
+      <section className="py-20 bg-slate-950 text-white relative overflow-hidden bg-grid-pattern">
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>
             <SectionHeading
-              title="One wellbeing view across the platforms students actually use"
-              subtitle="Analyse content across nine platforms and file formats in a single session."
+              title="One wellbeing view across digital touchpoints"
+              subtitle="Preview how MindGuard securely processes signals across Google Docs, Canvas LMS, School Email, and Consented Social Channels."
             />
           </Reveal>
-          <Stagger className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto">
-            {PLATFORMS.map((p) => (
-              <StaggerItem key={p}>
-                <span className="rounded-full border border-[#e5e7eb] bg-white px-5 py-2 text-sm font-semibold text-ink">
-                  {p}
-                </span>
-              </StaggerItem>
-            ))}
-          </Stagger>
+          <MultiPlatformPreview />
         </div>
       </section>
 
-      <section className="py-20">
+      {/* COMMITMENTS */}
+      <section className="py-24">
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>
             <SectionHeading
@@ -139,11 +122,12 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-[#f7f9fb]">
+      {/* WHAT MINDGUARD IS vs NOT */}
+      <section className="py-24 bg-slate-50 border-y border-emerald-500/10">
         <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
           <Reveal>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-              <h3 className="text-xl font-bold text-ink mb-6">What MindGuard is</h3>
+            <div className="bg-white border border-emerald-500/20 rounded-2xl p-8 shadow-sm">
+              <h3 className="text-xl font-bold text-slate-900 mb-6">What MindGuard is</h3>
               <ul className="flex flex-col gap-4">
                 <Check>An early-signal tool that helps counsellors prioritise follow-ups</Check>
                 <Check>A consent-first workflow with a full audit trail</Check>
@@ -153,8 +137,8 @@ export default function ProductPage() {
             </div>
           </Reveal>
           <Reveal delay={0.12}>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-              <h3 className="text-xl font-bold text-ink mb-6">What MindGuard is not</h3>
+            <div className="bg-white border border-emerald-500/20 rounded-2xl p-8 shadow-sm">
+              <h3 className="text-xl font-bold text-slate-900 mb-6">What MindGuard is not</h3>
               <ul className="flex flex-col gap-4">
                 <Check>Not a diagnosis tool — it never labels a student</Check>
                 <Check>Not a monitoring wiretap — only explicitly shared content is analysed</Check>
@@ -166,7 +150,8 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <section className="py-20">
+      {/* UNDER THE HOOD */}
+      <section className="py-24">
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>
             <SectionHeading
@@ -176,7 +161,7 @@ export default function ProductPage() {
           </Reveal>
           <Stagger className="grid sm:grid-cols-3 gap-6">
             <StaggerItem>
-              <Card title="Mental-RoBERTa">
+              <Card title="Mental-RoBERTa Model">
                 A transformer pre-trained on millions of mental-health domain posts and
                 fine-tuned on 12,656 annotated examples. ROC-AUC 0.9813, 92.5% accuracy.
               </Card>
@@ -197,12 +182,10 @@ export default function ProductPage() {
         </div>
       </section>
 
-      <div className="max-w-6xl mx-auto px-6 pb-20 flex flex-col items-center gap-4">
-        <CtaButton href="/demo">Request a demo</CtaButton>
-        <CtaButton href="/security" variant="ghost">
-          Read the security &amp; compliance overview
-        </CtaButton>
-      </div>
+      <CtaBand
+        title="Experience the live MindGuard platform"
+        subtitle="Explore the live application or request a dedicated institutional walkthrough with your data."
+      />
     </div>
   )
 }
