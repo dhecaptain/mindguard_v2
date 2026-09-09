@@ -45,7 +45,7 @@ const COMPARISON: { feature: string; pilot: string; school: string; enterprise: 
   { feature: 'Parental consent routing for minors', pilot: 'Yes', school: 'Yes', enterprise: 'Yes' },
   { feature: 'Consent tracker with audit trail', pilot: 'Yes', school: 'Yes', enterprise: 'Yes' },
   { feature: 'Roster CSV upload', pilot: 'Yes', school: 'Yes', enterprise: 'Yes' },
-  { feature: 'Multi-platform analysis', pilot: '4 platforms', school: 'All platforms', enterprise: 'All platforms' },
+  { feature: 'Signal sources supported', pilot: 'Core sources', school: 'All supported sources', enterprise: 'All supported sources' },
   { feature: 'Students included', pilot: 'Up to 100', school: 'Unlimited', enterprise: 'Unlimited' },
   { feature: 'Counsellor seats', pilot: '1', school: 'Up to 10', enterprise: 'Unlimited' },
   { feature: 'Full analytics & reporting', pilot: '—', school: '—', enterprise: 'Yes' },

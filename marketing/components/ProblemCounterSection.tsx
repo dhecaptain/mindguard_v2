@@ -116,12 +116,37 @@ export function ProblemCounterSection() {
                   {item.text}
                 </p>
                 <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-white/30">
-                  <span>Audited Signal Data</span>
-                  <span className="text-emerald-400 font-mono">Verified</span>
+                  <span>Public health & research data</span>
+                  <span className="text-emerald-400 font-mono">Sources below</span>
                 </div>
               </motion.div>
             )
           })}
+        </div>
+
+        {/* Sources */}
+        <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-x-8 gap-y-2 text-xs text-white/40">
+          <span className="flex items-center gap-1.5">
+            <span className="h-1 w-1 rounded-full bg-emerald-500/70" />
+            WHO — Global suicide estimates:{" "}
+            <a href="https://www.who.int/news-room/fact-sheets/detail/suicide" target="_blank" rel="noopener noreferrer" className="text-emerald-400/80 hover:text-emerald-300 underline underline-offset-2">
+              who.int
+            </a>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-1 w-1 rounded-full bg-emerald-500/70" />
+            ASCA — Student-to-school-counsellor ratios:{" "}
+            <a href="https://www.schoolcounselor.org/About-School-Counseling/Student-to-School-Counselor-Ratios" target="_blank" rel="noopener noreferrer" className="text-emerald-400/80 hover:text-emerald-300 underline underline-offset-2">
+              schoolcounselor.org
+            </a>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-1 w-1 rounded-full bg-emerald-500/70" />
+            AFSP — Warning signs of suicide:{" "}
+            <a href="https://afsp.org" target="_blank" rel="noopener noreferrer" className="text-emerald-400/80 hover:text-emerald-300 underline underline-offset-2">
+              afsp.org
+            </a>
+          </span>
         </div>
 
       </div>

@@ -27,9 +27,9 @@ export function GlassHero() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          <span className="text-white/90">Live</span>
+          <span className="text-white/90">Interactive preview</span>
           <span className="h-1 w-1 rounded-full bg-white/20" aria-hidden />
-          <span className="text-white/70">Consent First Student Distress Detection Matrix</span>
+          <span className="text-white/70">Consent-first distress detection walkthrough</span>
           <span className="ml-1 hidden sm:inline-flex items-center px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/60 text-[10px] font-mono tracking-wider">
             ROC AUC 0.98
           </span>
@@ -99,9 +99,9 @@ export function GlassHero() {
               <RiskSignalMatrix />
             </div>
             <div className="flex items-center justify-center gap-6 py-3 text-xs text-white/40 border-t border-white/[0.06] mt-1">
-              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> FERPA & COPPA Ready</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Built for FERPA & COPPA</span>
               <span className="hidden sm:flex items-center gap-1.5"><span className="h-1 w-1 rounded-full bg-white/20" /> 256-bit Encrypted</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Live Telemetry</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Simulated preview</span>
             </div>
           </div>
         </motion.div>

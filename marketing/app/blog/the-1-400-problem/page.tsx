@@ -49,6 +49,9 @@ export default function Post() {
         we exist to solve — and we intend to keep solving it, consent-first, for as long as it
         takes.
       </p>
+      <p className="text-xs text-slate" style={{ marginTop: '2rem' }}>
+        Sources: ASCA student-to-school-counsellor ratios (schoolcounselor.org) &middot; AFSP warning signs of suicide (afsp.org).
+      </p>
     </BlogPost>
   )
 }

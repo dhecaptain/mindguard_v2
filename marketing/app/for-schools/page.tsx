@@ -47,7 +47,7 @@ const HOW_HELPS = [
   {
     icon: <Icons.Lock />,
     title: 'COPPA and FERPA aware by design',
-    text: 'Minors are routed through parental consent. Student PII is encrypted at rest, analysed content is not stored between sessions, and data never leaves your school without permission.',
+    text: 'Minors are routed through parental consent. Student PII is encrypted at rest, analysed content is used only to produce a summary for review, and data never leaves your school without permission.',
   },
 ]
 
@@ -86,6 +86,9 @@ export default function ForSchoolsPage() {
               <Stat value="90%" label="Of youth who die by suicide showed warning signs" />
               <Stat value="0.98" label="ROC-AUC of the Mental-RoBERTa model" />
             </div>
+            <p className="mt-6 text-center text-xs text-slate-400">
+              Sources: ASCA student-to-school-counsellor ratios &middot; AFSP warning signs &middot; Mental-RoBERTa model evaluation.
+            </p>
           </Reveal>
         </div>
       </section>

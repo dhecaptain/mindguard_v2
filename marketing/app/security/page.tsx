@@ -34,7 +34,7 @@ const CONTROLS = [
   {
     icon: <Icons.ShieldCheck />,
     title: 'Data minimisation',
-    text: 'Only content a student explicitly shares is analysed, and analysed content is not stored between sessions. CSV validators read only whitelisted columns; extra columns are never stored.',
+    text: 'Only content a student explicitly shares is analysed, and the output is a summary for a counsellor to review — never an automated action. CSV validators read only whitelisted columns; extra columns are never stored.',
   },
 
   {
@@ -46,11 +46,11 @@ const CONTROLS = [
 
 const COMPLIANCE = [
   {
-    title: 'FERPA Compliance',
+    title: 'FERPA-conscious design',
     text: 'Student education records are treated with the confidentiality FERPA requires. Institutions stay in control of their data and who can access it.',
   },
   {
-    title: 'COPPA Verified',
+    title: 'COPPA-aware design',
     text: 'Minors only participate with verifiable parental consent. The age-of-majority threshold is configurable per institution, and parent emails are required for minors on the roster.',
   },
   {

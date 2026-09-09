@@ -4,15 +4,15 @@ import React from 'react'
 import { ShieldCheck, Award, Lock, CheckCircle2, Building2, Cpu } from 'lucide-react'
 
 const BADGES = [
-  { label: 'HIPAA-aligned', desc: 'Protected Health Information Standards', icon: ShieldCheck, accent: 'emerald' },
-  { label: 'FERPA-compliant', desc: 'Educational Records Privacy Certified', icon: Lock, accent: 'teal' },
-  { label: 'COPPA-ready', desc: 'Parental Consent Workflow for Minors', icon: CheckCircle2, accent: 'emerald' },
-  { label: 'GVSU Partner', desc: 'Grand Valley State University', icon: Building2, accent: 'cyan' },
-  { label: 'DeepTech Winner', desc: 'Grand Rapids Innovation Award', icon: Award, accent: 'amber' },
+  { label: 'HIPAA-aligned', desc: 'Design aligned with health data norms', icon: ShieldCheck, accent: 'emerald' },
+  { label: 'FERPA-conscious', desc: 'Educational Records Privacy Design', icon: Lock, accent: 'teal' },
+  { label: 'COPPA-aware', desc: 'Parental Consent Workflow for Minors', icon: CheckCircle2, accent: 'emerald' },
+  { label: 'GVSU Innovation Day', desc: 'Recognised at Grand Valley State University', icon: Building2, accent: 'cyan' },
+  { label: 'Grand Rapids DeepTech', desc: 'Top-tier Midwest AI accelerator', icon: Award, accent: 'amber' },
   { label: 'Hugging Face ML', desc: 'Mental-RoBERTa Model Host', icon: Cpu, accent: 'teal' },
 
-  { label: 'Zero Retention', desc: 'Analysed Content Purged Post-Session', icon: ShieldCheck, accent: 'emerald' },
-  { label: '256-Bit Encrypted', desc: 'End-to-End TLS & AES Security', icon: Lock, accent: 'cyan' },
+  { label: 'Data Minimised', desc: 'Only consented content processed', icon: ShieldCheck, accent: 'emerald' },
+  { label: '256-Bit Encrypted', desc: 'TLS 1.3 in transit · AES-256 at rest', icon: Lock, accent: 'cyan' },
 ]
 
 export function TrustMarquee() {

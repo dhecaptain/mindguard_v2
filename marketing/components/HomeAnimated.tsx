@@ -178,7 +178,7 @@ export default function HomeAnimated() {
       {/* HIGH IMPACT CTA BAND */}
       <CtaBand
         title="Ready to see MindGuard in action for your institution?"
-        subtitle="We'll walk your counselling and IT teams through the consent workflow, live telemetry tracking, and HIPAA/FERPA audit trail."
+        subtitle="We'll walk your counselling and IT teams through the consent workflow, the tracking dashboard, and the full audit trail."
       />
 
     </div>

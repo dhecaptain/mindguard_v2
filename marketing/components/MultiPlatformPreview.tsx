@@ -2,56 +2,52 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FileText, GraduationCap, MessageSquare, Mail, ShieldCheck, Activity } from 'lucide-react'
+import { MessageSquare, Video, Globe, FileText, ShieldCheck, Activity } from 'lucide-react'
 
 const CHANNELS = [
   {
-    id: 'gdocs',
-    label: 'Google Docs & Drive',
-    icon: FileText,
-    badge: 'Real-time Sync',
-    sampleTitle: 'English Literature Essay Draft #3',
-    snippet: '"...everything feels overwhelming lately and I can\'t seem to find any reason to keep trying..."',
-    sentiment: 'High Distress Flag',
-    confidence: '98.4%',
-    consentStatus: 'Parent Consented',
-    privacyNote: 'Processed via ephemeral memory pipeline. Zero text saved to DB.',
-  },
-  {
-    id: 'lms',
-    label: 'Canvas LMS / Blackboard',
-    icon: GraduationCap,
-    badge: 'LMS API Integration',
-    sampleTitle: 'Psychology 101 Discussion Board Post',
-    snippet: '"Sometimes I feel like disappearing from campus completely and nobody would even notice..."',
-    sentiment: 'Moderate Distress Flag',
-    confidence: '94.1%',
-    consentStatus: 'Student Opted-In',
-    privacyNote: 'Only submitted coursework processed after verified student opt-in.',
-  },
-  {
     id: 'social',
-    label: 'Consented Social (Reddit/Bluesky)',
+    label: 'Consented Social Feeds',
     icon: MessageSquare,
-    badge: 'OAuth Opt-In',
-    sampleTitle: 'Public Student Forum Post',
+    badge: 'OAuth opt-in',
+    sampleTitle: 'Public Forum Post (Illustrative)',
     snippet: '"Late night thoughts... feeling completely isolated and losing hope..."',
     sentiment: 'High Distress Flag',
-    confidence: '96.8%',
-    consentStatus: 'OAuth Verified',
-    privacyNote: 'Requires explicit OAuth token handshake from student.',
+    consentStatus: 'OAuth verified',
+    privacyNote: 'Requires an explicit OAuth token handshake from the student.',
   },
   {
-    id: 'email',
-    label: 'School Communications',
-    icon: Mail,
-    badge: 'Direct Signals',
-    sampleTitle: 'Student Inquiry Note',
+    id: 'youtube',
+    label: 'YouTube',
+    icon: Video,
+    badge: 'Consented public content',
+    sampleTitle: 'Public Comment (Illustrative)',
+    snippet: '"Sometimes I feel like disappearing from campus completely and nobody would even notice..."',
+    sentiment: 'Moderate Distress Flag',
+    consentStatus: 'Student opted-in',
+    privacyNote: 'Only consented public content is processed for a counsellor summary.',
+  },
+  {
+    id: 'facebook',
+    label: 'Facebook / X (Twitter)',
+    icon: Globe,
+    badge: 'Consented public content',
+    sampleTitle: 'Public Post (Illustrative)',
+    snippet: '"...everything feels overwhelming lately and I can\'t seem to find any reason to keep trying..."',
+    sentiment: 'High Distress Flag',
+    consentStatus: 'Consented protocol',
+    privacyNote: 'Output is a summary for human review — never shared outside your institution.',
+  },
+  {
+    id: 'uploads',
+    label: 'File & Message Exports',
+    icon: FileText,
+    badge: 'Consented upload',
+    sampleTitle: 'WhatsApp Export / CSV / JSON (Illustrative)',
     snippet: '"I need help with my crisis management plan before tomorrow morning..."',
     sentiment: 'Critical Priority Flag',
-    confidence: '99.2%',
-    consentStatus: 'Consented Protocol',
-    privacyNote: 'Automatically escalated to Counsellor Triage queue.',
+    consentStatus: 'Consented protocol',
+    privacyNote: 'Explicitly shared files are analysed to produce a summary a counsellor reviews.',
   },
 ]
 
@@ -74,10 +70,13 @@ export function MultiPlatformPreview() {
           <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
             How Signals Are Processed Across Digital Touchpoints
           </h3>
+          <p className="mt-1 text-xs text-slate-400">
+            Illustrative example — no real student data. Every connector is opt-in and consent-gated.
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-slate-950/80 px-3.5 py-1.5 rounded-xl border border-slate-800 shrink-0">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Zero Data Retention</span>
+          <span>Consent-Gated</span>
         </div>
       </div>
 
@@ -144,8 +143,8 @@ export function MultiPlatformPreview() {
             </div>
 
             <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-              <div className="text-slate-400 mb-1">Model Confidence</div>
-              <div className="font-bold text-emerald-400 font-mono">{current.confidence} ROC-AUC</div>
+              <div className="text-slate-400 mb-1">Review Queue</div>
+              <div className="font-bold text-emerald-400 font-mono">Summary → Counsellor</div>
             </div>
 
             <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
@@ -167,7 +166,7 @@ export function MultiPlatformPreview() {
               rel="noopener noreferrer"
               className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
             >
-              Test Live App &rarr;
+              Open the app &rarr;
             </a>
           </div>
         </motion.div>
