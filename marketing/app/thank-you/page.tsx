@@ -23,28 +23,28 @@ const STEPS = [
 
 export default function ThankYouPage() {
   return (
-    <div className="py-20">
+    <div className="py-24">
       <div className="max-w-2xl mx-auto px-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center mx-auto mb-6 text-3xl">
+        <div className="w-16 h-16 rounded-full bg-forest-50 border border-forest-100 flex items-center justify-center mx-auto mb-6 text-3xl text-forest">
           ✓
         </div>
-        <h1 className="text-3xl font-bold text-ink mb-3">Thank you — request received</h1>
-        <p className="text-slate mb-10 max-w-lg mx-auto">
+        <h1 className="display text-4xl text-ink mb-3">Thank you — request received</h1>
+        <p className="text-ink-soft mb-10 max-w-lg mx-auto">
           Our team will be in touch within <strong className="text-ink">2 business days</strong>.
           Keep an eye on your inbox (and check your spam folder just in case).
         </p>
 
-        <div className="bg-white border border-[#eef2f6] rounded-2xl p-6 sm:p-8 shadow-sm text-left">
-          <h2 className="text-lg font-bold text-ink mb-6">What happens next</h2>
+        <div className="mg-card p-6 sm:p-8 text-left">
+          <h2 className="text-lg font-semibold text-ink mb-6">What happens next</h2>
           <div className="flex flex-col gap-6">
             {STEPS.map((s) => (
               <div key={s.title} className="flex gap-4">
-                <span className="w-8 h-8 shrink-0 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center text-sm font-bold">
+                <span className="w-8 h-8 shrink-0 rounded-full bg-forest-50 text-forest flex items-center justify-center text-sm font-bold">
                   ✓
                 </span>
                 <div>
                   <div className="font-semibold text-ink text-sm">{s.title}</div>
-                  <p className="text-sm text-slate mt-1 leading-relaxed">{s.text}</p>
+                  <p className="text-sm text-ink-soft mt-1 leading-relaxed">{s.text}</p>
                 </div>
               </div>
             ))}
@@ -52,16 +52,10 @@ export default function ThankYouPage() {
         </div>
 
         <div className="mt-10 flex items-center justify-center gap-4">
-          <Link
-            href="/"
-            className="px-6 py-3 bg-teal-600 text-white rounded-xl font-semibold hover:bg-teal-700 transition-colors"
-          >
+          <Link href="/" className="px-6 py-3 mg-btn-primary">
             Back to home
           </Link>
-          <a
-            href="/privacy"
-            className="px-6 py-3 border border-[#e5e7eb] text-ink rounded-xl font-semibold hover:bg-white transition-colors"
-          >
+          <a href="/privacy" className="px-6 py-3 mg-btn-secondary">
             Privacy policy
           </a>
         </div>

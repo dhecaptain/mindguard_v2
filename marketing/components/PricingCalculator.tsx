@@ -52,18 +52,13 @@ export function PricingCalculator() {
   const tier = TIERS.find((t) => t.id === active) ?? TIERS[1]
 
   return (
-    <div className="max-w-4xl mx-auto rounded-3xl bg-white border border-emerald-500/20 p-8 sm:p-10 shadow-xl relative overflow-hidden">
-      {/* Background glow accent */}
-      <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="text-center mb-8">
-        <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 text-xs font-bold uppercase tracking-wider mb-3">
-          Pricing Overview
-        </span>
-        <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+    <div className="max-w-4xl mx-auto rounded-3xl bg-white border border-[rgba(23,33,29,0.08)] p-8 sm:p-10 shadow-card">
+      <div className="text-center mb-10">
+        <span className="mg-eyebrow mb-3 inline-block">Pricing overview</span>
+        <h3 className="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
           Plans that scale from one school to a district
         </h3>
-        <p className="text-slate-600 text-sm mt-2 max-w-lg mx-auto">
+        <p className="text-ink-soft text-sm mt-2 max-w-lg mx-auto">
           Select a tier to see what is included. Pricing is quoted per institution — get in touch
           for a proposal.
         </p>
@@ -77,12 +72,12 @@ export function PricingCalculator() {
             onClick={() => setActive(t.id)}
             className={`text-left rounded-2xl border p-4 transition-all cursor-pointer ${
               active === t.id
-                ? 'border-emerald-500/50 bg-emerald-500/5 shadow-md'
-                : 'border-slate-200 bg-white hover:border-emerald-500/30'
+                ? 'border-forest-400 bg-forest-50 shadow-card'
+                : 'border-[rgba(23,33,29,0.1)] bg-white hover:border-forest-300'
             }`}
           >
-            <div className="text-sm font-extrabold text-slate-900">{t.name}</div>
-            <div className="mt-1 text-[11px] leading-snug text-slate-500">{t.target}</div>
+            <div className="text-sm font-semibold text-ink">{t.name}</div>
+            <div className="mt-1 text-xs leading-snug text-ink-soft">{t.target}</div>
           </button>
         ))}
       </div>
@@ -93,43 +88,40 @@ export function PricingCalculator() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="rounded-2xl glass-panel-dark p-7 text-white shadow-2xl"
+        className="rounded-2xl border border-[rgba(23,33,29,0.08)] bg-mist p-7"
       >
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-[rgba(23,33,29,0.08)]">
           <div>
-            <h4 className="text-xl sm:text-2xl font-extrabold text-white">{tier.name}</h4>
-            <p className="mt-1 text-sm text-slate-400">{tier.target}</p>
+            <h4 className="text-xl sm:text-2xl font-semibold text-ink">{tier.name}</h4>
+            <p className="mt-1 text-sm text-ink-soft">{tier.target}</p>
           </div>
           <div className="sm:text-right sm:max-w-[220px]">
-            <div className="text-sm font-bold text-emerald-400">{tier.positioning}</div>
+            <div className="text-sm font-semibold text-forest">{tier.positioning}</div>
           </div>
         </div>
 
-        {/* Feature List */}
         <div className="mt-6">
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Included</div>
-          <div className="grid sm:grid-cols-2 gap-3 text-xs text-slate-300">
+          <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft mb-4">Included</div>
+          <div className="grid sm:grid-cols-2 gap-3 text-sm text-ink-soft">
             {tier.features.map((feat) => (
               <div key={feat} className="flex items-start gap-2.5">
-                <span className="mt-0.5 p-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-forest-100 text-forest-700">
                   <Check className="w-3.5 h-3.5" />
                 </span>
-                <span>{feat}</span>
+                <span className="leading-snug">{feat}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">
-          <p className="text-xs text-slate-400">
+        <div className="mt-8 pt-6 border-t border-[rgba(23,33,29,0.08)] flex flex-wrap items-center justify-between gap-4">
+          <p className="text-xs text-ink-soft">
             Need something custom? Every institution gets a tailored proposal — no hidden per-student fees.
           </p>
-
           <div className="flex items-center gap-3">
             <a
               href="/request-demo"
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/40 transition-all flex items-center gap-1.5"
+              className="mg-btn-primary !px-5 !py-2.5 text-sm"
             >
               <span>Request a demo</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -138,9 +130,9 @@ export function PricingCalculator() {
               href={APP_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-5 py-2.5 rounded-xl text-white/70 border border-white/15 hover:bg-white/10 hover:text-white font-bold text-xs transition-all flex items-center gap-1.5"
+              className="mg-btn-secondary !px-5 !py-2.5 text-sm"
             >
-              <span>Launch App</span>
+              Launch App
             </a>
           </div>
         </div>

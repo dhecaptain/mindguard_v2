@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { PageHero, SectionHeading, Card, Check, Stat, CtaBand } from '@/components/ui'
-import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
+import { Reveal, Stagger, StaggerItem } from '@/components/motion'
 import { Icons } from '@/components/icons'
-
 
 export const metadata: Metadata = {
   title: 'For schools (K-12) — MindGuard',
@@ -60,9 +59,8 @@ export default function ForSchoolsPage() {
         subtitle="MindGuard gives K-12 counselling teams early-signal support that respects student consent, parent involvement and your compliance obligations."
       />
 
-      <section className="relative py-20 overflow-hidden">
-        <FloatingOrb className="bg-teal-100 opacity-40 -top-20 -right-20" size={380} />
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="py-20 sm:py-24">
+        <div className="mg-section">
           <Reveal>
             <SectionHeading
               title="The problem K-12 teams face"
@@ -72,52 +70,52 @@ export default function ForSchoolsPage() {
           <Stagger className="grid md:grid-cols-3 gap-6">
             {PAINS.map((p) => (
               <StaggerItem key={p.title}>
-                <HoverLift className="h-full">
-                  <Card icon={p.icon} title={p.title}>
-                    {p.text}
-                  </Card>
-                </HoverLift>
+                <Card icon={p.icon} title={p.title}>
+                  {p.text}
+                </Card>
               </StaggerItem>
             ))}
           </Stagger>
-          <Reveal delay={0.15}>
-            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-10 max-w-3xl mx-auto text-center">
+          <Reveal delay={0.12}>
+            <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-10 max-w-3xl mx-auto text-center">
               <Stat value="1:400" label="Typical counsellor-to-student ratio" />
               <Stat value="90%" label="Of youth who die by suicide showed warning signs" />
               <Stat value="0.98" label="ROC-AUC of the Mental-RoBERTa model" />
             </div>
-            <p className="mt-6 text-center text-xs text-slate-400">
-              Sources: ASCA student-to-school-counsellor ratios &middot; AFSP warning signs &middot; Mental-RoBERTa model evaluation.
+            <div className="mt-6 text-center">
+              <a href="/request-demo" className="mt-4 inline-flex mg-btn-secondary">
+                See what it looks like
+              </a>
+            </div>
+            <p className="mt-5 text-center text-xs text-ink-soft">
+              Sources: ASCA student-to-school-counsellor ratios · AFSP warning signs · Mental-RoBERTa model evaluation.
             </p>
           </Reveal>
         </div>
       </section>
 
-      <section className="relative py-20 bg-surface-soft overflow-hidden">
-        <FloatingOrb className="bg-sky-100 opacity-30 -bottom-20 -left-20" size={420} duration={22} />
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="py-20 sm:py-24 bg-white border-y border-[rgba(23,33,29,0.08)]">
+        <div className="mg-section">
           <Reveal>
             <SectionHeading title="How MindGuard helps" />
           </Reveal>
           <Stagger className="grid sm:grid-cols-2 gap-6">
             {HOW_HELPS.map((h) => (
               <StaggerItem key={h.title}>
-                <HoverLift className="h-full">
-                  <Card icon={h.icon} title={h.title}>
-                    {h.text}
-                  </Card>
-                </HoverLift>
+                <Card icon={h.icon} title={h.title}>
+                  {h.text}
+                </Card>
               </StaggerItem>
             ))}
           </Stagger>
         </div>
       </section>
 
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
+      <section className="py-20 sm:py-24">
+        <div className="mg-section grid md:grid-cols-2 gap-8">
           <Reveal>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-              <h3 className="text-xl font-bold text-ink mb-6">Built for COPPA and FERPA</h3>
+            <div className="mg-card p-8 h-full">
+              <h3 className="text-xl font-semibold text-ink mb-6">Built for COPPA and FERPA</h3>
               <ul className="flex flex-col gap-4">
                 <Check>Minors can only participate with verified parental consent</Check>
                 <Check>Age-of-majority threshold configurable per institution</Check>
@@ -126,9 +124,9 @@ export default function ForSchoolsPage() {
               </ul>
             </div>
           </Reveal>
-          <Reveal delay={0.12}>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-              <h3 className="text-xl font-bold text-ink mb-6">Administrator-friendly</h3>
+          <Reveal delay={0.1}>
+            <div className="mg-card p-8 h-full">
+              <h3 className="text-xl font-semibold text-ink mb-6">Administrator-friendly</h3>
               <ul className="flex flex-col gap-4">
                 <Check>Bulk roster upload with validation and downloadable error report</Check>
                 <Check>Consent tracker with filters, search, bulk resend and CSV export</Check>
@@ -147,4 +145,3 @@ export default function ForSchoolsPage() {
     </div>
   )
 }
-

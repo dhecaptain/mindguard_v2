@@ -2,6 +2,10 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { APP_URL } from '@/lib/app-url'
 
+export function Eyebrow({ children }: { children: ReactNode }) {
+  return <span className="mg-eyebrow">{children}</span>
+}
+
 export function PageHero({
   eyebrow,
   title,
@@ -12,21 +16,17 @@ export function PageHero({
   subtitle?: string
 }) {
   return (
-    <section className="relative bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white overflow-hidden py-20 border-b border-emerald-500/20 bg-grid-pattern">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-emerald-500/15 rounded-full blur-[130px] pointer-events-none" />
-      
-      <div className="relative max-w-5xl mx-auto px-6 text-center z-10">
+    <section className="relative overflow-hidden bg-mist">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(220,235,227,0.6),transparent_70%)]" />
+      <div className="relative mg-section pt-20 pb-16 sm:pt-28 sm:pb-24 text-center">
         {eyebrow && (
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-6 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            {eyebrow}
-          </div>
+          <p className="mg-eyebrow mb-5">{eyebrow}</p>
         )}
-        <h1 className="text-3xl sm:text-5xl font-extrabold text-white leading-tight tracking-tight max-w-3xl mx-auto">
+        <h1 className="display text-4xl sm:text-5xl md:text-6xl text-ink max-w-4xl mx-auto">
           {title}
         </h1>
         {subtitle && (
-          <p className="mt-6 text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-6 text-base sm:text-lg text-ink-soft max-w-2xl mx-auto leading-relaxed">
             {subtitle}
           </p>
         )}
@@ -46,12 +46,12 @@ export function SectionHeading({
 }) {
   const alignCls = align === 'center' ? 'text-center' : 'text-left'
   return (
-    <div className={`${alignCls} mb-14`}>
-      <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+    <div className={`${alignCls} mb-12 max-w-3xl ${align === 'center' ? 'mx-auto' : ''}`}>
+      <h2 className="display text-3xl sm:text-4xl text-ink">
         {title}
       </h2>
       {subtitle && (
-        <p className={`mt-4 text-base text-slate-600 max-w-2xl leading-relaxed ${align === 'center' ? 'mx-auto' : ''}`}>
+        <p className="mt-5 text-base text-ink-soft leading-relaxed">
           {subtitle}
         </p>
       )}
@@ -69,23 +69,17 @@ export function Card({
   children: ReactNode
 }) {
   return (
-    <div className="group h-full glass-card rounded-2xl p-7 flex flex-col justify-between">
+    <div className="mg-card mg-card-hover flex h-full flex-col justify-between p-7">
       <div>
         {icon && (
-          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-500/20 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-600 group-hover:scale-105 transition-all duration-300 shadow-sm">
+          <div className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-forest-50 text-forest-600">
             {icon}
           </div>
         )}
-        <h3 className="font-bold text-slate-900 text-lg mb-2.5 group-hover:text-emerald-700 transition-colors">
-          {title}
-        </h3>
-        <div className="text-sm text-slate-600 leading-relaxed">
+        <h3 className="text-lg font-semibold text-ink">{title}</h3>
+        <div className="mt-2.5 text-[0.92rem] text-ink-soft leading-relaxed">
           {children}
         </div>
-      </div>
-      <div className="mt-6 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 group-hover:text-emerald-600 transition-colors">
-        <span>Consent-first by design</span>
-        <span className="font-mono text-emerald-600">Human in the loop &rarr;</span>
       </div>
     </div>
   )
@@ -100,23 +94,19 @@ export function CtaButton({
   children: ReactNode
   variant?: 'primary' | 'ghost'
 }) {
-  const base =
-    'inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm transition-all duration-300 relative overflow-hidden group'
-  const styles =
-    variant === 'primary'
-      ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 text-white shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] hover:-translate-y-[2px] btn-emerald-shine'
-      : 'bg-white border border-emerald-500/30 text-slate-800 hover:bg-emerald-50/50 hover:border-emerald-500/60 hover:-translate-y-[2px] shadow-sm'
+  const cls =
+    variant === 'primary' ? 'mg-btn-primary' : 'mg-btn-secondary'
   return (
-    <Link href={href} className={`${base} ${styles}`}>
-      <span className="relative z-10 flex items-center gap-2">{children}</span>
+    <Link href={href} className={cls}>
+      {children}
     </Link>
   )
 }
 
 export function Check({ children }: { children: ReactNode }) {
   return (
-    <li className="flex items-start gap-3 text-sm text-slate-600">
-      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600">
+    <li className="flex items-start gap-3 text-[0.92rem] text-ink-soft">
+      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-forest-100 text-forest-700">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
           <path d="M2 6.5 4.5 9 10 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -128,8 +118,8 @@ export function Check({ children }: { children: ReactNode }) {
 
 export function TrustBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-white/80 backdrop-blur-md px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:border-emerald-500/40 transition-colors">
-      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+    <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(23,74,58,0.18)] bg-white px-4 py-2 text-xs font-semibold text-forest-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-forest-400" />
       {label}
     </span>
   )
@@ -143,23 +133,31 @@ export function CtaBand({
   subtitle?: string
 }) {
   return (
-    <section className="relative py-20 bg-slate-900 bg-grid-pattern text-white overflow-hidden border-t border-emerald-500/20">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-emerald-500/15 rounded-full blur-[100px] pointer-events-none" />
-      <div className="relative max-w-4xl mx-auto px-6 text-center z-10">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4 tracking-tight">
+    <section className="relative overflow-hidden bg-forest text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_80%_at_100%_0%,rgba(98,168,137,0.35),transparent_60%)]" />
+      <div className="relative mg-section py-20 text-center">
+        <h2 className="display text-3xl sm:text-4xl text-white max-w-2xl mx-auto">
           {title}
         </h2>
-        {subtitle && <p className="text-slate-300 text-base sm:text-lg mb-8 max-w-xl mx-auto leading-relaxed">{subtitle}</p>}
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          <CtaButton href="/request-demo">Request a demo</CtaButton>
+        {subtitle && (
+          <p className="mt-5 text-base text-white/70 max-w-xl mx-auto leading-relaxed">
+            {subtitle}
+          </p>
+        )}
+        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/request-demo"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-forest shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift"
+          >
+            Request a demo
+          </Link>
           <a
             href={APP_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm text-white/80 border border-white/15 hover:bg-white/10 hover:text-white hover:-translate-y-[2px] transition-all duration-300"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/30 px-7 py-3.5 text-sm font-semibold text-white transition-colors duration-300 hover:bg-white/10"
           >
-            <span>Launch App</span>
-            <span className="font-mono text-xs opacity-80">&rarr;</span>
+            Launch App
           </a>
         </div>
       </div>
@@ -167,13 +165,13 @@ export function CtaBand({
   )
 }
 
-
 export function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="p-6 rounded-2xl bg-white/80 backdrop-blur-md border border-emerald-500/20 shadow-sm hover:border-emerald-500/40 transition-all">
-      <div className="text-3xl sm:text-4xl font-extrabold text-emerald-600 tracking-tight font-mono">{value}</div>
-      <div className="mt-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">{label}</div>
+    <div className="text-center">
+      <div className="display text-4xl sm:text-5xl text-forest">{value}</div>
+      <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-ink-soft">
+        {label}
+      </div>
     </div>
   )
 }
-

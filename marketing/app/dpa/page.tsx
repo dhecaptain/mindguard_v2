@@ -73,27 +73,27 @@ export default function DpaPage() {
 
       <section className="py-20">
         <div className="max-w-3xl mx-auto px-6">
-          <div className="rounded-2xl bg-teal-600 text-white p-8 text-center mb-12">
+          <div className="rounded-2xl bg-forest text-white p-8 text-center mb-12">
             <h2 className="text-xl font-bold mb-3">Download the template</h2>
-            <p className="text-teal-50 mb-6 text-sm">
+            <p className="text-white/80 mb-6 text-sm">
               A fill-in-the-blanks DPA covering parties, processing, security, sub-processors,
               incident notification and deletion.
             </p>
             <a
               href="/dpa-template.pdf"
               download
-              className="inline-block px-6 py-3 bg-white text-teal-700 rounded-xl font-semibold hover:bg-teal-50 transition-colors"
+              className="inline-block px-6 py-3 bg-white text-forest rounded-xl font-semibold hover:bg-mist transition-colors"
             >
               Download DPA template (PDF)
             </a>
           </div>
 
-          <h2 className="text-2xl font-bold text-ink mb-8">What the agreement covers</h2>
+          <h2 className="display text-2xl text-ink mb-8">What the agreement covers</h2>
           <div className="flex flex-col gap-8">
             {CLAUSES.map((c) => (
               <div key={c.title}>
-                <h3 className="font-bold text-ink mb-2">{c.title}</h3>
-                <p className="text-sm text-slate leading-relaxed">{c.text}</p>
+                <h3 className="font-semibold text-ink mb-2">{c.title}</h3>
+                <p className="text-sm text-ink-soft leading-relaxed">{c.text}</p>
               </div>
             ))}
           </div>

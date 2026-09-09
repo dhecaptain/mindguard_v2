@@ -70,16 +70,18 @@ export default function TermsPage() {
         subtitle="The terms that govern use of the MindGuard service."
       />
       <section className="py-20">
-        <div className="max-w-3xl mx-auto px-6 flex flex-col gap-8">
-          {SECTIONS.map((s) => (
-            <div key={s.title}>
-              <h2 className="font-bold text-ink mb-2">{s.title}</h2>
-              <p className="text-sm text-slate leading-relaxed">{s.body}</p>
-            </div>
-          ))}
-          <p className="text-xs text-slate/70 mt-6">
-            Last updated: June 2025
-          </p>
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="mg-card p-8 sm:p-10 flex flex-col gap-8">
+            {SECTIONS.map((s) => (
+              <div key={s.title}>
+                <h2 className="font-semibold text-ink mb-2">{s.title}</h2>
+                <p className="text-sm text-ink-soft leading-relaxed">{s.body}</p>
+              </div>
+            ))}
+            <p className="text-xs text-ink-soft/70 mt-2">
+              Last updated: June 2025
+            </p>
+          </div>
         </div>
       </section>
     </div>
