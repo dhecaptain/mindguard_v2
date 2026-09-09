@@ -4,7 +4,7 @@ import Link from 'next/link'
 
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShieldCheck, Clock, UserCheck, AlertTriangle, Activity, Brain, Eye, Lock } from 'lucide-react'
+import { ShieldCheck, Clock, UserCheck, Activity, Brain, Eye, Lock } from 'lucide-react'
 
 type StateTab = 'pending' | 'consented' | 'active_review'
 

@@ -196,7 +196,7 @@ export default function DemoForm() {
           {showFreeEmailWarning && (
             <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               For institutional sign-ups we recommend a school/work email address so our team can
-              verify your organisation. A personal address is fine if you don't have one.
+              verify your organisation. A personal address is fine if you do not have one.
             </p>
           )}
         </div>

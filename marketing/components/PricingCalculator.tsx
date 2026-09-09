@@ -64,7 +64,7 @@ export function PricingCalculator() {
           Plans that scale from one school to a district
         </h3>
         <p className="text-slate-600 text-sm mt-2 max-w-lg mx-auto">
-          Select a tier to see what's included. Pricing is quoted per institution — get in touch
+          Select a tier to see what is included. Pricing is quoted per institution — get in touch
           for a proposal.
         </p>
       </div>

@@ -78,7 +78,7 @@ export default function TermsPage() {
             </div>
           ))}
           <p className="text-xs text-slate/70 mt-6">
-            Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            Last updated: June 2025
           </p>
         </div>
       </section>

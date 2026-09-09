@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { PageHero } from '@/components/ui'
-import { Reveal, Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
+import { Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
 import Link from 'next/link'
 
 export const metadata: Metadata = {

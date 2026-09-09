@@ -17,11 +17,11 @@
   },
   "lint-staged": {
     "frontend/**/*.{ts,tsx,js,jsx}": [
-      "eslint --fix",
-      "tsc --noEmit --project frontend/tsconfig.app.json"
+      "frontend/node_modules/.bin/eslint --fix",
+      "frontend/node_modules/.bin/tsc --noEmit --project frontend/tsconfig.app.json"
     ],
     "marketing/**/*.{ts,tsx,js,jsx}": [
-      "eslint --fix"
+      "marketing/node_modules/.bin/eslint --fix"
     ],
     "backend/**/*.py": [
       "ruff check --fix",

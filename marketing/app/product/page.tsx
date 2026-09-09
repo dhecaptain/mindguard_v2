@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, Card, Check, CtaButton, CtaBand } from '@/components/ui'
+import { PageHero, SectionHeading, Card, Check, CtaBand } from '@/components/ui'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { Icons } from '@/components/icons'
 import { MultiPlatformPreview } from '@/components/MultiPlatformPreview'
@@ -183,8 +183,8 @@ export default function ProductPage() {
       </section>
 
       <CtaBand
-        title="Experience the live MindGuard platform"
-        subtitle="Explore the live application or request a dedicated institutional walkthrough with your data."
+        title="See MindGuard in action"
+        subtitle="Request a dedicated institutional walkthrough with your data, or launch the app directly to explore."
       />
     </div>
   )

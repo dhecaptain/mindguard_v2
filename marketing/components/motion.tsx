@@ -1,5 +1,5 @@
 'use client'
-import { motion, useScroll, useTransform, useInView, useSpring, useMotionValue } from 'framer-motion'
+import { motion, useScroll, useTransform, useInView, useMotionValue } from 'framer-motion'
 import { useEffect, useRef } from 'react'
 
 export function Reveal({ children, delay = 0, y = 24, className = '' }: { children: React.ReactNode; delay?: number; y?: number; className?: string }) {
@@ -56,7 +56,6 @@ export function CountUp({ value, suffix = '', prefix = '' }: { value: string; su
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true, margin: '-40px' })
   const motionVal = useMotionValue(0)
-  const spring = useSpring(motionVal, { stiffness: 90, damping: 20 })
   const num = parseFloat(value.replace(/[^0-9.]/g, '')) || 0
   const isPercent = value.includes('%')
   const hasK = value.toLowerCase().includes('k')

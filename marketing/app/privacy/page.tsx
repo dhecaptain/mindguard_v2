@@ -36,7 +36,7 @@ export default function PrivacyPage() {
           </p>
           <h2 className="text-lg font-bold text-ink mt-4">Contact</h2>
           <p>Email: privacy@mindguard.ai</p>
-          <p className="text-xs text-slate/70">Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+          <p className="text-xs text-slate/70">Last updated: June 2025</p>
         </div>
       </div>
     </div>

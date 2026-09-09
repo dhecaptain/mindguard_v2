@@ -1,22 +1,29 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+set -u
+
+run_gate() {
+  local name="$1"
+  shift
+  echo "→ $name"
+  "$@" > logs/pre-commit.log 2>&1
+  local rc=$?
+  cat logs/pre-commit.log
+  if [ "$rc" -ne 0 ]; then
+    echo "❌ $name failed (exit $rc)"
+    exit 1
+  fi
+}
+
 echo "🔍 vibe-check: lint-staged + tsc + tests"
-npx lint-staged 2>&1 | tee logs/pre-commit.log
-if [ $? -ne 0 ]; then echo "❌ lint-staged failed — piping to agent"; cat logs/pre-commit.log; exit 1; fi
+npx lint-staged > logs/pre-commit.log 2>&1
+rc=$?
+cat logs/pre-commit.log
+if [ "$rc" -ne 0 ]; then echo "❌ lint-staged failed — piping to agent"; exit 1; fi
 
-echo "→ typecheck frontend"
-cd frontend && npx tsc --noEmit --project tsconfig.app.json 2>&1 | tee ../logs/pre-commit.log
-if [ $? -ne 0 ]; then echo "❌ tsc failed"; exit 1; fi
-cd ..
-
-echo "→ typecheck marketing"
-cd marketing && npx tsc --noEmit 2>&1 | tee ../logs/pre-commit.log
-if [ $? -ne 0 ]; then echo "❌ marketing tsc failed"; exit 1; fi
-cd ..
-
-echo "→ pytest quick"
-PYTHONPATH=..:. python3 -m pytest backend/tests -q --tb=line 2>&1 | tee logs/pre-commit.log
-if [ $? -ne 0 ]; then echo "❌ tests failed — agent auto-fix needed"; exit 1; fi
+run_gate "typecheck frontend" frontend/node_modules/.bin/tsc --noEmit --project frontend/tsconfig.app.json
+run_gate "typecheck marketing" marketing/node_modules/.bin/tsc --noEmit
+run_gate "pytest quick" python3 -m pytest backend/tests -q --tb=line
 
 echo "✅ pre-commit passed"

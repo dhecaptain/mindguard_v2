@@ -1,13 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
-import { CtaButton, Card, CtaBand, SectionHeading } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem, HoverLift } from '@/components/motion'
+import { CtaBand } from '@/components/ui'
 import { Icons } from '@/components/icons'
 import { GlassHero } from '@/components/GlassHero'
 import { TrustMarquee } from '@/components/TrustMarquee'
 import { ProblemCounterSection } from '@/components/ProblemCounterSection'
-import { ShieldCheck, Heart, ClipboardCheck, Brain, Lock, Users, Activity, Award, ArrowRight } from 'lucide-react'
+import { ShieldCheck, Heart, ClipboardCheck, Brain, Lock, Users, Activity, Award } from 'lucide-react'
 
 
 const SOLUTION = [

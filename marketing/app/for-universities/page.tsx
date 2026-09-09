@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, Card, Check, CtaButton, CtaBand } from '@/components/ui'
+import { PageHero, SectionHeading, Card, Check, CtaBand } from '@/components/ui'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { Icons } from '@/components/icons'
 

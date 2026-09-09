@@ -39,7 +39,9 @@ export default function ContactPage() {
               <div className="bg-white border border-[#eef2f6] rounded-2xl p-6">
                 <MailIcon />
                 <h2 className="font-bold text-ink mb-1">General</h2>
-                <p className="text-sm text-slate">hello@mindguard.ai</p>
+                <a href="mailto:hello@mindguard.ai" className="text-sm text-slate underline decoration-slate/40 underline-offset-2 hover:text-emerald-700 hover:decoration-emerald-600 transition-colors">
+                  hello@mindguard.ai
+                </a>
               </div>
             </HoverLift>
           </StaggerItem>
@@ -48,7 +50,9 @@ export default function ContactPage() {
               <div className="bg-white border border-[#eef2f6] rounded-2xl p-6">
                 <Icons.Lock />
                 <h2 className="font-bold text-ink mb-1">Privacy</h2>
-                <p className="text-sm text-slate">privacy@mindguard.ai</p>
+                <a href="mailto:privacy@mindguard.ai" className="text-sm text-slate underline decoration-slate/40 underline-offset-2 hover:text-emerald-700 hover:decoration-emerald-600 transition-colors">
+                  privacy@mindguard.ai
+                </a>
               </div>
             </HoverLift>
           </StaggerItem>
