@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, Card, Check, CtaButton, CtaBand } from '@/components/ui'
-import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
+import { PageHero, SectionHeading, Card, Check, CtaBand } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem } from '@/components/motion'
 import { Icons } from '@/components/icons'
-
 
 export const metadata: Metadata = {
   title: 'For universities — MindGuard',
@@ -65,9 +64,8 @@ export default function ForUniversitiesPage() {
         subtitle="MindGuard helps university counselling services identify early signs of distress in consented digital content — ethically, transparently, and in step with Title IX responsibilities."
       />
 
-      <section className="relative py-20 overflow-hidden">
-        <FloatingOrb className="bg-indigo-100 opacity-30 -top-16 -right-16" size={380} />
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="py-20 sm:py-24">
+        <div className="mg-section">
           <Reveal>
             <SectionHeading
               title="The challenges universities face"
@@ -77,42 +75,37 @@ export default function ForUniversitiesPage() {
           <Stagger className="grid sm:grid-cols-2 gap-6">
             {CHALLENGES.map((c) => (
               <StaggerItem key={c.title}>
-                <HoverLift className="h-full">
-                  <Card icon={c.icon} title={c.title}>
-                    {c.text}
-                  </Card>
-                </HoverLift>
+                <Card icon={c.icon} title={c.title}>
+                  {c.text}
+                </Card>
               </StaggerItem>
             ))}
           </Stagger>
         </div>
       </section>
 
-      <section className="relative py-20 bg-surface-soft overflow-hidden">
-        <FloatingOrb className="bg-teal-100 opacity-30 -bottom-20 -left-20" size={420} duration={20} />
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="py-20 sm:py-24 bg-white border-y border-[rgba(23,33,29,0.08)]">
+        <div className="mg-section">
           <Reveal>
             <SectionHeading title="Built for counselling services" />
           </Reveal>
           <Stagger className="grid sm:grid-cols-2 gap-6">
             {FEATURES.map((f) => (
               <StaggerItem key={f.title}>
-                <HoverLift className="h-full">
-                  <Card icon={f.icon} title={f.title}>
-                    {f.text}
-                  </Card>
-                </HoverLift>
+                <Card icon={f.icon} title={f.title}>
+                  {f.text}
+                </Card>
               </StaggerItem>
             ))}
           </Stagger>
         </div>
       </section>
 
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
+      <section className="py-20 sm:py-24">
+        <div className="mg-section grid md:grid-cols-2 gap-8">
           <Reveal>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-              <h3 className="text-xl font-bold text-ink mb-6">Adult students, adult consent</h3>
+            <div className="mg-card p-8 h-full">
+              <h3 className="text-xl font-semibold text-ink mb-6">Adult students, adult consent</h3>
               <ul className="flex flex-col gap-4">
                 <Check>Consent is personal — university students are routed consent directly</Check>
                 <Check>Students review the terms and decide with full transparency</Check>
@@ -121,9 +114,9 @@ export default function ForUniversitiesPage() {
               </ul>
             </div>
           </Reveal>
-          <Reveal delay={0.12}>
-            <div className="bg-white border border-[#eef2f6] rounded-2xl p-8">
-              <h3 className="text-xl font-bold text-ink mb-6">Title IX-aware by design</h3>
+          <Reveal delay={0.1}>
+            <div className="mg-card p-8 h-full">
+              <h3 className="text-xl font-semibold text-ink mb-6">Title IX-aware by design</h3>
               <ul className="flex flex-col gap-4">
                 <Check>Non-discriminatory: the same consent rules apply to every student</Check>
                 <Check>Human-in-the-loop outputs avoid automated, potentially biased decisions</Check>
@@ -142,4 +135,3 @@ export default function ForUniversitiesPage() {
     </div>
   )
 }
-

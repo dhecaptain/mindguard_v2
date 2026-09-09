@@ -1,14 +1,37 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, Card, Check, CtaBand } from '@/components/ui'
-import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
+import { PageHero, SectionHeading, Card, Check, CtaBand, Eyebrow } from '@/components/ui'
+import { Reveal, Stagger, StaggerItem } from '@/components/motion'
 import { Icons } from '@/components/icons'
 import { SecurityDiagram } from '@/components/SecurityDiagram'
-
+import { UserCheck, Scale, ShieldCheck } from 'lucide-react'
 export const metadata: Metadata = {
   title: 'Security & compliance — MindGuard',
   description:
     'MindGuard security and compliance: encryption, FERPA, COPPA, incident response, and our SOC 2 roadmap.',
 }
+
+const PILLARS = [
+  {
+    icon: <Icons.Lock />,
+    title: 'Privacy',
+    text: 'Consent-first and data-minimal. Only explicitly shared content is processed, and analysed content is never stored between sessions.',
+  },
+  {
+    icon: <ShieldCheck className="w-6 h-6" />,
+    title: 'Security',
+    text: 'Encryption at rest and in transit, least-privilege access, signed single-use consent tokens, and an immutable audit trail.',
+  },
+  {
+    icon: <Scale className="w-6 h-6" />,
+    title: 'Compliance',
+    text: 'Designed for FERPA and COPPA, with a DPA for your records and a SOC 2 readiness roadmap.',
+  },
+  {
+    icon: <UserCheck className="w-6 h-6" />,
+    title: 'Human oversight',
+    text: 'Every AI output is reviewed by a trained counsellor. MindGuard never makes an automated decision.',
+  },
+]
 
 const CONTROLS = [
   {
@@ -22,7 +45,7 @@ const CONTROLS = [
     text: 'Consent links use HMAC-SHA256 tokens with a random nonce. They are single-use, verified server-side, and hashed at rest so a database leak does not enable replay.',
   },
   {
-    icon: <Icons.ShieldCheck />,
+    icon: <ShieldCheck className="w-6 h-6" />,
     title: 'Rate limiting',
     text: 'Login and registration are limited per IP, demo submissions are limited to 5 per hour per IP, and each consent page is limited to 20 loads per token.',
   },
@@ -36,7 +59,6 @@ const CONTROLS = [
     title: 'Data minimisation',
     text: 'Only content a student explicitly shares is analysed, and the output is a summary for a counsellor to review — never an automated action. CSV validators read only whitelisted columns; extra columns are never stored.',
   },
-
   {
     icon: <Icons.Lock />,
     title: 'Access control',
@@ -72,53 +94,25 @@ const RESPONSE = [
 
 export default function SecurityPage() {
   return (
-    <div className="bg-surface">
+    <div>
       <PageHero
-        eyebrow="Security & Compliance Infrastructure"
-        title="Built for institutions that take data seriously"
+        eyebrow="Security & compliance"
+        title="Trust is part of the product"
         subtitle="Encryption, consent integrity, audit trails and regulatory awareness — engineered in from the start, not bolted on."
       />
 
-      {/* INTERACTIVE DATA PIPELINE DIAGRAM */}
-      <section className="py-20 bg-slate-950 text-white relative overflow-hidden bg-grid-pattern">
-        <div className="max-w-6xl mx-auto px-6">
-          <SecurityDiagram />
-        </div>
-      </section>
-
-      {/* SECURITY CONTROLS */}
-      <section className="relative py-24 overflow-hidden">
-        <FloatingOrb className="bg-emerald-200 opacity-30 -top-20 -right-20" size={400} />
-        <div className="max-w-6xl mx-auto px-6">
-          <Reveal>
-            <SectionHeading title="Security Controls & Auditing" subtitle="Institutional-grade safeguards protecting student identity and data." />
-          </Reveal>
-          <Stagger className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {CONTROLS.map((c) => (
-              <StaggerItem key={c.title}>
-                <HoverLift>
-                  <Card icon={c.icon} title={c.title}>
-                    {c.text}
-                  </Card>
-                </HoverLift>
-              </StaggerItem>
-            ))}
-          </Stagger>
-        </div>
-      </section>
-
-      {/* COMPLIANCE STANDARDS */}
-      <section className="py-24 bg-slate-50 border-y border-emerald-500/10">
-        <div className="max-w-6xl mx-auto px-6">
-          <Reveal>
-            <SectionHeading title="Compliance Standards" subtitle="Designed for the regulatory reality of education." />
-          </Reveal>
-          <Stagger className="grid md:grid-cols-2 gap-6">
-            {COMPLIANCE.map((c) => (
-              <StaggerItem key={c.title}>
-                <div className="glass-card rounded-2xl p-8 hover:-translate-y-1 transition-all">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">{c.title}</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">{c.text}</p>
+      {/* Pillars */}
+      <section className="py-20 sm:py-24">
+        <div className="mg-section">
+          <Stagger className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {PILLARS.map((p) => (
+              <StaggerItem key={p.title}>
+                <div className="mg-card mg-card-hover h-full p-7">
+                  <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-forest-50 text-forest-600">
+                    {p.icon}
+                  </div>
+                  <h3 className="text-lg font-semibold text-ink">{p.title}</h3>
+                  <p className="mt-2 text-sm text-ink-soft leading-relaxed">{p.text}</p>
                 </div>
               </StaggerItem>
             ))}
@@ -126,15 +120,73 @@ export default function SecurityPage() {
         </div>
       </section>
 
-      {/* INCIDENT RESPONSE */}
-      <section className="py-24">
-        <div className="max-w-6xl mx-auto px-6">
+      {/* Architecture visualization (single dark panel) */}
+      <section className="py-20 bg-white">
+        <div className="mg-section">
           <Reveal>
-            <SectionHeading title="Incident Response & Transparency" />
+            <div className="max-w-3xl mx-auto text-center mb-12">
+              <Eyebrow>Architecture</Eyebrow>
+              <h2 className="display text-3xl sm:text-4xl text-ink mt-3">
+                A consent-gated pipeline
+              </h2>
+              <p className="mt-4 text-base text-ink-soft max-w-xl mx-auto">
+                How data moves through MindGuard — with consent at every gate and a human always
+                in the loop.
+              </p>
+            </div>
           </Reveal>
           <Reveal delay={0.1}>
-            <div className="max-w-3xl mx-auto bg-white border border-emerald-500/20 rounded-2xl p-8 shadow-sm">
-              <ul className="flex flex-col gap-4">
+            <SecurityDiagram />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Controls */}
+      <section className="py-20 sm:py-24">
+        <div className="mg-section">
+          <Reveal>
+            <SectionHeading title="Security controls & auditing" subtitle="Institutional-grade safeguards protecting student identity and data." />
+          </Reveal>
+          <Stagger className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {CONTROLS.map((c) => (
+              <StaggerItem key={c.title}>
+                <Card icon={c.icon} title={c.title}>
+                  {c.text}
+                </Card>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      {/* Compliance */}
+      <section className="py-20 sm:py-24 bg-white border-y border-[rgba(23,33,29,0.08)]">
+        <div className="mg-section">
+          <Reveal>
+            <SectionHeading title="Compliance standards" subtitle="Designed for the regulatory reality of education." />
+          </Reveal>
+          <Stagger className="grid md:grid-cols-2 gap-6">
+            {COMPLIANCE.map((c) => (
+              <StaggerItem key={c.title}>
+                <div className="mg-card mg-card-hover p-8">
+                  <h3 className="text-xl font-semibold text-ink mb-3">{c.title}</h3>
+                  <p className="text-sm text-ink-soft leading-relaxed">{c.text}</p>
+                </div>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      {/* Incident response */}
+      <section className="py-20 sm:py-24">
+        <div className="mg-section">
+          <Reveal>
+            <SectionHeading title="Incident response & transparency" />
+          </Reveal>
+          <Reveal delay={0.08}>
+            <div className="max-w-3xl mx-auto mg-card p-8">
+              <ul className="flex flex-col gap-5">
                 {RESPONSE.map((r) => (
                   <Check key={r}>{r}</Check>
                 ))}
@@ -148,4 +200,3 @@ export default function SecurityPage() {
     </div>
   )
 }
-

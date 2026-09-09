@@ -15,7 +15,7 @@ const DOCS_LINKS = [
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="py-12">
+    <div className="py-16 bg-mist/40">
       <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row gap-10">
         <aside className="md:w-56 shrink-0">
           <nav className="flex flex-col gap-1">
@@ -24,14 +24,16 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               <Link
                 key={l.href}
                 href={l.href}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-slate hover:text-teal-700 hover:bg-teal-50"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:text-forest hover:bg-forest-50 transition-colors"
               >
                 {l.label}
               </Link>
             ))}
           </nav>
         </aside>
-        <article className="flex-1 min-w-0 max-w-3xl">{children}</article>
+        <article className="flex-1 min-w-0 max-w-3xl">
+          <div className="mg-card p-8 sm:p-10">{children}</div>
+        </article>
       </div>
     </div>
   )

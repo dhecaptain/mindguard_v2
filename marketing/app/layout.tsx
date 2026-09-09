@@ -1,11 +1,17 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Instrument_Serif } from 'next/font/google'
 import Link from 'next/link'
 import Script from 'next/script'
 import Header from '@/components/Header'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], display: 'swap' })
+const inter = Inter({ subsets: ['latin'], display: 'swap', variable: '--font-sans' })
+const instrument = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
+  variable: '--font-serif',
+})
 
 export const metadata: Metadata = {
   title: 'MindGuard — Consent-first student wellbeing monitoring',
@@ -19,8 +25,6 @@ export const metadata: Metadata = {
     type: 'website',
   },
 }
-
-
 
 const FOOTER_COLS: { title: string; links: { href: string; label: string }[] }[] = [
   {
@@ -53,14 +57,11 @@ const FOOTER_COLS: { title: string; links: { href: string; label: string }[] }[]
   },
 ]
 
-// Privacy-first analytics (Remediation P2-3): Plausible script is injected only
-// when the site domain is configured via NEXT_PUBLIC_PLAUSIBLE_DOMAIN. No
-// cookies, no fingerprinting — keeps the marketing site's consent story honest.
 const PLAUSIBLE_DOMAIN = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${instrument.variable}`}>
       {PLAUSIBLE_DOMAIN && (
         <Script
           defer
@@ -69,43 +70,47 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="afterInteractive"
         />
       )}
-      <body className={`min-h-screen flex flex-col ${inter.className}`}>
+      <body className={`min-h-screen flex flex-col font-sans antialiased`}>
         <Header />
 
         <main className="flex-1">{children}</main>
 
-        <footer className="relative bg-[#0B1D17] bg-grid-pattern text-slate-300 border-t border-emerald-500/20 overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-          <div className="max-w-6xl mx-auto px-6 py-16 relative z-10">
-            <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <footer className="bg-white border-t border-[rgba(23,33,29,0.08)]">
+          <div className="mg-section py-16">
+            <div className="grid gap-12 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
               <div>
-                <div className="flex items-center gap-2.5 mb-4">
-                  <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white font-extrabold shadow-md shadow-emerald-500/20 border border-emerald-400/30">
-                    M
+                <Link href="/" className="flex items-center gap-2.5">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-forest text-white">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 3c1.6 1.4 3.4 2 5 2 0 5.5-1 9.5-5 12-4-2.5-5-6.5-5-12 1.6 0 3.4-.6 5-2z" />
+                    </svg>
                   </span>
-                  <span className="text-xl font-extrabold text-white tracking-tight">MindGuard</span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
-                  Consent-first AI decision support for school and university counsellors.
-                  Powered by Mental-RoBERTa, reviewed by humans, built for trust.
+                  <span className="text-lg font-semibold text-ink tracking-tight">MindGuard</span>
+                </Link>
+                <p className="mt-5 text-sm text-ink-soft leading-relaxed max-w-xs">
+                  Human-centred mental-health technology for schools and universities. AI detects
+                  signals. People provide care.
                 </p>
-                <div className="mt-4 flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
-                    HIPAA-aligned · FERPA-conscious
-                  </span>
+                <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[rgba(23,74,58,0.18)] bg-forest-50 px-3 py-1.5 text-[0.72rem] font-semibold text-forest-700">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7l7-4z" />
+                    <path d="M9 12l2 2 4-4" />
+                  </svg>
+                  FERPA-conscious · COPPA-aware
                 </div>
               </div>
+
               {FOOTER_COLS.map((col) => (
                 <div key={col.title}>
-                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-soft mb-5">
                     {col.title}
                   </h3>
-                  <ul className="flex flex-col gap-3 text-sm text-slate-300">
+                  <ul className="flex flex-col gap-3">
                     {col.links.map((l) => (
                       <li key={l.href}>
                         <Link
                           href={l.href}
-                          className="hover:text-emerald-400 transition-colors duration-200 hover:translate-x-1 inline-block"
+                          className="text-sm text-ink-soft hover:text-forest transition-colors duration-200"
                         >
                           {l.label}
                         </Link>
@@ -115,13 +120,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               ))}
             </div>
-            <div className="mt-14 pt-8 border-t border-emerald-500/15 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+
+            <div className="mt-14 pt-8 border-t border-[rgba(23,33,29,0.08)] flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-ink-soft">
               <div>&copy; {new Date().getFullYear()} MindGuard AI Inc. Student wellbeing, consented.</div>
               <div className="flex items-center gap-5">
-                <Link href="/privacy" className="hover:text-emerald-400 transition-colors">Privacy</Link>
-                <Link href="/terms" className="hover:text-emerald-400 transition-colors">Terms</Link>
-                <Link href="/dpa" className="hover:text-emerald-400 transition-colors">DPA</Link>
-                <Link href="/contact" className="hover:text-emerald-400 transition-colors">Contact</Link>
+                <Link href="/privacy" className="hover:text-forest transition-colors">Privacy</Link>
+                <Link href="/terms" className="hover:text-forest transition-colors">Terms</Link>
+                <Link href="/dpa" className="hover:text-forest transition-colors">DPA</Link>
+                <Link href="/contact" className="hover:text-forest transition-colors">Contact</Link>
               </div>
             </div>
           </div>
@@ -130,4 +136,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   )
 }
-
