@@ -8,10 +8,11 @@ export const metadata: Metadata = {
 
 export default function RequestDemoPage() {
   return (
-    <div className="py-16">
+    <div className="py-20">
       <div className="max-w-2xl mx-auto px-6">
-        <h1 className="text-3xl font-bold text-ink mb-3 text-center">Request a demo</h1>
-        <p className="text-slate text-center mb-10 max-w-lg mx-auto">
+        <span className="mg-eyebrow mb-3 inline-block">Demo request</span>
+        <h1 className="display text-4xl text-ink mb-3">Request a demo</h1>
+        <p className="text-ink-soft mb-10 max-w-lg">
           See how MindGuard helps counselling teams spot signs of distress across consent-gated
           channels — with consent baked in from day one.
         </p>

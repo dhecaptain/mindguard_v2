@@ -4,93 +4,95 @@
 
 :root {
   color-scheme: light;
+  --bg: #F7F8F5;
+  --surface: #FFFFFF;
+  --forest: #174A3A;
+  --ink: #17211D;
+  --ink-soft: #53615A;
+  --border: rgba(23, 33, 29, 0.10);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background-color: #FAFAFA;
-  color: #0F172A;
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans), Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
   overflow-x: hidden;
 }
 
-/* Glassmorphism utilities */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(16, 185, 129, 0.18);
-  box-shadow: 0 10px 30px -10px rgba(15, 81, 50, 0.05);
+::selection {
+  background-color: rgba(23, 74, 58, 0.14);
+  color: #123A2E;
 }
 
-.glass-panel-dark {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+/* ---------- Editorial display headings ---------- */
+.display {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
 }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(16, 185, 129, 0.15);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+/* ---------- Calm, subtle attention utilities ---------- */
+.mg-section {
+  @apply max-w-container mx-auto px-6 sm:px-8;
 }
 
-.glass-card:hover {
-  border-color: rgba(16, 185, 129, 0.4);
-  box-shadow: 0 12px 30px -5px rgba(16, 185, 129, 0.15);
-  transform: translateY(-4px);
+.mg-eyebrow {
+  @apply text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-forest-500;
 }
 
-/* Dynamic Mesh Fluid Canvas Background */
-.mesh-gradient-bg {
-  background: radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.15) 0%, transparent 40%),
-              radial-gradient(circle at 80% 30%, rgba(15, 81, 50, 0.12) 0%, transparent 45%),
-              radial-gradient(circle at 40% 80%, rgba(20, 184, 166, 0.15) 0%, transparent 50%),
-              radial-gradient(circle at 90% 90%, rgba(16, 185, 129, 0.08) 0%, transparent 35%);
-  background-size: 140% 140%;
+.mg-card {
+  @apply rounded-2xl border border-[rgba(23,33,29,0.08)] bg-white shadow-card;
 }
 
-/* Grid line background for dark sections */
-.bg-grid-pattern {
-  background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(16, 185, 129, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(16, 185, 129, 0.07) 1px, transparent 1px);
+.mg-card-hover {
+  @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-[rgba(23,74,58,0.22)];
 }
 
-/* CTA Sweep & Shine effect */
-.btn-emerald-shine {
-  position: relative;
-  overflow: hidden;
+/* ---------- Buttons ---------- */
+.mg-btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-full bg-forest text-white px-6 py-3 text-sm font-semibold shadow-card
+    transition-all duration-300 hover:bg-forest-700 hover:shadow-lift hover:-translate-y-0.5
+    active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
-.btn-emerald-shine::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    60deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.3) 50%,
-    transparent 70%
-  );
-  transform: rotate(30deg);
-  animation: shine 4s ease-in-out infinite;
+.mg-btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-full bg-white text-forest border border-[rgba(23,74,58,0.25)] px-6 py-3 text-sm font-semibold
+    transition-all duration-300 hover:bg-forest-50 hover:border-forest-400 hover:-translate-y-0.5
+    active:translate-y-0;
 }
 
-@keyframes gradient-x {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+.mg-btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-full text-ink-soft px-4 py-2.5 text-sm font-semibold
+    transition-colors duration-200 hover:text-forest;
 }
 
-.animate-gradient-x {
-  animation: gradient-x 6s ease infinite;
+/* ---------- Keyframes: calm + reduced-motion friendly ---------- */
+@keyframes mg-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mg-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Product preview panels (kept dark only inside product UI) ---------- */
+.mg-console {
+  background: #12241d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 60px -20px rgba(12, 39, 32, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -98,6 +100,6 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
-

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { PageHero } from '@/components/ui'
-import { Reveal, Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
+import { Reveal } from '@/components/motion'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
@@ -34,36 +34,51 @@ const POSTS = [
 ]
 
 export default function BlogPage() {
+  const [featured, ...rest] = POSTS
+
   return (
-    <div className="overflow-hidden">
+    <div>
       <PageHero
         eyebrow="Blog"
         title="Ideas on consent-first wellbeing tech"
         subtitle="Essays from the team on building technology that schools can trust."
       />
-      <section className="py-20 relative overflow-hidden">
-        <FloatingOrb className="bg-teal-100/20 -top-10 -right-10" size={400} duration={18} />
-        <FloatingOrb className="bg-violet-100/20 top-40 -left-20" size={300} duration={16} />
-        <div className="relative max-w-3xl mx-auto px-6 flex flex-col gap-6">
-          <Stagger className="flex flex-col gap-6">
-            {POSTS.map((p) => (
-              <StaggerItem key={p.href}>
-                <HoverLift>
-                  <Link
-                    href={p.href}
-                    className="group block bg-white border border-[#eef2f6] rounded-2xl p-8 hover:shadow-md transition-shadow"
-                  >
-                    <div className="text-xs font-semibold text-teal-600 uppercase tracking-wide">{p.date}</div>
-                    <h2 className="mt-2 text-xl font-bold text-ink group-hover:text-teal-700">
-                      {p.title}
-                    </h2>
-                    <p className="mt-3 text-sm text-slate leading-relaxed">{p.excerpt}</p>
-                    <div className="mt-4 text-sm font-semibold text-teal-700">Read more →</div>
-                  </Link>
-                </HoverLift>
-              </StaggerItem>
+
+      <section className="py-20 sm:py-24">
+        <div className="mg-section max-w-5xl">
+          {/* Featured */}
+          <Reveal>
+            <Link
+              href={featured.href}
+              className="group block mg-card mg-card-hover p-8 sm:p-10 mb-8"
+            >
+              <span className="mg-eyebrow inline-block mb-4">Featured · {featured.date}</span>
+              <h2 className="display text-2xl sm:text-3xl text-ink group-hover:text-forest transition-colors">
+                {featured.title}
+              </h2>
+              <p className="mt-4 text-base text-ink-soft leading-relaxed max-w-2xl">{featured.excerpt}</p>
+              <span className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-forest">
+                Read more <span aria-hidden>→</span>
+              </span>
+            </Link>
+          </Reveal>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {rest.map((p) => (
+              <Reveal key={p.href}>
+                <Link href={p.href} className="group block mg-card mg-card-hover p-7 h-full">
+                  <div className="text-xs font-semibold text-ink-soft uppercase tracking-wide">{p.date}</div>
+                  <h3 className="mt-3 text-xl font-semibold text-ink group-hover:text-forest transition-colors">
+                    {p.title}
+                  </h3>
+                  <p className="mt-3 text-sm text-ink-soft leading-relaxed">{p.excerpt}</p>
+                  <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-forest">
+                    Read more <span aria-hidden>→</span>
+                  </span>
+                </Link>
+              </Reveal>
             ))}
-          </Stagger>
+          </div>
         </div>
       </section>
     </div>

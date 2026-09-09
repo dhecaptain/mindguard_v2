@@ -29,7 +29,7 @@ const RULES = [
 
 export default function DocsRosterCsvPage() {
   return (
-    <div className="flex flex-col gap-6 text-sm leading-relaxed text-slate">
+    <div className="flex flex-col gap-6 text-sm leading-relaxed text-ink-soft">
       <h1 className="text-3xl font-bold text-ink">Roster CSV format</h1>
       <p>
         The roster upload accepts a UTF-8 CSV with one student per row. Extra columns are
@@ -37,10 +37,10 @@ export default function DocsRosterCsvPage() {
       </p>
 
       <h2 className="text-lg font-bold text-ink mt-2">Required columns</h2>
-      <div className="overflow-x-auto rounded-xl border border-[#eef2f6]">
+      <div className="overflow-x-auto rounded-2xl border border-[rgba(23,33,29,0.1)]">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#eef2f6] text-left bg-surface-soft">
+            <tr className="border-b border-[rgba(23,33,29,0.1)] text-left bg-mist">
               <th className="px-4 py-3 font-semibold text-ink">Column</th>
               <th className="px-4 py-3 font-semibold text-ink">Required</th>
               <th className="px-4 py-3 font-semibold text-ink">Notes</th>
@@ -48,8 +48,8 @@ export default function DocsRosterCsvPage() {
           </thead>
           <tbody>
             {COLUMNS.map((c) => (
-              <tr key={c.col} className="border-b border-[#eef2f6] last:border-0 align-top">
-                <td className="px-4 py-3 font-mono text-xs text-teal-700 whitespace-nowrap">{c.col}</td>
+              <tr key={c.col} className="border-b border-[rgba(23,33,29,0.08)] last:border-0 align-top bg-white">
+                <td className="px-4 py-3 font-mono text-xs text-forest whitespace-nowrap">{c.col}</td>
                 <td className="px-4 py-3 font-semibold text-ink whitespace-nowrap">{c.required}</td>
                 <td className="px-4 py-3">{c.notes}</td>
               </tr>
@@ -59,7 +59,7 @@ export default function DocsRosterCsvPage() {
       </div>
 
       <h2 className="text-lg font-bold text-ink mt-2">Example</h2>
-      <pre className="overflow-x-auto rounded-xl bg-[#0f172a] text-teal-50 p-5 text-xs leading-relaxed">
+      <pre className="overflow-x-auto rounded-2xl bg-ink text-mist p-5 text-xs leading-relaxed">
 {`student_id,student_first_name,student_email,date_of_birth,parent_first_name,parent_email,grade_level,notes
 S-1001,Aisha,aisha@example.edu,2010-03-14,Fatima,fatima@example.com,Grade 9,
 S-1002,Ben,ben@example.edu,2005-11-02,,,Grade 12,Transfer student
@@ -70,7 +70,7 @@ S-1003,Chen,chen@example.edu,2009-07-22,Wei,wei@example.com,Grade 8,`}
       <ul className="flex flex-col gap-3">
         {RULES.map((r) => (
           <li key={r} className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-forest-50 text-forest">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <path d="M2 6.5 4.5 9 10 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -88,7 +88,7 @@ S-1003,Chen,chen@example.edu,2009-07-22,Wei,wei@example.com,Grade 8,`}
         is rejected — MindGuard never guesses.
       </p>
       <p>
-        <Link href="/docs" className="text-teal-700 font-semibold hover:underline">
+        <Link href="/docs" className="text-forest font-semibold hover:underline">
           ← Back to getting started
         </Link>
       </p>

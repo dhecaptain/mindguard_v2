@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import Faq from '@/components/Faq'
+import { Faq } from '@/components/Faq'
 
 export const metadata: Metadata = {
   title: 'FAQ — MindGuard',

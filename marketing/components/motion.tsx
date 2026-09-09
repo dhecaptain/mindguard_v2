@@ -1,14 +1,17 @@
 'use client'
-import { motion, useScroll, useTransform, useInView, useSpring, useMotionValue } from 'framer-motion'
+import { motion, useScroll, useTransform, useInView, useMotionValue, useReducedMotion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
 
-export function Reveal({ children, delay = 0, y = 24, className = '' }: { children: React.ReactNode; delay?: number; y?: number; className?: string }) {
+const EASE = [0.22, 0.61, 0.36, 1] as const
+
+export function Reveal({ children, delay = 0, y = 20, className = '' }: { children: React.ReactNode; delay?: number; y?: number; className?: string }) {
+  const reduce = useReducedMotion()
   return (
     <motion.div
-      initial={{ opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.6, delay, ease: [0.25, 0.1, 0.25, 1] }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y }}
+      whileInView={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-70px' }}
+      transition={{ duration: 0.6, delay, ease: EASE }}
       className={className}
     >
       {children}
@@ -17,12 +20,13 @@ export function Reveal({ children, delay = 0, y = 24, className = '' }: { childr
 }
 
 export function Stagger({ children, stagger = 0.08, className = '' }: { children: React.ReactNode; stagger?: number; className?: string }) {
+  const reduce = useReducedMotion()
   return (
     <motion.div
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, margin: '-60px' }}
-      variants={{ hidden: {}, show: { transition: { staggerChildren: stagger } } }}
+      variants={{ hidden: {}, show: { transition: { staggerChildren: reduce ? 0 : stagger } } }}
       className={className}
     >
       {children}
@@ -31,9 +35,13 @@ export function Stagger({ children, stagger = 0.08, className = '' }: { children
 }
 
 export function StaggerItem({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const reduce = useReducedMotion()
   return (
     <motion.div
-      variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1] } } }}
+      variants={{
+        hidden: reduce ? { opacity: 0 } : { opacity: 0, y: 16 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
+      }}
       className={className}
     >
       {children}
@@ -41,7 +49,7 @@ export function StaggerItem({ children, className = '' }: { children: React.Reac
   )
 }
 
-export function Parallax({ children, offset = 40, className = '' }: { children: React.ReactNode; offset?: number; className?: string }) {
+export function Parallax({ children, offset = 30, className = '' }: { children: React.ReactNode; offset?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const y = useTransform(scrollYProgress, [0, 1], [0, -offset])
@@ -56,9 +64,7 @@ export function CountUp({ value, suffix = '', prefix = '' }: { value: string; su
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true, margin: '-40px' })
   const motionVal = useMotionValue(0)
-  const spring = useSpring(motionVal, { stiffness: 90, damping: 20 })
   const num = parseFloat(value.replace(/[^0-9.]/g, '')) || 0
-  const isPercent = value.includes('%')
   const hasK = value.toLowerCase().includes('k')
   const display = value.replace(/[^0-9.:/]/g, '')
 
@@ -66,14 +72,14 @@ export function CountUp({ value, suffix = '', prefix = '' }: { value: string; su
     if (inView) motionVal.set(hasK ? num : num)
   }, [inView, motionVal, num, hasK])
 
-  const text = hasK || isPercent || value.includes(':') ? value : display
+  const text = hasK || value.includes('%') || value.includes(':') ? value : display
 
   if (value.includes(':') || value.includes('/') || hasK) {
     return (
       <motion.span
         ref={ref}
-        initial={{ opacity: 0, scale: 0.9 }}
-        whileInView={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
       >
@@ -83,11 +89,7 @@ export function CountUp({ value, suffix = '', prefix = '' }: { value: string; su
   }
   return (
     <span ref={ref}>
-      <motion.span
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
-      >
+      <motion.span initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}>
         {prefix}{text}{suffix}
       </motion.span>
     </span>
@@ -95,23 +97,22 @@ export function CountUp({ value, suffix = '', prefix = '' }: { value: string; su
 }
 
 export function FloatingOrb({ className, size = 400, duration = 18 }: { className?: string; size?: number; duration?: number }) {
+  void duration
   return (
-    <motion.div
+    <div
       aria-hidden
-      className={`absolute rounded-full blur-3xl pointer-events-none ${className}`}
+      className={`pointer-events-none absolute blur-3xl ${className}`}
       style={{ width: size, height: size }}
-      animate={{ x: [0, 30, -20, 0], y: [0, -30, 20, 0], scale: [1, 1.05, 0.98, 1] }}
-      transition={{ duration, repeat: Infinity, ease: 'easeInOut' }}
     />
   )
 }
 
 export function HoverLift({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const reduce = useReducedMotion()
   return (
     <motion.div
-      whileHover={{ y: -4, scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+      whileHover={reduce ? undefined : { y: -4 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 24 }}
       className={className}
     >
       {children}
@@ -121,7 +122,7 @@ export function HoverLift({ children, className = '' }: { children: React.ReactN
 
 export function GradientText({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={`bg-gradient-to-r from-teal-600 via-emerald-500 to-teal-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x ${className}`}>
+    <span className={`text-forest ${className}`}>
       {children}
     </span>
   )

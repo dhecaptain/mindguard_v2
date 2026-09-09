@@ -1,210 +1,100 @@
 import type { Metadata } from 'next'
-import { PageHero, SectionHeading, CtaBand } from '@/components/ui'
-import { Reveal, Stagger, StaggerItem, HoverLift, FloatingOrb } from '@/components/motion'
-import Faq from '@/components/Faq'
+import { PageHero, CtaBand } from '@/components/ui'
+import { Reveal } from '@/components/motion'
 import { PricingCalculator } from '@/components/PricingCalculator'
+import { Faq } from '@/components/Faq'
+import { ShieldCheck, Scale, Clock } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Pricing — MindGuard',
   description:
-    'MindGuard pricing: a free Pilot tier, School and District/University plans. Annual licensing, enterprise options, and a full feature comparison.',
+    'Transparent, institution-friendly pricing for MindGuard student wellbeing intelligence. Pilot plan free for 3 months. No hidden per-student fees.',
 }
 
-const TIERS = [
+const ASSURANCES = [
   {
-    name: 'Pilot',
-    price: 'Free for 3 months',
-    cadence: 'onboarding & training included',
-    blurb: 'A single school getting started with one counsellor.',
-    features: ['Up to 100 students', '1 counsellor seat', 'Consent workflow & tracker', 'Email delivery & templates', 'Onboarding & training included'],
-    cta: 'Start a pilot',
-    featured: false,
+    icon: <ShieldCheck className="w-6 h-6" />,
+    title: 'No hidden per-student fees',
+    text: 'Pricing is a clear annual license per institution. No surprises as your roster grows.',
   },
   {
-    name: 'School',
-    price: 'Contact for pricing',
-    cadence: 'annual license',
-    blurb: 'A K-12 institution with unlimited students and up to 10 counsellors.',
-    features: ['Unlimited students', 'Up to 10 counsellors', 'Everything in Pilot', 'Bulk roster upload & CSV export', 'Automated reminders & audit trail', 'Dedicated onboarding manager'],
-    cta: 'Request proposal',
-    featured: true,
+    icon: <Scale className="w-6 h-6" />,
+    title: 'Built for procurement',
+    text: 'DPA, W-9, SOC 2 readiness and a clear quote make approval with IT and legal easier.',
   },
   {
-    name: 'District / University',
-    price: 'Contact for pricing',
-    cadence: 'enterprise agreement',
-    blurb: 'Multi-school districts or university systems with full analytics.',
-    features: ['Multi-school / multi-campus', 'Full analytics & reporting', 'Everything in School', 'Custom roles & SLAs', 'Data Processing Agreement', 'Dedicated success manager'],
-    cta: 'Talk to sales',
-    featured: false,
+    icon: <Clock className="w-6 h-6" />,
+    title: 'Onboarding included',
+    text: 'Every plan includes onboarding, roster setup, consent-flow configuration and staff training.',
   },
 ]
 
-const COMPARISON: { feature: string; pilot: string; school: string; enterprise: string }[] = [
-  { feature: 'Consent-first workflow', pilot: 'Yes', school: 'Yes', enterprise: 'Yes' },
-  { feature: 'Parental consent routing for minors', pilot: 'Yes', school: 'Yes', enterprise: 'Yes' },
-  { feature: 'Consent tracker with audit trail', pilot: 'Yes', school: 'Yes', enterprise: 'Yes' },
-  { feature: 'Roster CSV upload', pilot: 'Yes', school: 'Yes', enterprise: 'Yes' },
-  { feature: 'Signal sources supported', pilot: 'Core sources', school: 'All supported sources', enterprise: 'All supported sources' },
-  { feature: 'Students included', pilot: 'Up to 100', school: 'Unlimited', enterprise: 'Unlimited' },
-  { feature: 'Counsellor seats', pilot: '1', school: 'Up to 10', enterprise: 'Unlimited' },
-  { feature: 'Full analytics & reporting', pilot: '—', school: '—', enterprise: 'Yes' },
-  { feature: 'Data Processing Agreement', pilot: 'On request', school: 'Included', enterprise: 'Included' },
-  { feature: 'Onboarding & training', pilot: 'Included', school: 'Dedicated', enterprise: 'Dedicated' },
-]
-
-const FAQS = [
-  {
-    q: 'How long does implementation take?',
-    a: 'A pilot can be up and running in days. You upload your student roster, consent requests go out automatically, and your counselling team is trained as part of onboarding. Larger districts and universities typically take a few weeks end-to-end.',
-  },
-  {
-    q: 'Do you provide a Data Processing Agreement?',
-    a: 'Yes. A DPA is available on request for Pilot customers and included with School and District/University plans. Download the template from our DPA page and contact us to sign an agreement tailored to your institution.',
-  },
-  {
-    q: 'Where is our data stored?',
-    a: 'Student PII is encrypted at rest and access is limited to institution-authorised staff. Data residency requirements for pilot institutions are supported on request — if your institution needs in-country storage, that shapes the deployment and we will scope it with you.',
-  },
-  {
-    q: 'How often is the model updated?',
-    a: 'We re-train and evaluate the risk model on an ongoing basis and ship improvements as they pass validation. The model remains a decision-support layer — counsellors always review outputs before acting.',
-  },
-  {
-    q: 'What happens when we off-board?',
-    a: 'Your roster and consent records can be exported at any time, and on request we delete all student PII from our systems. Off-boarding is documented in your agreement.',
-  },
-  {
-    q: 'Do you work with single counsellors?',
-    a: 'Yes — the Pilot tier is built exactly for that. One counsellor, up to 100 students, free for the first three months.',
-  },
-]
+const FAQS = {
+  title: 'Frequently asked questions',
+  subtitle: 'Answers about pricing, pilots, and how the quote process works.',
+  items: [
+    {
+      q: 'Is there really a free plan?',
+      a: 'Yes. The Pilot tier is free for your first 3 months — up to 100 students at a single school — and includes full consent dispatch, the risk triage engine and onboarding training. After the pilot, you can continue, upgrade, or end without obligation.',
+    },
+    {
+      q: 'How is pricing structured?',
+      a: 'Pricing is a straightforward annual license per institution. There are no per-student or per-seat fees that scale unpredictably. Each institution receives a tailored proposal based on size and needs.',
+    },
+    {
+      q: 'Do you offer discounts for non-profits or smaller districts?',
+      a: 'We work with a range of institutions and can tailor proposals. Get in touch for a quote and we will find a structure that fits your budget.',
+    },
+    {
+      q: 'What does onboarding include?',
+      a: 'Every plan includes assistance with roster upload, consent-flow configuration, staff training, and a documented handoff. District and university plans include a dedicated onboarding manager.',
+    },
+  ],
+}
 
 export default function PricingPage() {
   return (
-    <div className="bg-surface overflow-hidden">
+    <div>
       <PageHero
-        eyebrow="Transparent Institutional Pricing"
-        title="Simple pricing, serious support"
-        subtitle="Start free with a pilot. Scale to a whole district or campus when you are ready."
+        eyebrow="Pricing"
+        title="Simple, institution-friendly pricing"
+        subtitle="A clear annual license. No hidden per-student fees. A free pilot so you can see it work before you commit."
       />
 
-      {/* PRICING CARDS */}
-      <section className="py-20 relative overflow-hidden">
-        <FloatingOrb className="bg-emerald-200/30 -top-10 -right-10" size={400} duration={18} />
-        <div className="relative max-w-6xl mx-auto px-6">
-          <Stagger className="grid md:grid-cols-3 gap-6 items-stretch">
-            {TIERS.map((t) => (
-              <StaggerItem key={t.name} className="flex">
-                <HoverLift className="flex-1 flex">
-                  <div
-                    className={`relative glass-card rounded-2xl p-8 flex flex-col w-full hover:shadow-xl hover:-translate-y-1 transition-all ${
-                      t.featured ? 'border-emerald-500/60 ring-2 ring-emerald-500/20' : 'border-emerald-500/20'
-                    }`}
-                  >
-                    {t.featured && (
-                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 px-4 py-1 text-xs font-bold text-white shadow-md">
-                        Most popular for districts
-                      </span>
-                    )}
-                    <h3 className="text-xl font-extrabold text-slate-900">{t.name}</h3>
-                    <div className="mt-4">
-                      <div className="text-2xl font-extrabold text-slate-900 font-mono">{t.price}</div>
-                      <div className="text-xs text-slate-500 mt-1">{t.cadence}</div>
-                    </div>
-                    <p className="mt-4 text-sm text-slate-600 leading-relaxed">{t.blurb}</p>
-                    <ul className="mt-6 flex flex-col gap-3 text-sm text-slate-600 flex-1">
-                      {t.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2.5">
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                              <path d="M2 6.5 4.5 9 10 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </span>
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-8">
-                      <a
-                        href="/request-demo"
-                        className={`block text-center px-6 py-3.5 rounded-xl font-bold text-xs transition-all ${
-                          t.featured
-                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md hover:shadow-lg'
-                            : 'border border-emerald-500/30 text-slate-800 hover:bg-emerald-50/50'
-                        }`}
-                      >
-                        {t.cta} &rarr;
-                      </a>
-                    </div>
-                  </div>
-                </HoverLift>
-              </StaggerItem>
-            ))}
-          </Stagger>
-        </div>
-      </section>
-
-      {/* INTERACTIVE CALCULATOR */}
-      <section className="py-20 bg-slate-900 text-white relative overflow-hidden bg-grid-pattern">
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="pb-20 sm:pb-24">
+        <div className="mg-section">
           <PricingCalculator />
         </div>
       </section>
 
-      {/* FEATURE COMPARISON TABLE */}
-      <section className="py-20 relative overflow-hidden">
-        <div className="relative max-w-6xl mx-auto px-6">
-          <Reveal>
-            <SectionHeading
-              title="Feature comparison"
-              subtitle="The same consent-first foundation across every tier."
-            />
-          </Reveal>
-          <Reveal delay={0.1}>
-            <div className="overflow-x-auto rounded-2xl border border-emerald-500/20 bg-white shadow-sm">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-emerald-500/15 text-left bg-slate-50">
-                    <th className="px-6 py-4 font-bold text-slate-900">Feature</th>
-                    <th className="px-6 py-4 font-bold text-slate-900">Pilot</th>
-                    <th className="px-6 py-4 font-bold text-emerald-700 bg-emerald-50">School</th>
-                    <th className="px-6 py-4 font-bold text-slate-900">District / University</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARISON.map((row) => (
-                    <tr key={row.feature} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                      <td className="px-6 py-4 font-semibold text-slate-900">{row.feature}</td>
-                      <td className="px-6 py-4 text-slate-600">{row.pilot}</td>
-                      <td className="px-6 py-4 text-slate-600 bg-emerald-50/40 font-semibold">{row.school}</td>
-                      <td className="px-6 py-4 text-slate-600">{row.enterprise}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Reveal>
+      <section className="py-16 bg-white border-y border-[rgba(23,33,29,0.08)]">
+        <div className="mg-section">
+          <div className="max-w-4xl mx-auto grid sm:grid-cols-3 gap-6">
+            {ASSURANCES.map((a) => (
+              <div key={a.title} className="text-center">
+                <div className="mx-auto mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-forest-50 text-forest-600">
+                  {a.icon}
+                </div>
+                <h3 className="text-base font-semibold text-ink">{a.title}</h3>
+                <p className="mt-2 text-sm text-ink-soft leading-relaxed">{a.text}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* FAQ SECTION */}
-      <section className="py-20 bg-slate-50 border-t border-emerald-500/10">
-        <div className="max-w-3xl mx-auto px-6">
+      <section className="py-20 sm:py-24">
+        <div className="mg-section">
           <Reveal>
-            <SectionHeading title="Frequently asked questions" />
-          </Reveal>
-          <Reveal delay={0.1}>
-            <Faq items={FAQS} />
+            <Faq {...FAQS} />
           </Reveal>
         </div>
       </section>
 
       <CtaBand
-        title="Ready to estimate for your school or campus?"
-        subtitle="Our team will scope your roster volume and prepare a formal compliance proposal."
+        title="Let's scope the right plan for you"
+        subtitle="Tell us about your institution and we'll send a tailored proposal — no pressure, no obligation."
       />
     </div>
   )
 }
-

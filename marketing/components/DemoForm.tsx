@@ -16,9 +16,9 @@ const COUNT_RANGES = ['Under 500', '500–1,000', '1,001–5,000', '5,001–10,0
 const FREE_EMAIL_DOMAINS = new Set(['gmail.com', 'yahoo.com', 'ymail.com', 'hotmail.com', 'outlook.com', 'live.com', 'aol.com'])
 
 const inputCls =
-  'w-full bg-[#fafbfc] border border-[#e5e7eb] rounded-lg px-3 py-2.5 text-sm text-ink outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20'
+  'w-full bg-white border border-[rgba(23,33,29,0.12)] rounded-lg px-3 py-2.5 text-sm text-ink outline-none focus:border-forest focus:ring-2 focus:ring-forest/15 placeholder:text-ink-soft/50'
 
-const labelCls = 'block text-xs font-bold text-[#374151] uppercase tracking-wider mb-1.5'
+const labelCls = 'block text-xs font-bold text-ink uppercase tracking-wider mb-1.5'
 
 type Status = 'idle' | 'submitting' | 'done' | 'error'
 
@@ -146,12 +146,12 @@ export default function DemoForm() {
 
   if (status === 'done') {
     return (
-      <div className="bg-white border border-[#eef2f6] rounded-2xl p-8 text-center shadow-sm">
-        <div className="w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center mx-auto mb-4 text-2xl">
+      <div className="mg-card p-8 text-center">
+        <div className="w-14 h-14 rounded-full bg-forest-50 flex items-center justify-center mx-auto mb-4 text-2xl text-forest">
           ✓
         </div>
         <h2 className="text-xl font-bold text-ink mb-2">Request received</h2>
-        <p className="text-sm text-slate max-w-md mx-auto">
+        <p className="text-sm text-ink-soft max-w-md mx-auto">
           Thanks, {form.full_name.trim()}! Our team will reach out within 2 business days.
         </p>
         {warning && (
@@ -161,7 +161,7 @@ export default function DemoForm() {
         )}
         <button
           onClick={() => router.push('/thank-you')}
-          className="mt-6 px-6 py-3 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition-colors"
+          className="mt-6 px-6 py-3 mg-btn-primary text-sm"
         >
           Next steps
         </button>
@@ -170,7 +170,7 @@ export default function DemoForm() {
   }
 
   return (
-    <div className="bg-white border border-[#eef2f6] rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-4">
+    <div className="mg-card p-6 sm:p-8 flex flex-col gap-4">
       {/* Honeypot (invisible to humans, irresistible to bots) */}
       <div className="absolute left-[-9999px] top-[-9999px]" aria-hidden="true">
         <label htmlFor="website">Leave this field blank</label>
@@ -196,7 +196,7 @@ export default function DemoForm() {
           {showFreeEmailWarning && (
             <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               For institutional sign-ups we recommend a school/work email address so our team can
-              verify your organisation. A personal address is fine if you don't have one.
+              verify your organisation. A personal address is fine if you do not have one.
             </p>
           )}
         </div>
@@ -259,12 +259,12 @@ export default function DemoForm() {
         </select>
       </div>
 
-      <label className="flex items-start gap-2 text-sm text-[#4b5563] cursor-pointer">
+      <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
         <input
           type="checkbox"
           checked={consentToContact}
           onChange={(e) => setConsentToContact(e.target.checked)}
-          className="mt-0.5 accent-teal-600"
+          className="mt-0.5 accent-forest"
         />
         <span>I agree to be contacted by MindGuard about my request. *</span>
       </label>
@@ -283,7 +283,7 @@ export default function DemoForm() {
       <button
         onClick={handleSubmit}
         disabled={!valid || status === 'submitting'}
-        className="self-start px-6 py-3 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="self-start px-6 py-3 mg-btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {status === 'submitting' ? 'Submitting...' : 'Request demo'}
       </button>
