@@ -58,7 +58,7 @@ const COMMITMENTS = [
 
 export default function ProductPage() {
   return (
-    <div className="bg-[#FAFAFA]">
+    <div className="bg-surface">
       <PageHero
         eyebrow="Product Architecture"
         title="Decision support your counsellors can defend"
@@ -75,7 +75,7 @@ export default function ProductPage() {
           <Stagger className="grid md:grid-cols-2 gap-6">
             {HOW_IT_WORKS.map((s) => (
               <StaggerItem key={s.step}>
-                <div className="relative bg-white/90 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-7 shadow-sm hover:border-emerald-500/40 transition-all">
+                <div className="relative glass-card rounded-2xl p-7 hover:-translate-y-1 transition-all">
                   <div className="text-5xl font-extrabold text-emerald-500/20 mb-4 font-mono">{s.step}</div>
                   <h3 className="font-bold text-slate-900 text-lg mb-2">{s.title}</h3>
                   <p className="text-sm text-slate-600 leading-relaxed">{s.text}</p>

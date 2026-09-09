@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import Link from 'next/link'
 import Script from 'next/script'
 import Header from '@/components/Header'
 import './globals.css'
+
+const inter = Inter({ subsets: ['latin'], display: 'swap' })
 
 export const metadata: Metadata = {
   title: 'MindGuard — Consent-first student wellbeing monitoring',
@@ -66,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="afterInteractive"
         />
       )}
-      <body className="min-h-screen flex flex-col">
+      <body className={`min-h-screen flex flex-col ${inter.className}`}>
         <Header />
 
         <main className="flex-1">{children}</main>

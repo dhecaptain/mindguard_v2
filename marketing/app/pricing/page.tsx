@@ -82,7 +82,7 @@ const FAQS = [
 
 export default function PricingPage() {
   return (
-    <div className="bg-[#FAFAFA] overflow-hidden">
+    <div className="bg-surface overflow-hidden">
       <PageHero
         eyebrow="Transparent Institutional Pricing"
         title="Simple pricing, serious support"
@@ -98,7 +98,7 @@ export default function PricingPage() {
               <StaggerItem key={t.name} className="flex">
                 <HoverLift className="flex-1 flex">
                   <div
-                    className={`relative bg-white/90 backdrop-blur-md border rounded-2xl p-8 flex flex-col w-full shadow-sm hover:shadow-xl transition-all ${
+                    className={`relative glass-card rounded-2xl p-8 flex flex-col w-full hover:shadow-xl hover:-translate-y-1 transition-all ${
                       t.featured ? 'border-emerald-500/60 ring-2 ring-emerald-500/20' : 'border-emerald-500/20'
                     }`}
                   >

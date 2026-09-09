@@ -33,6 +33,8 @@ module.exports = {
         },
         ink: '#0F172A',
         body: '#334155',
+        surface: '#FAFAFA',
+        'surface-soft': '#F7F9FB',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
