@@ -82,7 +82,7 @@ export default function HomeAnimated() {
                     <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-emerald-400 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20 transition-colors">{s.icon}</div>
                     <h3 className="font-bold text-white text-[15px] mb-2">{s.title}</h3>
                     <p className="text-sm text-white/50 leading-relaxed">{s.text}</p>
-                    <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-white/25"><span>Verified Safeguard</span><span className="font-mono text-emerald-400/70">Strict Protocol</span></div>
+                    <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-white/40"><span>Consent-first architecture</span><span className="font-mono text-emerald-400/80">Human in the loop</span></div>
                   </div>
                 </HoverLift>
               </StaggerItem>
@@ -165,9 +165,9 @@ export default function HomeAnimated() {
                   ))}
                 </Stagger>
               </div>
-              <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center justify-between text-xs text-white/30">
-                <span>Audited Academic Credentials</span>
-                <span className="text-emerald-300 font-medium">GVSU & DeepTech Verified</span>
+              <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center justify-between text-xs text-white/40">
+                <span>Recognition</span>
+                <span className="text-emerald-300 font-medium">GVSU Innovation Day · Grand Rapids DeepTech</span>
               </div>
             </div>
           </Reveal>

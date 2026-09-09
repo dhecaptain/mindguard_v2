@@ -88,7 +88,7 @@ export default function ForUniversitiesPage() {
         </div>
       </section>
 
-      <section className="relative py-20 bg-[#f7f9fb] overflow-hidden">
+      <section className="relative py-20 bg-surface-soft overflow-hidden">
         <FloatingOrb className="bg-teal-100 opacity-30 -bottom-20 -left-20" size={420} duration={20} />
         <div className="max-w-6xl mx-auto px-6">
           <Reveal>

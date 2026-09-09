@@ -40,7 +40,7 @@ export default function DocsRosterCsvPage() {
       <div className="overflow-x-auto rounded-xl border border-[#eef2f6]">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#eef2f6] text-left bg-[#f7f9fb]">
+            <tr className="border-b border-[#eef2f6] text-left bg-surface-soft">
               <th className="px-4 py-3 font-semibold text-ink">Column</th>
               <th className="px-4 py-3 font-semibold text-ink">Required</th>
               <th className="px-4 py-3 font-semibold text-ink">Notes</th>
