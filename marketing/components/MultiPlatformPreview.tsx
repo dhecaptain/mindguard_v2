@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageSquare, Video, Globe, FileText, ShieldCheck, Activity } from 'lucide-react'
+import { APP_URL } from '@/lib/app-url'
 
 const CHANNELS = [
   {
@@ -161,7 +162,7 @@ export function MultiPlatformPreview() {
             </span>
             <a
 
-              href="https://app.mindguardai.me"
+              href={APP_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"

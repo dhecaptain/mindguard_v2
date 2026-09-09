@@ -2,7 +2,8 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { FloatingOrb, Reveal } from '@/components/motion'
-import { ArrowRight, ShieldCheck } from 'lucide-react'
+import { ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react'
+import { APP_URL } from '@/lib/app-url'
 import { RiskSignalMatrix } from '@/components/RiskSignalMatrix'
 
 export function GlassHero() {
@@ -65,21 +66,28 @@ export function GlassHero() {
           transition={{ duration: 0.6, delay: 0.24 }}
           className="mt-9 flex flex-wrap items-center justify-center gap-4"
         >
-          <a
-            href="https://app.mindguardai.me"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/request-demo"
             className="group relative inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.35),0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_0_36px_rgba(16,185,129,0.5)] hover:-translate-y-[2px] transition-all duration-300 overflow-hidden"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-            <span className="relative flex items-center gap-2">Launch App (app.mindguardai.me) <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></span>
-          </a>
+            <span className="relative flex items-center gap-2">Request a demo <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></span>
+          </Link>
           <Link
-            href="/demo"
+            href="/product"
             className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-bold text-sm text-white/90 bg-white/[0.06] border border-white/[0.08] backdrop-blur-[12px] hover:bg-white/[0.1] hover:border-white/[0.14] hover:-translate-y-[2px] shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300"
           >
-            Request a demo
+            See how it works
           </Link>
+          <a
+            href={APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 px-7 py-3.5 rounded-xl font-bold text-sm text-white/60 border border-white/[0.08] hover:bg-white/[0.06] hover:text-white/90 hover:-translate-y-[2px] transition-all duration-300"
+          >
+            <span>Launch App</span>
+            <ExternalLink className="w-4 h-4 opacity-70" />
+          </a>
         </motion.div>
 
         <motion.div

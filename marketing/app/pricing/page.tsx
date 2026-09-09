@@ -14,27 +14,27 @@ const TIERS = [
   {
     name: 'Pilot',
     price: 'Free for 3 months',
-    cadence: 'then $49 / month',
+    cadence: 'onboarding & training included',
     blurb: 'A single school getting started with one counsellor.',
     features: ['Up to 100 students', '1 counsellor seat', 'Consent workflow & tracker', 'Email delivery & templates', 'Onboarding & training included'],
     cta: 'Start a pilot',
     featured: false,
   },
   {
-    name: 'School / District',
-    price: 'Custom Licensing',
-    cadence: 'annual agreement',
-    blurb: 'A K-12 school or district running a full wellbeing program.',
+    name: 'School',
+    price: 'Contact for pricing',
+    cadence: 'annual license',
+    blurb: 'A K-12 institution with unlimited students and up to 10 counsellors.',
     features: ['Unlimited students', 'Up to 10 counsellors', 'Everything in Pilot', 'Bulk roster upload & CSV export', 'Automated reminders & audit trail', 'Dedicated onboarding manager'],
     cta: 'Request proposal',
     featured: true,
   },
   {
-    name: 'University Campus',
-    price: 'Institutional Plan',
-    cadence: 'campus agreement',
-    blurb: 'Multi-school districts or university systems at scale.',
-    features: ['Multi-school / multi-campus', 'Unlimited counsellors', 'Everything in School', 'Full analytics & audit log', 'Data Processing Agreement', 'Dedicated success manager'],
+    name: 'District / University',
+    price: 'Contact for pricing',
+    cadence: 'enterprise agreement',
+    blurb: 'Multi-school districts or university systems with full analytics.',
+    features: ['Multi-school / multi-campus', 'Full analytics & reporting', 'Everything in School', 'Custom roles & SLAs', 'Data Processing Agreement', 'Dedicated success manager'],
     cta: 'Talk to sales',
     featured: false,
   },
@@ -127,7 +127,7 @@ export default function PricingPage() {
                     </ul>
                     <div className="mt-8">
                       <a
-                        href="/demo"
+                        href="/request-demo"
                         className={`block text-center px-6 py-3.5 rounded-xl font-bold text-xs transition-all ${
                           t.featured
                             ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md hover:shadow-lg'
