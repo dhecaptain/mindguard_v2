@@ -93,7 +93,7 @@ export function PricingCalculator() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="rounded-2xl bg-slate-900 border border-emerald-500/30 p-7 text-white shadow-2xl"
+        className="rounded-2xl glass-panel-dark p-7 text-white shadow-2xl"
       >
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-slate-800">
           <div>

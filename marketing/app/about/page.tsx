@@ -65,7 +65,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-[#f7f9fb] relative overflow-hidden">
+      <section className="py-20 bg-surface-soft relative overflow-hidden">
         <FloatingOrb className="bg-emerald-100/40 -bottom-20 left-10" size={350} duration={16} />
         <div className="relative max-w-6xl mx-auto px-6">
           <Reveal>
@@ -110,7 +110,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-[#f7f9fb] relative overflow-hidden">
+      <section className="py-20 bg-surface-soft relative overflow-hidden">
         <FloatingOrb className="bg-teal-100/30 -bottom-10 -right-10" size={350} duration={17} />
         <div className="relative max-w-6xl mx-auto px-6">
           <Reveal>

@@ -72,7 +72,7 @@ const RESPONSE = [
 
 export default function SecurityPage() {
   return (
-    <div className="bg-[#FAFAFA]">
+    <div className="bg-surface">
       <PageHero
         eyebrow="Security & Compliance Infrastructure"
         title="Built for institutions that take data seriously"
@@ -116,7 +116,7 @@ export default function SecurityPage() {
           <Stagger className="grid md:grid-cols-2 gap-6">
             {COMPLIANCE.map((c) => (
               <StaggerItem key={c.title}>
-                <div className="bg-white/90 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-8 shadow-sm hover:border-emerald-500/40 transition-all">
+                <div className="glass-card rounded-2xl p-8 hover:-translate-y-1 transition-all">
                   <h3 className="text-xl font-bold text-slate-900 mb-4">{c.title}</h3>
                   <p className="text-sm text-slate-600 leading-relaxed">{c.text}</p>
                 </div>

@@ -69,7 +69,7 @@ export function Card({
   children: ReactNode
 }) {
   return (
-    <div className="group h-full bg-white/90 backdrop-blur-md border border-emerald-500/15 hover:border-emerald-500/40 rounded-2xl p-7 shadow-sm hover:shadow-xl hover:shadow-emerald-950/5 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+    <div className="group h-full glass-card rounded-2xl p-7 flex flex-col justify-between">
       <div>
         {icon && (
           <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-500/20 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-600 group-hover:scale-105 transition-all duration-300 shadow-sm">
@@ -84,8 +84,8 @@ export function Card({
         </div>
       </div>
       <div className="mt-6 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 group-hover:text-emerald-600 transition-colors">
-        <span>Verified Safeguard</span>
-        <span className="font-mono text-emerald-600">Strict Protocol &rarr;</span>
+        <span>Consent-first by design</span>
+        <span className="font-mono text-emerald-600">Human in the loop &rarr;</span>
       </div>
     </div>
   )
