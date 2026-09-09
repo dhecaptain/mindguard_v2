@@ -2,6 +2,9 @@
 // Usage: `composio run marketing/scripts/composio_fastlane.mjs` injects execute/search/proxy.
 // Dry-run: `composio execute SLACK_SEND_MESSAGE --dry-run -d '{...}'` before live.
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.mindguardai.me'
+const DASH_URL = `${APP_URL}/dashboard`
+
 export async function runDemoEngine(payload) {
   const { name, work_email_hash, institution, score, spreadsheetId, channel, work_email } = payload
   const row = [[new Date().toISOString(), name || '', work_email_hash || work_email || '', institution || '', score || 'STANDARD']]
@@ -35,7 +38,7 @@ export async function runCrisisTriage(payload) {
   if (channel) {
     await execute('SLACK_SEND_MESSAGE', {
       channel,
-      text: `⚠️ *CRISIS TRIAGE*\n*Student:* \`${student_id_hash}\`\n*Tier:* \`${risk_tier || 'HIGH'}\` prob ${(prob ?? 0).toFixed(2)} inst \`${institution_id || '—'}\`\n<https://app.mindguardai.me/dashboard|Open dashboard>`,
+      text: `⚠️ *CRISIS TRIAGE*\n*Student:* \`${student_id_hash}\`\n*Tier:* \`${risk_tier || 'HIGH'}\` prob ${(prob ?? 0).toFixed(2)} inst \`${institution_id || '—'}\`\n<${DASH_URL}|Open dashboard>`,
     })
   }
   try {
@@ -44,7 +47,7 @@ export async function runCrisisTriage(payload) {
       await execute('JIRA_CREATE_ISSUE', {
         project_key: projectKey,
         summary: `[Triage] ${risk_tier || 'HIGH'} — ${String(student_id_hash).slice(0, 8)}`,
-        description: `hash=${student_id_hash} tier=${risk_tier} prob=${prob} inst=${institution_id} dashboard=https://app.mindguardai.me/dashboard`,
+        description: `hash=${student_id_hash} tier=${risk_tier} prob=${prob} inst=${institution_id} dashboard=${DASH_URL}`,
         issue_type: 'Task',
       })
     }

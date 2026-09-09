@@ -99,7 +99,7 @@ export default function DpaPage() {
           </div>
 
           <div className="mt-12 text-center">
-            <CtaButton href="/demo">Request a signed DPA</CtaButton>
+            <CtaButton href="/request-demo">Request a signed DPA</CtaButton>
           </div>
         </div>
       </section>

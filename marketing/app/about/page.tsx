@@ -142,7 +142,7 @@ export default function AboutPage() {
             <h2 className="text-3xl font-bold text-ink mb-8">Work with us</h2>
           </Reveal>
           <Reveal delay={0.1}>
-            <CtaButton href="/demo">Request a demo</CtaButton>
+            <CtaButton href="/request-demo">Request a demo</CtaButton>
           </Reveal>
         </div>
       </section>
