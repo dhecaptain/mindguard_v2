@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Reveal, Stagger, StaggerItem, FloatingOrb, HoverLift } from '@/components/motion'
 import { CtaButton, Card, CtaBand, SectionHeading } from '@/components/ui'
 import { Icons } from '@/components/icons'
-import { RiskSignalMatrix } from '@/components/RiskSignalMatrix'
+import { GlassHero } from '@/components/GlassHero'
 import { TrustMarquee } from '@/components/TrustMarquee'
 import { ProblemCounterSection } from '@/components/ProblemCounterSection'
 import { ShieldCheck, Heart, ClipboardCheck, Brain, Lock, Users, Activity, Award, ArrowRight } from 'lucide-react'
@@ -59,109 +59,31 @@ const AWARDS = [
 
 export default function HomeAnimated() {
   return (
-    <div className="overflow-hidden bg-[#FAFAFA]">
-      
-      {/* HERO SECTION */}
-      <section className="relative overflow-hidden pt-16 pb-20 mesh-gradient-bg border-b border-emerald-500/10">
-        
-        {/* Ambient Animated Orbs */}
-        <FloatingOrb className="bg-emerald-300/30 -top-24 -right-24" size={550} duration={22} />
-        <FloatingOrb className="bg-teal-300/25 top-60 -left-36" size={450} duration={18} />
-
-        <div className="relative max-w-6xl mx-auto px-6 text-center z-10">
-          
-          {/* Status Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 border border-emerald-500/30 text-emerald-700 text-xs font-bold shadow-sm mb-8 backdrop-blur-md"
-          >
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Live — Consent-First Student Distress Detection Matrix
-          </motion.div>
-
-          {/* Main Title */}
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.08 }}
-            className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-slate-900 leading-[1.1] tracking-tight max-w-5xl mx-auto"
-          >
-            Catch the signals of distress —{' '}
-            <span className="bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x">
-              before a crisis.
-            </span>
-          </motion.h1>
-
-          {/* Subtitle */}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.16 }}
-            className="mt-6 text-lg sm:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed"
-          >
-            Consent-first AI decision support for school and university counsellors. Powered by Mental-RoBERTa, reviewed by humans, built for institutional trust.
-          </motion.p>
-
-          {/* Action CTAs */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.24 }}
-            className="mt-9 flex flex-wrap items-center justify-center gap-4"
-          >
-            <a
-              href="https://app.mindguardai.me"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_30px_rgba(16,185,129,0.55)] hover:-translate-y-[2px] transition-all duration-300 btn-emerald-shine group"
-            >
-              <span>Launch App (app.mindguardai.me)</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </a>
-
-            <CtaButton href="/demo" variant="ghost">
-              <span>Request a demo</span>
-            </CtaButton>
-          </motion.div>
-
-
-          {/* Interactive 3D Pseudo-Glass Matrix Widget */}
-          <motion.div
-            initial={{ opacity: 0, y: 35, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-12"
-          >
-            <RiskSignalMatrix />
-          </motion.div>
-
-        </div>
-      </section>
-
-      {/* CONTINUOUS TRUST MARQUEE STRIP */}
+    <div className="overflow-hidden bg-[#0a0d14]">
+      <GlassHero />
       <TrustMarquee />
-
-      {/* THE PROBLEM SECTION */}
       <ProblemCounterSection />
 
-      {/* THE SOLUTION SECTION */}
-      <section className="py-24 relative overflow-hidden bg-white">
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="py-24 relative overflow-hidden bg-[#0a0d14] border-t border-white/[0.06]">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0e1a14]/30 via-transparent to-transparent" />
+        <div className="relative max-w-6xl mx-auto px-6">
           <Reveal>
-            <SectionHeading
-              title="The MindGuard Solution"
-              subtitle="Decision support that gives counsellors an earlier warning — without crossing into surveillance."
-            />
+            <div className="text-center mb-14">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-emerald-300 text-[11px] font-semibold tracking-widest uppercase mb-4">Solution</div>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">The MindGuard Solution</h2>
+              <p className="mt-4 text-base text-white/50 max-w-2xl mx-auto leading-relaxed">Decision support that gives counsellors an earlier warning without crossing into surveillance.</p>
+            </div>
           </Reveal>
-          <Stagger stagger={0.08} className="grid sm:grid-cols-3 gap-8">
+          <Stagger stagger={0.08} className="grid sm:grid-cols-3 gap-6">
             {SOLUTION.map((s) => (
               <StaggerItem key={s.title}>
                 <HoverLift className="h-full">
-                  <Card icon={s.icon} title={s.title}>
-                    {s.text}
-                  </Card>
+                  <div className="group h-full rounded-2xl bg-white/[0.04] backdrop-blur-[16px] border border-white/[0.06] p-7 shadow-[0_16px_48px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)] hover:bg-white/[0.06] hover:border-white/[0.1] transition-all duration-300 flex flex-col">
+                    <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-emerald-400 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20 transition-colors">{s.icon}</div>
+                    <h3 className="font-bold text-white text-[15px] mb-2">{s.title}</h3>
+                    <p className="text-sm text-white/50 leading-relaxed">{s.text}</p>
+                    <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-white/25"><span>Verified Safeguard</span><span className="font-mono text-emerald-400/70">Strict Protocol</span></div>
+                  </div>
                 </HoverLift>
               </StaggerItem>
             ))}
@@ -169,22 +91,25 @@ export default function HomeAnimated() {
         </div>
       </section>
 
-      {/* ETHICAL SAFEGUARDS SECTION */}
-      <section className="py-24 bg-slate-50 border-y border-emerald-500/10">
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="py-24 relative overflow-hidden bg-[#0a0d14] border-y border-white/[0.06]">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-emerald-500/5 rounded-full blur-[80px]" />
+        <div className="relative max-w-6xl mx-auto px-6">
           <Reveal>
-            <SectionHeading
-              title="Ethical Safeguards by Design"
-              subtitle="Four core principles embedded directly into our codebase that we will not compromise."
-            />
+            <div className="text-center mb-14">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-emerald-300 text-[11px] font-semibold tracking-widest uppercase mb-4">Safeguards</div>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Ethical Safeguards by Design</h2>
+              <p className="mt-4 text-base text-white/50 max-w-2xl mx-auto">Four core principles embedded directly into our codebase that we will not compromise.</p>
+            </div>
           </Reveal>
           <Stagger stagger={0.08} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {COMMITMENTS.map((c) => (
               <StaggerItem key={c.title}>
                 <HoverLift className="h-full">
-                  <Card icon={c.icon} title={c.title}>
-                    {c.text}
-                  </Card>
+                  <div className="group h-full rounded-2xl bg-white/[0.04] backdrop-blur-[16px] border border-white/[0.06] p-7 hover:bg-white/[0.06] hover:border-white/[0.1] transition-all flex flex-col">
+                    <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] text-emerald-400 group-hover:bg-emerald-500/10 transition-colors">{c.icon}</div>
+                    <h3 className="font-semibold text-white text-sm mb-2">{c.title}</h3>
+                    <p className="text-xs text-white/50 leading-relaxed">{c.text}</p>
+                  </div>
                 </HoverLift>
               </StaggerItem>
             ))}
@@ -192,80 +117,57 @@ export default function HomeAnimated() {
         </div>
       </section>
 
-      {/* FOUNDER & RECOGNITION SECTION */}
-      <section className="py-24 bg-white relative overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-10">
+      <section className="py-24 bg-[#0a0d14] relative overflow-hidden border-b border-white/[0.06]">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/[0.02] to-transparent" />
+        <div className="relative max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-6">
           
-          {/* Founder Spotlight Card */}
           <Reveal>
             <HoverLift className="h-full">
-              <div className="relative rounded-3xl bg-slate-900 border border-emerald-500/30 p-8 sm:p-10 text-white shadow-2xl overflow-hidden glass-panel-dark">
-                {/* Ambient glow behind avatar */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
-
+              <div className="relative rounded-3xl bg-white/[0.04] backdrop-blur-[16px] border border-white/[0.06] p-8 sm:p-10 shadow-[0_24px_64px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] overflow-hidden hover:bg-white/[0.06] hover:border-white/[0.1] transition-colors">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
                 <div className="flex items-center gap-5 mb-6">
-                  <div className="relative p-1 rounded-full bg-gradient-to-tr from-emerald-500 via-teal-400 to-emerald-300 shadow-lg shadow-emerald-500/30">
-                    <div className="w-16 h-16 rounded-full bg-slate-950 flex items-center justify-center font-extrabold text-xl text-emerald-400 border border-slate-800">
-                      DO
-                    </div>
+                  <div className="relative p-1 rounded-full bg-gradient-to-tr from-emerald-500 via-teal-400 to-emerald-300 shadow-lg shadow-emerald-500/20">
+                    <div className="w-16 h-16 rounded-full bg-[#0a0d14] flex items-center justify-center font-extrabold text-xl text-emerald-400 border border-white/10">DO</div>
                   </div>
                   <div>
                     <h3 className="text-xl font-extrabold text-white">Diana Opiyo</h3>
-                    <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mt-0.5">
-                      Founder, Lead Developer & ML Engineer
-                    </p>
-                    <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono">
-                      Creator of Mental-RoBERTa Pipeline
-                    </span>
+                    <p className="text-xs font-semibold text-emerald-300 uppercase tracking-wider mt-0.5">Founder, Lead Developer & ML Engineer</p>
+                    <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/60 text-[11px] font-mono">Creator of Mental-RoBERTa Pipeline</span>
                   </div>
                 </div>
-
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  Built from academic research to production system — training the model, architecting the consent-first consent flow, and building a platform that counsellors can trust.
-                </p>
-
-                <div className="mt-8 pt-6 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">MindGuard Founder Spotlight</span>
-                  <Link href="/about" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
-                    Read Our Narrative &rarr;
-                  </Link>
+                <p className="text-sm text-white/60 leading-relaxed">Built from academic research to production system — training the model, architecting the consent first flow, and building a platform that counsellors can trust.</p>
+                <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center justify-between">
+                  <span className="text-xs text-white/30">MindGuard Founder Spotlight</span>
+                  <Link href="/about" className="text-xs font-semibold text-emerald-300 hover:text-emerald-200 flex items-center gap-1">Read Our Narrative →</Link>
                 </div>
               </div>
             </HoverLift>
           </Reveal>
 
-          {/* Recognition Card */}
           <Reveal delay={0.12}>
-            <div className="h-full rounded-3xl bg-white border border-emerald-500/20 p-8 sm:p-10 shadow-lg flex flex-col justify-between">
+            <div className="h-full rounded-3xl bg-white/[0.04] backdrop-blur-[16px] border border-white/[0.06] p-8 sm:p-10 shadow-[0_24px_64px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] flex flex-col justify-between hover:bg-white/[0.06] transition-colors">
               <div>
                 <div className="flex items-center gap-2 mb-6">
-                  <Award className="w-6 h-6 text-emerald-600" />
-                  <h3 className="text-xl font-bold text-slate-900">Institutional Recognition</h3>
+                  <Award className="w-6 h-6 text-emerald-400" />
+                  <h3 className="text-xl font-bold text-white">Institutional Recognition</h3>
                 </div>
-
                 <Stagger stagger={0.08} className="space-y-4">
                   {AWARDS.map((a) => (
                     <StaggerItem key={a.title}>
-                      <motion.div
-                        whileHover={{ x: 4 }}
-                        className="p-4 rounded-2xl bg-slate-50 border border-emerald-500/15 hover:border-emerald-500/40 hover:bg-emerald-50/40 transition-all flex items-start gap-4"
-                      >
-                        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 shrink-0">
-                          <Icons.Trophy />
-                        </div>
+                      <motion.div whileHover={{ x: 4 }} className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.1] hover:bg-white/[0.06] transition-all flex items-start gap-4">
+                        <div className="p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-emerald-400 shrink-0"><Icons.Trophy /></div>
                         <div>
-                          <h4 className="font-bold text-slate-900 text-sm">{a.title}</h4>
-                          <p className="text-xs text-slate-500 mt-0.5">{a.note}</p>
+                          <h4 className="font-bold text-white text-sm">{a.title}</h4>
+                          <p className="text-xs text-white/40 mt-0.5">{a.note}</p>
                         </div>
                       </motion.div>
                     </StaggerItem>
                   ))}
                 </Stagger>
               </div>
-
-              <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center justify-between text-xs text-white/30">
                 <span>Audited Academic Credentials</span>
-                <span className="text-emerald-600 font-semibold">GVSU & DeepTech Verified</span>
+                <span className="text-emerald-300 font-medium">GVSU & DeepTech Verified</span>
               </div>
             </div>
           </Reveal>
@@ -276,7 +178,7 @@ export default function HomeAnimated() {
       {/* HIGH IMPACT CTA BAND */}
       <CtaBand
         title="Ready to see MindGuard in action for your institution?"
-        subtitle="We'll walk your counselling and IT teams through the consent workflow, live telemetry tracking, and HIPAA/FERPA audit trail."
+        subtitle="We'll walk your counselling and IT teams through the consent workflow, the tracking dashboard, and the full audit trail."
       />
 
     </div>

@@ -17,7 +17,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/blog/why-we-built-mindguard-consent-first',
     '/blog/what-clinical-decision-support-means',
     '/blog/the-1-400-problem',
-    '/demo',
+    '/request-demo',
     '/contact',
     '/privacy',
     '/terms',

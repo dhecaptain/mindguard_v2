@@ -95,7 +95,7 @@ export default function DocsHomePage() {
                 </Link>
               </li>
               <li>
-                <Link href="/demo" className="text-teal-700 font-semibold hover:underline">
+                <Link href="/request-demo" className="text-teal-700 font-semibold hover:underline">
                   Request a guided demo →
                 </Link>
               </li>

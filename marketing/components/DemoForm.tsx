@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 const ORG_TYPES = [
@@ -12,6 +12,8 @@ const ORG_TYPES = [
 ]
 
 const COUNT_RANGES = ['Under 500', '500–1,000', '1,001–5,000', '5,001–10,000', '10,000+']
+
+const FREE_EMAIL_DOMAINS = new Set(['gmail.com', 'yahoo.com', 'ymail.com', 'hotmail.com', 'outlook.com', 'live.com', 'aol.com'])
 
 const inputCls =
   'w-full bg-[#fafbfc] border border-[#e5e7eb] rounded-lg px-3 py-2.5 text-sm text-ink outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20'
@@ -33,6 +35,7 @@ const SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY
 
 export default function DemoForm() {
   const router = useRouter()
+  const redirectedRef = useRef(false)
   const [form, setForm] = useState({
     full_name: '',
     work_email: '',
@@ -71,7 +74,21 @@ export default function DemoForm() {
       setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const valid =
-    form.full_name.trim() && form.work_email.trim() && form.organisation.trim() && consentToContact
+    form.full_name.trim() &&
+    form.work_email.trim() &&
+    form.organisation.trim() &&
+    form.role_title.trim() &&
+    form.country.trim() &&
+    form.student_count_range &&
+    consentToContact
+
+  const freeEmailDomain = (() => {
+    const domain = form.work_email.split('@')[1]?.toLowerCase() ?? ''
+    if (!domain) return false
+    return FREE_EMAIL_DOMAINS.has(domain)
+  })()
+  const showFreeEmailWarning =
+    (form.organisation_type === 'k12' || form.organisation_type === 'university') && freeEmailDomain
 
   const handleSubmit = async () => {
     if (!valid || status === 'submitting') return
@@ -115,7 +132,12 @@ export default function DemoForm() {
       }
       setWarning(data.warning || null)
       setStatus('done')
-      router.push('/thank-you')
+      window.setTimeout(() => {
+        if (!redirectedRef.current) {
+          redirectedRef.current = true
+          router.push('/thank-you')
+        }
+      }, 1400)
     } catch {
       setError('Network error — please try again.')
       setStatus('error')
@@ -171,6 +193,12 @@ export default function DemoForm() {
         <div>
           <label className={labelCls}>Work email *</label>
           <input className={inputCls} type="email" value={form.work_email} onChange={set('work_email')} placeholder="jordan@yourschool.edu" />
+          {showFreeEmailWarning && (
+            <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              For institutional sign-ups we recommend a school/work email address so our team can
+              verify your organisation. A personal address is fine if you don't have one.
+            </p>
+          )}
         </div>
       </div>
 
@@ -181,7 +209,7 @@ export default function DemoForm() {
 
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Role / title</label>
+          <label className={labelCls}>Role / title *</label>
           <input className={inputCls} value={form.role_title} onChange={set('role_title')} placeholder="Head of Pastoral Care" />
         </div>
         <div>
@@ -196,11 +224,11 @@ export default function DemoForm() {
 
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Country</label>
+          <label className={labelCls}>Country *</label>
           <input className={inputCls} value={form.country} onChange={set('country')} placeholder="UK" />
         </div>
         <div>
-          <label className={labelCls} htmlFor="student-pop">Student population</label>
+          <label className={labelCls} htmlFor="student-pop">Student population *</label>
           <select id="student-pop" className={inputCls} value={form.student_count_range} onChange={set('student_count_range')}>
             <option value="">Select a range...</option>
             {COUNT_RANGES.map((c) => (
@@ -238,7 +266,7 @@ export default function DemoForm() {
           onChange={(e) => setConsentToContact(e.target.checked)}
           className="mt-0.5 accent-teal-600"
         />
-        <span>I consent to MindGuard contacting me at this email address about the demo. *</span>
+        <span>I agree to be contacted by MindGuard about my request. *</span>
       </label>
 
       {warning && (

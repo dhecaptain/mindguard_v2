@@ -88,7 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </p>
                 <div className="mt-4 flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
-                    HIPAA & FERPA Compliant
+                    HIPAA-aligned · FERPA-conscious
                   </span>
                 </div>
               </div>

@@ -57,6 +57,9 @@ export default function AboutPage() {
                 powered by a purpose-trained model, governed by consent, and always reviewed by
                 a human. We build for trust because nothing else works in a counselling room.
               </p>
+              <p className="mt-6 text-xs text-slate-400">
+                Source: World Health Organization — suicide fact sheet (who.int).
+              </p>
             </div>
           </Reveal>
         </div>
@@ -139,7 +142,7 @@ export default function AboutPage() {
             <h2 className="text-3xl font-bold text-ink mb-8">Work with us</h2>
           </Reveal>
           <Reveal delay={0.1}>
-            <CtaButton href="/demo">Request a demo</CtaButton>
+            <CtaButton href="/request-demo">Request a demo</CtaButton>
           </Reveal>
         </div>
       </section>

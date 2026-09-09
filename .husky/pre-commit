@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 vibe-check: lint-staged + tsc + tests"
+npx lint-staged 2>&1 | tee logs/pre-commit.log
+if [ $? -ne 0 ]; then echo "❌ lint-staged failed — piping to agent"; cat logs/pre-commit.log; exit 1; fi
+
+echo "→ typecheck frontend"
+cd frontend && npx tsc --noEmit --project tsconfig.app.json 2>&1 | tee ../logs/pre-commit.log
+if [ $? -ne 0 ]; then echo "❌ tsc failed"; exit 1; fi
+cd ..
+
+echo "→ typecheck marketing"
+cd marketing && npx tsc --noEmit 2>&1 | tee ../logs/pre-commit.log
+if [ $? -ne 0 ]; then echo "❌ marketing tsc failed"; exit 1; fi
+cd ..
+
+echo "→ pytest quick"
+PYTHONPATH=..:. python3 -m pytest backend/tests -q --tb=line 2>&1 | tee logs/pre-commit.log
+if [ $? -ne 0 ]; then echo "❌ tests failed — agent auto-fix needed"; exit 1; fi
+
+echo "✅ pre-commit passed"

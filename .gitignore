@@ -80,3 +80,5 @@ MINDGUARD_DEV_GUIDE.md
 *.swo
 *.log
 frontend/npm-cache/
+logs/
+graphify-out/
