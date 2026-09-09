@@ -10,7 +10,7 @@ const STEPS = [
     title: 'Encrypted Roster Ingestion',
     icon: Upload,
     short: 'Roster Upload',
-    details: 'IT administrators upload student rosters over AES-256 TLS 1.3 encrypted connections. Student IDs are anonymized before processing.',
+    details: 'IT administrators upload student rosters over TLS 1.3 encrypted connections. Student PII is encrypted at rest.',
     guarantee: 'Zero raw PII exposure',
   },
   {
@@ -18,7 +18,7 @@ const STEPS = [
     title: 'Verified Consent Dispatch',
     icon: CheckCircle2,
     short: 'Consent Verification',
-    details: 'MindGuard routes digital consent forms (Parent for minors, Direct for adult university students). Only verified active consent unlocks telemetry analysis.',
+    details: 'MindGuard routes digital consent forms (parent for minors, direct for adult university students). Only verified consent ever unlocks analysis.',
     guarantee: '100% Opt-In Required',
   },
   {
@@ -26,16 +26,16 @@ const STEPS = [
     title: 'Ephemeral Mental-RoBERTa ML',
     icon: Cpu,
     short: 'ML Distress Analysis',
-    details: 'Purpose-trained model (ROC-AUC 0.98) evaluates distress risk in isolated RAM buffers without persistent storage or external API calls.',
+    details: 'Purpose-trained model (ROC-AUC 0.98) evaluates distress risk and produces a summary for counsellors — no external API calls, no automated decisions.',
     guarantee: 'In-memory processing only',
   },
   {
     num: '04',
     title: 'Immediate Erase & Human Summary',
     icon: Trash2,
-    short: 'Zero Data Retention',
-    details: 'Raw content is permanently purged from buffer immediately after generating a structured risk summary for human counsellor triage.',
-    guarantee: 'Zero text saved to database',
+    short: 'Summary-Only, Human-Reviewed',
+    details: 'Raw content is purged after generating a structured risk summary for human counsellor triage. The counsellor keeps the decision.',
+    guarantee: 'Summary-only output',
   },
 ]
 
@@ -54,12 +54,12 @@ export function SecurityDiagram() {
             <span>Architecture Breakdown</span>
           </div>
           <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-            The 4-Step Zero-Data-Retention Pipeline
+            The 4-Step Consent-Gated Pipeline
           </h3>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono text-emerald-300 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-slate-800 shrink-0">
           <Lock className="w-4 h-4 text-emerald-400" />
-          <span>FERPA & HIPAA Audited</span>
+          <span>Designed for Education Compliance</span>
         </div>
       </div>
 
@@ -125,7 +125,7 @@ export function SecurityDiagram() {
             </span>
             <span className="flex items-center gap-1.5 font-mono text-emerald-400">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              Automated Memory Purge Active
+              Summary → Human Review
             </span>
           </div>
         </motion.div>

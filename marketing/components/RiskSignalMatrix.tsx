@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldCheck, Clock, UserCheck, AlertTriangle, Activity, Brain, Eye, Lock } from 'lucide-react'
@@ -28,7 +30,7 @@ const NODES_DATA: Record<StateTab, SignalNode[]> = {
       confidence: 89.2,
       platform: 'Canvas LMS',
       timestamp: '2 mins ago',
-      flaggedPhraseSnippet: 'Parent consent request dispatched via SMS & Email',
+      flaggedPhraseSnippet: 'Parent consent request dispatched via email',
       counsellorNote: 'Awaiting parent digital signature. Analysis paused pending consent.',
     },
     {
@@ -120,7 +122,7 @@ export function RiskSignalMatrix() {
                   Risk Signal Detection Matrix
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-semibold tracking-wider uppercase">
-                  Live Telemetry
+                  Illustrative Preview
                 </span>
               </div>
               <p className="text-xs text-slate-400">
@@ -174,9 +176,9 @@ export function RiskSignalMatrix() {
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>
-              {activeTab === 'pending' && 'Strict Privacy Shield: Content analysis is strictly blocked until parent/student signs.'}
-              {activeTab === 'consented' && 'Active Monitoring: Analysing opted-in digital content for early distress signals.'}
-              {activeTab === 'active_review' && 'Counsellor Command: Human decision-maker reviewing AI summaries for direct intervention.'}
+              {activeTab === 'pending' && 'Simulated: content analysis stays blocked until parent or student signs.'}
+              {activeTab === 'consented' && 'Simulated: consented content is analysed into summaries for a counsellor to review.'}
+              {activeTab === 'active_review' && 'Simulated: a human counsellor reviews AI summaries before any action.'}
             </span>
           </div>
           <span className="hidden md:inline-block font-mono text-[11px] text-emerald-400/80">
@@ -269,8 +271,8 @@ export function RiskSignalMatrix() {
                       <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
                       <span>{node.counsellorNote}</span>
                     </div>
-                    <span className="text-emerald-400 font-semibold cursor-pointer group-hover:underline flex items-center gap-1">
-                      View Audit Log &rarr;
+                    <span className="text-emerald-400 font-semibold group-hover:underline flex items-center gap-1">
+                      <Link href="/security">How the audit trail works &rarr;</Link>
                     </span>
                   </div>
 
@@ -295,7 +297,7 @@ export function RiskSignalMatrix() {
 
           <div className="flex items-center gap-2">
             <span className="text-[11px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md border border-slate-700">
-              Interactive Preview Mode
+              Illustrative mock-up — not real student data
             </span>
           </div>
         </div>

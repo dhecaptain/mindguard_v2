@@ -33,7 +33,7 @@ const FAQS = [
   },
   {
     q: 'Which platforms are supported?',
-    a: 'Reddit, Bluesky, Mastodon, YouTube, TikTok, Twitter/X, Facebook (public content), plus file uploads including WhatsApp exports and CSV/JSON archives.',
+    a: 'Reddit, Bluesky, Mastodon, YouTube, Twitter/X and Facebook (public content), plus file uploads including WhatsApp exports and CSV/JSON archives.',
   },
   {
     q: 'How does MindGuard handle crisis situations?',
