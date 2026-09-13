@@ -41,11 +41,15 @@ from backend.models.schemas import (
     MuteGroupRequest, NOTIFICATION_TYPES,
     DemoRequestCreate, DemoRequestUpdate,
 )
-from backend.services.email_sender import process_email_outbox, send_html_email
+from backend.services.email_sender import (
+    get_email_provider_status,
+    process_email_outbox,
+    send_html_email,
+)
 from backend.services.predictor import predict_one, predict_batch, InferenceUnavailableError
 from backend.services.webhook_service import handle_webhook
 from backend.services.email_templates import (
-    demo_request_confirmation, demo_request_notification,
+    demo_request_confirmation, demo_request_notification, student_status_notification,
 )
 from backend.services.predictor import predict_one, predict_batch
 from backend.utils import clean_text, risk_label, detect_socioeconomic, calibrate_risk_score, RESOURCES, US_STATE_RESOURCES, TEAM_MEMBERS
@@ -72,7 +76,7 @@ from backend.database import (
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
     update_user_password, update_user_role,
-    get_institution_by_id, list_institutions, list_students,
+    get_institution_by_id, list_institutions, create_institution, list_students,
     get_student_by_id,
     create_demo_request, get_demo_request, list_demo_requests, update_demo_request,
     # groups
@@ -85,7 +89,7 @@ from backend.database import (
     get_notification_preferences, set_notification_preference, should_notify,
 )
 from backend.services.consent_service import (
-    dispatch_consent, remind_consent, record_view, accept_consent, decline_consent, revoke_consent,
+    dispatch_consent, remind_consent, record_consent_decision, record_view, accept_consent, decline_consent, revoke_consent,
     verify_consent_token, remaining_views,
     process_consent_reminders, process_expired_consents,
     dispatch_consents_for_students, consents_to_csv,
@@ -378,6 +382,14 @@ async def startup():
     seed_defaults()
     _bootstrap_admins()
     logger.info("Database initialized and seeded")
+    email_status = get_email_provider_status()
+    logger.info(
+        "email delivery configured: provider=%s resend=%s webhook=%s sender=%s",
+        email_status["provider"],
+        email_status["resend_configured"],
+        email_status["webhook_configured"],
+        email_status["sender"],
+    )
     asyncio.create_task(_consent_maintenance_loop())
     asyncio.create_task(_email_drain_loop())
 
@@ -458,7 +470,12 @@ async def healthz():
     """Liveness/readiness probe (Delivery Brief §12) — includes a DB check."""
     db = health_check()
     ok = db.get("db") == "ok"
-    return {"status": "ok" if ok else "degraded", "version": "2.0.0", "db": db}
+    return {
+        "status": "ok" if ok else "degraded",
+        "version": "2.0.0",
+        "db": db,
+        "email": get_email_provider_status(),
+    }
 
 
 
@@ -1791,7 +1808,7 @@ async def get_counsellor_students(user: dict = Depends(require_auth)):
 
 
 @app.post("/api/counsellor/students/approve")
-async def approve_counsellor_student(data: dict, user: dict = Depends(require_auth)):
+async def approve_counsellor_student(data: dict, request: Request, user: dict = Depends(require_auth)):
     if user["role_type"] not in ("counsellor", "admin"):
         raise HTTPException(403, "Counsellor or admin access required")
     sid = data.get("id")
@@ -1800,12 +1817,26 @@ async def approve_counsellor_student(data: dict, user: dict = Depends(require_au
     ok = update_student_status(sid, "approved")
     if not ok:
         raise HTTPException(404, "Student not found")
+    student = get_user_by_id(sid)
     _safe_notify(sid, "Account Approved", "Your account has been approved by a counsellor.", "approval")
-    return {"ok": True}
+    email_sent, email_error = False, ""
+    if student and student.get("email"):
+        subject, body = student_status_notification(student, approved=True)
+        email_sent, email_error = send_html_email(
+            student["email"], subject, body,
+            related_type="student_status", related_id=sid,
+            metadata={"status": "approved"},
+        )
+    write_audit(
+        user["id"], user["role_type"], "STUDENT_APPROVED", "user", sid,
+        payload={"status": "approved", "email_sent": email_sent},
+        ip=_client_ip(request),
+    )
+    return {"ok": True, "status": "approved", "email_sent": email_sent, "email_error": email_error or None}
 
 
 @app.post("/api/counsellor/students/revoke")
-async def revoke_counsellor_student(data: dict, user: dict = Depends(require_auth)):
+async def revoke_counsellor_student(data: dict, request: Request, user: dict = Depends(require_auth)):
     if user["role_type"] not in ("counsellor", "admin"):
         raise HTTPException(403, "Counsellor or admin access required")
     sid = data.get("id")
@@ -1815,7 +1846,21 @@ async def revoke_counsellor_student(data: dict, user: dict = Depends(require_aut
     if not ok:
         raise HTTPException(404, "Student not found")
     _safe_notify(sid, "Account Revoked", "Your account access has been revoked.", "general")
-    return {"ok": True}
+    student = get_user_by_id(sid)
+    email_sent, email_error = False, ""
+    if student and student.get("email"):
+        subject, body = student_status_notification(student, approved=False)
+        email_sent, email_error = send_html_email(
+            student["email"], subject, body,
+            related_type="student_status", related_id=sid,
+            metadata={"status": "revoked"},
+        )
+    write_audit(
+        user["id"], user["role_type"], "STUDENT_REVOKED", "user", sid,
+        payload={"status": "revoked", "email_sent": email_sent},
+        ip=_client_ip(request),
+    )
+    return {"ok": True, "status": "revoked", "email_sent": email_sent, "email_error": email_error or None}
 
 
 @app.get("/api/counsellor/students/{student_id}")
@@ -2239,6 +2284,58 @@ async def v1_remind_consent(
         "message": "Reminder sent" if updated.get("email_sent") else "Reminder recorded but email was not sent",
         "email_sent": updated.get("email_sent", False),
         "email_error": updated.get("email_error", ""),
+        "consent_url": updated.get("consent_url", ""),
+    }
+
+
+@app.post(
+    "/api/v1/consents/{consent_id}/decision",
+    responses={
+        200: {"description": "Decision recorded on behalf of the recipient"},
+        400: {"description": "Invalid decision value or consent state"},
+        403: {"description": "Access denied"},
+        404: {"description": "Consent not found"},
+    },
+)
+async def v1_record_consent_decision(
+    consent_id: str,
+    data: dict,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Record the consent decision from the tracker (paper/verbal consent).
+
+    Lets a counsellor log the recipient's decision collected outside the
+    portal. The outcome, signature name and actor are written to the immutable
+    audit trail and a confirmation email is sent to the recipient.
+    """
+    _require_counsellor(user)
+    consent = get_consent_by_id(consent_id)
+    if not consent:
+        raise HTTPException(404, "Consent not found")
+    if consent["counsellor_id"] != user["id"] and user["role_type"] != "admin":
+        raise HTTPException(403, "Access denied")
+    decision = (data.get("decision") or "").strip().upper()
+    if decision not in ("ACCEPTED", "DECLINED"):
+        raise HTTPException(400, "decision must be 'ACCEPTED' or 'DECLINED'")
+    signature_name = (data.get("signature_name") or "").strip() or None
+    try:
+        updated = record_consent_decision(
+            consent_id,
+            actor_id=user["id"],
+            decision=decision,
+            signature_name=signature_name,
+            ip=_client_ip(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:
+        logger.error("record_consent_decision error: %s", exc)
+        raise HTTPException(500, "Failed to record decision")
+    return {
+        "ok": True,
+        "status": updated["status"],
+        "email_sent": bool(updated.get("email_sent")) if isinstance(updated, dict) else False,
         "consent_url": updated.get("consent_url", ""),
     }
 
@@ -2713,6 +2810,29 @@ async def v1_admin_list_institutions(user: dict = Depends(require_auth)):
         }
         for i in insts
     ]}
+
+
+@app.post("/api/v1/admin/institutions", status_code=201)
+async def v1_admin_create_institution(
+    data: dict,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    require_any_permission(user, {PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW})
+    name = (data.get("name") or "").strip()
+    inst_type = (data.get("type") or "university").strip().lower()
+    if not name:
+        raise HTTPException(400, "Institution name is required")
+    if len(name) > 200:
+        raise HTTPException(400, "Institution name is too long")
+    institution = create_institution(name, inst_type)
+    write_audit(
+        user["id"], user["role_type"], "INSTITUTION_CREATED",
+        "institution", institution["id"],
+        payload={"type": inst_type},
+        ip=_client_ip(request),
+    )
+    return institution
 
 
 # ── Consent maintenance (manual trigger) ──────────────────────────────

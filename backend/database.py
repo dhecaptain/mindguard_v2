@@ -612,26 +612,18 @@ def mark_notification_read(nid: str, user_id: str):
 
 def get_counsellor_dashboard(counsellor_id: str):
     conn = get_db()
-    counsellor = conn.execute("SELECT institution_id FROM users WHERE id = ?", (counsellor_id,)).fetchone()
-    inst_id = counsellor["institution_id"] if counsellor and counsellor["institution_id"] else None
-    if inst_id:
-        total_students = conn.execute(
-            "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND institution_id = ?", (inst_id,)
-        ).fetchone()[0]
-        pending = conn.execute(
-            "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending' AND institution_id = ?", (inst_id,)
-        ).fetchone()[0]
-        crisis_flags = conn.execute(
-            "SELECT COUNT(*) FROM analyses a JOIN users u ON a.user_id = u.id "
-            "WHERE a.prob >= 0.75 AND a.created_at >= datetime('now', '-7 days') AND u.institution_id = ?",
-            (inst_id,),
-        ).fetchone()[0]
-    else:
-        total_students = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student'").fetchone()[0]
-        pending = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending'").fetchone()[0]
-        crisis_flags = conn.execute(
-            "SELECT COUNT(*) FROM analyses WHERE prob >= 0.75 AND created_at >= datetime('now', '-7 days')"
-        ).fetchone()[0]
+    # The baseline schema keeps institution ownership on roster ``students``
+    # rows, not on auth ``users`` rows.  Do not query a column that is absent
+    # from existing databases; admins also intentionally see global totals.
+    total_students = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE role_type = 'student'"
+    ).fetchone()[0]
+    pending = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending'"
+    ).fetchone()[0]
+    crisis_flags = conn.execute(
+        "SELECT COUNT(*) FROM analyses WHERE prob >= 0.75 AND created_at >= datetime('now', '-7 days')"
+    ).fetchone()[0]
     open_referrals = conn.execute("SELECT COUNT(*) FROM referrals WHERE counsellor_id = ? AND status = 'open'", (counsellor_id,)).fetchone()[0]
     recent_referrals = conn.execute(
         "SELECT r.*, u.name as student_name FROM referrals r JOIN users u ON r.student_id = u.id "
@@ -1117,40 +1109,29 @@ def write_audit(
 
 
 def get_audit_log(counsellor_id: str, limit: int = 100) -> list:
-    """Return audit entries where actor is the counsellor or target is one of their students.
+    """Return audit entries relevant to this staff member, newest first.
 
-    Scoped to the counsellor's institution to avoid leaking cross-institution data.
-    Consent workflow entries are matched via consents owned by this counsellor.
+    The baseline schema keeps institution ownership on roster ``students``
+    rows — there is no ``users.institution_id`` column, so scoping by it would
+    crash with ``no such column`` (this took down the counsellor Audit Log
+    page). Scope instead to what the schema guarantees:
+      * entries where this user is the actor, plus
+      * entries targeting students who have a consent with this counsellor, plus
+      * consent-workflow entries on consents this counsellor owns.
     """
     conn = get_db()
-    counsellor = conn.execute("SELECT institution_id FROM users WHERE id = ?", (counsellor_id,)).fetchone()
-    inst_id = counsellor["institution_id"] if counsellor and counsellor["institution_id"] else None
-    if inst_id:
-        student_ids = [
-            r["id"] for r in conn.execute(
-                "SELECT id FROM users WHERE role_type = 'student' AND institution_id = ?", (inst_id,)
-            ).fetchall()
-        ]
-    else:
-        student_ids = [
-            r["id"] for r in conn.execute(
-                "SELECT id FROM users WHERE role_type = 'student' LIMIT 500",
-            ).fetchall()
-        ]
-    if len(student_ids) > 500:
-        student_ids = student_ids[:500]
-    placeholders = ",".join("?" * len(student_ids)) if student_ids else "''"
-    query = f"""
+    query = """
         SELECT * FROM audit_log
         WHERE actor_id = ?
-           OR target_id IN ({placeholders})
+           OR (target_type = 'user' AND target_id IN (
+               SELECT c.student_id FROM consents c WHERE c.counsellor_id = ?
+           ))
            OR (target_type = 'consent' AND target_id IN (
                SELECT id FROM consents WHERE counsellor_id = ?
            ))
         ORDER BY occurred_at DESC LIMIT ?
     """
-    params = [counsellor_id] + student_ids + [counsellor_id, limit]
-    rows = conn.execute(query, params).fetchall()
+    rows = conn.execute(query, (counsellor_id, counsellor_id, counsellor_id, limit)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

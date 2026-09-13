@@ -19,6 +19,19 @@ def test_is_resend_configured(monkeypatch):
     assert email_sender.is_resend_configured()
 
 
+def test_resend_provider_status_is_safe_and_explicit(monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_123")
+    monkeypatch.setenv("RESEND_WEBHOOK_SECRET", "whsec_123")
+    monkeypatch.setenv("EMAIL_FROM", "MindGuard <no-reply@schools.example.org>")
+    status = email_sender.get_email_provider_status()
+    assert status["provider"] == "resend"
+    assert status["resend_configured"] is True
+    assert status["webhook_configured"] is True
+    assert status["sender_valid"] is True
+    assert "re_123" not in str(status)
+    assert "whsec_123" not in str(status)
+
+
 def test_email_from_defaults_to_brand_not_personal(monkeypatch):
     monkeypatch.delenv("EMAIL_FROM", raising=False)
     assert email_sender.get_email_from() == "MindGuard <noreply@mindguard.ai>"

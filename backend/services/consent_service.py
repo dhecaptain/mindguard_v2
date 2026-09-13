@@ -400,6 +400,89 @@ def decline_consent(consent_id: str, ip: str | None = None, user_agent: str | No
     return updated
 
 
+def record_consent_decision(
+    consent_id: str,
+    actor_id: str,
+    decision: str,
+    signature_name: str | None = None,
+    ip: str | None = None,
+) -> dict:
+    """Record the consent decision from the tracker on behalf of the recipient.
+
+    Used for paper/verbal consent collected outside the portal: the counsellor
+    logs what the recipient decided, with the outcome, signature name (when
+    provided) and actor written to the immutable audit trail. Valid from any
+    dispatchable or pending-like state; record the decision against the same
+    state machine the portal uses so downstream gating stays truthful.
+
+    ``decision`` must be "ACCEPTED" or "DECLINED".
+    """
+    decision = (decision or "").strip().upper()
+    if decision not in ("ACCEPTED", "DECLINED"):
+        raise ValueError("decision must be 'ACCEPTED' or 'DECLINED'")
+
+    consent = get_consent_by_id(consent_id)
+    if not consent:
+        raise ValueError("Consent not found")
+    consent = check_and_expire(consent)
+    if consent["status"] not in ("PENDING", "VIEWED", "DRAFT", "DECLINED", "EXPIRED", "INVALID", "RENEWAL_DUE"):
+        raise ValueError(f"Cannot record a decision for consent in status {consent['status']}")
+
+    # Portal dispatch semantics: a decision can only be recorded against a
+    # request that was actually sent (or is being re-sent as part of the same
+    # flow). DRAFT/DECLINED/EXPIRED/INVALID/RENEWAL_DUE go through dispatch
+    # first so a fresh signed link exists for the recipient to change their mind.
+    if consent["status"] != "PENDING" and consent["status"] != "VIEWED":
+        consent = dispatch_consent(consent_id, actor_id=actor_id, ip=ip)
+
+    now = datetime.now(timezone.utc).isoformat()
+    signature = (signature_name or "").strip() or "Recorded by counsellor"
+    if decision == "ACCEPTED":
+        expiry = (datetime.now(timezone.utc) + timedelta(days=CONSENT_EXPIRY_DAYS)).isoformat()
+        updated = update_consent_status(
+            consent_id,
+            "ACCEPTED",
+            signature_name=signature,
+            signature_ip=ip,
+            accepted_at=now,
+            expires_at=expiry,
+            response_ip=ip,
+        )
+    else:
+        updated = update_consent_status(
+            consent_id,
+            "DECLINED",
+            declined_at=now,
+            response_ip=ip,
+        )
+
+    write_audit(
+        actor_id,
+        "counsellor",
+        "CONSENT_ACCEPTED" if decision == "ACCEPTED" else "CONSENT_DECLINED",
+        "consent",
+        consent_id,
+        payload={
+            "signature": signature,
+            "recorded_by": "counsellor",
+            "via": "tracker",
+            "recipient": updated["recipient_email"],
+        },
+        ip=ip,
+    )
+    create_consent_event(
+        consent_id,
+        "accepted" if decision == "ACCEPTED" else "declined",
+        actor_type="counsellor",
+        actor_id=actor_id,
+        metadata={"signature": signature, "via": "tracker"},
+    )
+    # The recipient still gets the §4.5 confirmation email so the decision is
+    # reflected in their own records (a failed email must not undo the decision).
+    _notify_consent_response(updated, accepted=(decision == "ACCEPTED"), token=consent.get("magic_token"))
+    return updated
+
+
 def revoke_consent(consent_id: str, ip: str | None = None, user_agent: str | None = None) -> dict:
     """Transition ACCEPTED -> REVOKED.
 

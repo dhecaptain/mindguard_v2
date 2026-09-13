@@ -3,7 +3,10 @@ import { getAuditLog } from '../api/counsellor'
 import type { AuditEvent } from '../types'
 
 function formatTime(d: string) {
-  return new Date(d).toLocaleString('en-US', {
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (Number.isNaN(dt.getTime())) return d
+  return dt.toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   })
@@ -26,8 +29,8 @@ export default function AuditLogPage() {
     try {
       const data = await getAuditLog()
       setEvents(data)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load the audit log.')
     } finally {
       setLoading(false)
     }

@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import smtplib
+from email.utils import getaddresses
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -29,6 +30,32 @@ _personal_from_warned = False
 
 def is_resend_configured() -> bool:
     return bool(get_secret("RESEND_API_KEY"))
+
+
+def get_email_provider_status() -> dict:
+    """Return safe, non-secret diagnostics for readiness and health checks."""
+    sender = get_email_from()
+    addresses = getaddresses([sender])
+    sender_address = addresses[0][1] if addresses else ""
+    sender_domain = sender_address.rsplit("@", 1)[-1].lower() if "@" in sender_address else ""
+    resend_configured = is_resend_configured()
+    sender_valid = bool(sender_address and sender_domain and "." in sender_domain)
+    if resend_configured and not sender_valid:
+        message = "EMAIL_FROM must contain a valid address on a verified Resend domain."
+    elif resend_configured:
+        message = "Resend is configured; verify the sender domain in the Resend dashboard."
+    elif is_smtp_configured():
+        message = "Resend is not configured; SMTP fallback is active."
+    else:
+        message = "No email provider is configured."
+    return {
+        "provider": "resend" if resend_configured else ("smtp" if is_smtp_configured() else None),
+        "resend_configured": resend_configured,
+        "webhook_configured": bool(get_secret("RESEND_WEBHOOK_SECRET")),
+        "sender": sender,
+        "sender_valid": sender_valid,
+        "message": message,
+    }
 
 
 def is_smtp_configured() -> bool:

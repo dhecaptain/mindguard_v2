@@ -284,6 +284,21 @@ def admin_consent_notification(context: dict) -> tuple[str, str]:
     return subject, _layout(body, footer)
 
 
+def student_status_notification(context: dict, approved: bool) -> tuple[str, str]:
+    """Notify a student when an administrator changes account access."""
+    name = _esc(context.get("student_name") or "there")
+    if approved:
+        subject = "Your MindGuard account has been approved"
+        headline = "Your account has been approved."
+        copy = "You can now sign in to MindGuard and use the services available to you."
+    else:
+        subject = "Your MindGuard account access has been revoked"
+        headline = "Your account access has been revoked."
+        copy = "If you believe this was a mistake, please contact your institution's administrator."
+    body = _heading(headline) + _p(f"Hi {name},") + _p(copy)
+    return subject, _layout(body)
+
+
 # ── Demo pipeline templates (Brief §4.7–4.8) ─────────────────────────
 
 def demo_request_confirmation(context: dict) -> tuple[str, str]:

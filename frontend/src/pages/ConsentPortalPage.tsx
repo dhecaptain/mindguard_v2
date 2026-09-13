@@ -43,8 +43,8 @@ export default function ConsentPortalPage({ token }: { token: string }) {
         if (!res.ok) throw new Error(data.detail || 'This consent link could not be opened.')
         setConsent(data)
         setStatus('ready')
-      } catch (err: any) {
-        setMessage(err.message || 'This consent link could not be opened.')
+      } catch (err) {
+        setMessage(err instanceof Error ? err.message : 'This consent link could not be opened.')
         setStatus('error')
       }
     }
@@ -73,8 +73,8 @@ export default function ConsentPortalPage({ token }: { token: string }) {
           : 'Consent withdrawn. Analysis of this data has been stopped.'
       )
       setStatus('done')
-    } catch (err: any) {
-      setMessage(err.message || `Could not ${action} consent.`)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : `Could not ${action} consent.`)
       setStatus('ready')
     }
   }
