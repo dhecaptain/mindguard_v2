@@ -62,16 +62,6 @@ export default function DashboardPage() {
     }
   }
 
-  const platformLabels: Record<string, string> = {
-    reddit: 'Reddit',
-    bluesky: 'Bluesky',
-    mastodon: 'Mastodon',
-    youtube: 'YouTube',
-    file: 'File Upload',
-    facebook: 'Facebook',
-    twitter: 'Twitter / X',
-  }
-
   return (
     <div className="flex flex-col gap-[18px]">
       <section>
@@ -138,18 +128,17 @@ export default function DashboardPage() {
             icon="ti ti-brand-reddit"
             label="Run Platform Analysis"
             onClick={() => {
-              const platformsWithAccounts = Object.keys(platformLabels).filter(
-                (p) => socialAccounts.some((a: any) => a.platform === p)
-              )
-              if (platformsWithAccounts.length === 0) {
+              if (socialAccounts.length === 0) {
                 setHasError(true)
                 return
               }
-              if (platformsWithAccounts.length === 1) {
-                handleAnalyzeSelf(platformsWithAccounts[0])
-              } else {
+              // Use the first connected account's platform for analysis.
+              const firstAccount = socialAccounts[0]
+              if (!firstAccount?.platform) {
                 setHasError(true)
+                return
               }
+              handleAnalyzeSelf(firstAccount.platform)
             }}
           />
 
