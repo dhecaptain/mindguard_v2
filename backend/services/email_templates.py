@@ -286,17 +286,9 @@ def admin_consent_notification(context: dict) -> tuple[str, str]:
 
 def student_status_notification(context: dict, approved: bool) -> tuple[str, str]:
     """Notify a student when an administrator changes account access."""
-    name = _esc(context.get("student_name") or "there")
     if approved:
-        subject = "Your MindGuard account has been approved"
-        headline = "Your account has been approved."
-        copy = "You can now sign in to MindGuard and use the services available to you."
-    else:
-        subject = "Your MindGuard account access has been revoked"
-        headline = "Your account access has been revoked."
-        copy = "If you believe this was a mistake, please contact your institution's administrator."
-    body = _heading(headline) + _p(f"Hi {name},") + _p(copy)
-    return subject, _layout(body)
+        return student_approval_notification(context)
+    return student_revocation_notification(context)
 
 
 # ── Demo pipeline templates (Brief §4.7–4.8) ─────────────────────────
@@ -355,4 +347,73 @@ def demo_request_notification(context: dict) -> tuple[str, str]:
         + '<p style="margin:0 0 20px;">' + _button(context["admin_url"], "View in admin panel") + "</p>"
     )
     footer = _FOOTER.format(**context)
+    return subject, _layout(body, footer)
+
+
+def student_approval_notification(context: dict) -> tuple[str, str]:
+    """Notify a student when their account has been approved."""
+    name = _esc(context.get("student_name") or "there")
+    institution = _esc(context.get("institution_name") or "your school")
+    subject = "Your MindGuard account has been approved"
+    body = (
+        _p(f"Hi {name},")
+        + _p("Great news! Your MindGuard account has been approved.")
+        + _p("You can now sign in and access the following:")
+        + '<ul style="margin:0 0 16px;padding-left:20px;">'
+        + _li("Review and respond to consent requests")
+        + _li("Connect your social media accounts for wellbeing analysis")
+        + _li("Communicate with your counsellor")
+        + _li("Access mental health resources")
+        + "</ul>"
+        + '<p style="margin:0 0 20px;">' + _button(context.get("login_url", "https://app.mindguardai.me"), "Sign in to MindGuard") + "</p>"
+        + _p(f"If you have any questions, please contact your counsellor or {_esc(context.get('support_email', 'support@mindguard.ai'))}.")
+        + _p(f"— The MindGuard Team at {institution}", size=13)
+    )
+    footer = _FOOTER.format(**{**context, "withdraw_url": context.get("withdraw_url", ""), "privacy_url": context.get("privacy_url", ""), "contact_url": context.get("contact_url", "")})
+    return subject, _layout(body, footer)
+
+
+def student_revocation_notification(context: dict) -> tuple[str, str]:
+    """Notify a student when their account access has been revoked."""
+    name = _esc(context.get("student_name") or "there")
+    institution = _esc(context.get("institution_name") or "your school")
+    subject = "Your MindGuard account access has been revoked"
+    body = (
+        _p(f"Hi {name},")
+        + _p("We regret to inform you that your MindGuard account access has been revoked.")
+        + _p("This means:")
+        + '<ul style="margin:0 0 16px;padding-left:20px;">'
+        + _li("You can no longer sign in to MindGuard")
+        + _li("Your existing data is no longer accessible through the platform")
+        + _li("Any active consent has been terminated")
+        + "</ul>"
+        + _p("If you believe this was a mistake or have questions about this decision, please contact your institution's administrator or counsellor.")
+        + _p(f"— The MindGuard Team at {institution}", size=13)
+    )
+    footer = _FOOTER.format(**{**context, "withdraw_url": context.get("withdraw_url", ""), "privacy_url": context.get("privacy_url", ""), "contact_url": context.get("contact_url", "")})
+    return subject, _layout(body, footer)
+
+
+def counsellor_invitation_notification(context: dict) -> tuple[str, str]:
+    """Invite a new counsellor via secure magic-link (single-use, 7-day expiry)."""
+    name = _esc(context.get("counsellor_name") or "there")
+    institution = _esc(context.get("institution_name") or "your institution")
+    invite_url = context.get("invite_url") or context.get("setup_url", "https://app.mindguardai.me/invite")
+    subject = f"MindGuard counsellor invitation — {institution}"
+    body = (
+        _p(f"Hi {name},")
+        + _p(f"You have been invited to join MindGuard as a counsellor at {institution}.")
+        + _p("As a counsellor, you will be able to:")
+        + '<ul style="margin:0 0 16px;padding-left:20px;">'
+        + _li("View and manage student consents")
+        + _li("Analyse student social media content (with consent)")
+        + _li("Create referrals and track student wellbeing")
+        + _li("Communicate with students through the platform")
+        + "</ul>"
+        + _p("This invitation link is single-use and expires in 7 days. Click below to set your password and activate your account:")
+        + '<p style="margin:0 0 20px;">' + _button(invite_url, "Accept invitation") + "</p>"
+        + _p("If you did not expect this invitation, you can safely ignore this email.", size=13)
+        + _p(f"— The MindGuard Team at {institution}", size=13)
+    )
+    footer = _FOOTER.format(**{**context, "withdraw_url": context.get("withdraw_url", ""), "privacy_url": context.get("privacy_url", ""), "contact_url": context.get("contact_url", "")})
     return subject, _layout(body, footer)

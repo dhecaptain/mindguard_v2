@@ -1,4 +1,4 @@
-"""Tests for the email sender (Resend primary + SMTP fallback + email_events logging)."""
+"""Tests for the email sender (Resend-only + email_events logging)."""
 
 import pytest
 
@@ -8,8 +8,6 @@ from services import email_sender
 @pytest.fixture(autouse=True)
 def clear_env(monkeypatch):
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
-    monkeypatch.delenv("SMTP_USER", raising=False)
-    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
     monkeypatch.setenv("EMAIL_FROM", "MindGuard <noreply@example.com>")
 
 

@@ -37,8 +37,7 @@ Copy `.env.example` → `.env`. Key variables:
 | `JWT_SECRET` | Signing secret for MindGuard JWTs |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Supabase project (Google OAuth) |
 | `ENCRYPTION_KEY` | 64-hex AES-256-GCM key for student PII at rest |
-| `RESEND_API_KEY` | Preferred email provider |
-| `SMTP_USER`, `SMTP_PASSWORD` | SMTP fallback (e.g. Gmail app password) |
+| `RESEND_API_KEY` | Resend API key for email delivery |
 | `EMAIL_FROM` | Sender header, e.g. `MindGuard <noreply@mindguard.ai>` |
 | `DEMO_NOTIFY_EMAIL` | Where demo request notifications are sent |
 | `APP_BASE_URL` | Public URL used in consent/demo email links |
@@ -256,9 +255,9 @@ Set these in the Railway service dashboard (Variables):
 | `EMAIL_WORKER_BATCH_SIZE` | outbox rows drained per pass (default `50`) |
 | `EMAIL_WORKER_MAX_ATTEMPTS` | max delivery attempts per outbox row (default `5`) |
 
-Email provider — one of:
-- **Resend** (preferred): `RESEND_API_KEY`.
-- **SMTP** fallback: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`.
+Email provider:
+- **Resend** (required): `RESEND_API_KEY`. SMTP fallback has been removed.
+  All application email goes through Resend only.
 
 Verify delivery after configuring:
 
@@ -328,21 +327,17 @@ authentication on the sending domain so consent links land in the inbox rather
 than spam:
 
 1. **SPF** — in DNS add a TXT record for the sending domain:
-   `v=spf1 include:amazonses.com ~all` (Resend uses Amazon SES; follow the exact
-   value Resend shows under *Domains* for your account).
-2. **DKIM** — add the TXT records Resend provides (`sendgrid._domainkey` or
-   Resend's generated selectors). Verify both SPF and DKIM show **Verified** in
-   the Resend dashboard.
+   `v=spf1 include:resend.net ~all` (Resend domain authentication).
+2. **DKIM** — add the TXT records Resend provides. Verify DKIM shows **Verified**
+   in the Resend dashboard.
 3. **DMARC** — add `_dmarc.<sending-domain>` TXT:
    `v=DMARC1; p=none; rua=mailto:dmarc@<your-domain>; pct=100`. Start at
    `p=none`, review aggregate reports, then tighten to `p=quarantine`.
 4. Set `EMAIL_FROM` to a verified sender on the authenticated domain, e.g.
-   `MindGuard <noreply@<your-domain>>` (never a personal Gmail — the app logs a
-   warning and consumers will bounce). `RESEND_API_KEY` must be set (see §2).
+   `MindGuard <noreply@<your-domain>>` (must be a verified Resend sender).
 5. **Verify** with [mail-tester.com](https://www.mail-tester.com) — send a
    consent request to a throwaway address and aim for **≥ 9/10**. Warm up
-   sending volume gradually if the domain is new (see `brief.txt` for the full
-   deliverability plan).
+   sending volume gradually if the domain is new.
 
 The backend webhook secret (`RESEND_WEBHOOK_SECRET`) must also be set — see
 `.env.example`. Delivery events (delivered/bounced/complained) flow through

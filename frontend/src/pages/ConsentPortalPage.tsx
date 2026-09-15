@@ -12,6 +12,8 @@ type PortalConsent = {
   expires_at?: string
 }
 
+const SOCIAL_PLATFORMS = ['Facebook', 'X', 'Instagram', 'Mastodon', 'Bluesky', 'YouTube', 'Reddit']
+
 const apiBase =
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? 'http://127.0.0.1:8000/api' : '/api')
@@ -25,9 +27,24 @@ function parsePlatforms(value: string) {
   }
 }
 
+function normalizeHandle(platform: string, value: string): string {
+  if (!value.trim()) return ''
+  let handle = value.trim()
+  // Remove leading @ for most platforms
+  if (platform !== 'Reddit' && handle.startsWith('@')) {
+    handle = handle.slice(1)
+  }
+  // Remove leading u/ for Reddit
+  if (platform === 'Reddit' && handle.startsWith('u/')) {
+    handle = handle.slice(2)
+  }
+  return handle
+}
+
 export default function ConsentPortalPage({ token }: { token: string }) {
   const [consent, setConsent] = useState<PortalConsent | null>(null)
   const [signatureName, setSignatureName] = useState('')
+  const [socialHandles, setSocialHandles] = useState<Record<string, string>>({})
   const [status, setStatus] = useState<'loading' | 'ready' | 'submitting' | 'done' | 'error'>('loading')
   const [message, setMessage] = useState('')
 
@@ -59,10 +76,19 @@ export default function ConsentPortalPage({ token }: { token: string }) {
     setStatus('submitting')
     setMessage('')
     try {
+      // Build social handles object - only include platforms that were requested
+      const socialAccounts: Record<string, string> = {}
+      for (const platform of platforms) {
+        if (SOCIAL_PLATFORMS.includes(platform) && socialHandles[platform]) {
+          socialAccounts[platform] = normalizeHandle(platform, socialHandles[platform])
+        }
+      }
       const res = await fetch(`${apiBase}/v1/portal/consents/${token}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: action === 'accept' ? JSON.stringify({ signature_name: signatureName.trim(), platforms }) : undefined,
+        body: action === 'accept'
+          ? JSON.stringify({ signature_name: signatureName.trim(), platforms, social_accounts: socialAccounts })
+          : undefined,
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.detail || `Could not ${action} consent.`)
@@ -164,6 +190,32 @@ export default function ConsentPortalPage({ token }: { token: string }) {
                       required
                       className="w-full rounded-[8px] border border-[#d1d5db] px-[12px] py-[10px] text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
                     />
+                  </div>
+
+                  {/* Social media handles */}
+                  <div>
+                    <div className="text-[0.78rem] uppercase font-bold text-[#0F766E] mb-[8px]">Your social media accounts (optional)</div>
+                    <p className="text-[0.72rem] text-[#6b7280] mb-[12px]">
+                      Add your usernames for the platforms above. This helps your counsellor support you better.
+                      You can leave fields blank if you don't use a platform.
+                    </p>
+                    <div className="flex flex-col gap-[10px]">
+                      {SOCIAL_PLATFORMS.filter(p => platforms.includes(p)).map((platform) => (
+                        <div key={platform} className="flex items-center gap-[10px]">
+                          <label htmlFor={`social-${platform}`} className="text-[0.78rem] font-medium text-[#374151] w-[80px] flex-shrink-0">
+                            {platform}
+                          </label>
+                          <input
+                            id={`social-${platform}`}
+                            type="text"
+                            value={socialHandles[platform] || ''}
+                            onChange={(e) => setSocialHandles(prev => ({ ...prev, [platform]: e.target.value }))}
+                            placeholder={platform === 'Reddit' ? 'u/username' : `@username or URL`}
+                            className="flex-1 rounded-[8px] border border-[#d1d5db] px-[12px] py-[10px] text-[0.85rem] text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {message && (

@@ -59,7 +59,7 @@ from backend.database import (
     ensure_user_approved,
     get_user_by_email, get_user_by_id, create_user,
     get_students, update_student_status,
-    update_user_status,
+    update_user_status, set_user_invitation, get_user_by_invitation_token_hash, clear_user_invitation,
     save_analysis, get_analytics,
     create_referral, get_referrals, update_referral,
     send_message, get_conversation, get_conversations, mark_read, mark_all_read,
@@ -1809,54 +1809,76 @@ async def get_unified(user: dict = Depends(require_auth)):
 
 @app.post("/api/admin/counsellors")
 async def create_counsellor(data: dict, request: Request, user: dict = Depends(require_auth)):
-    """Create a new counsellor account (admin only)."""
+    """Create a new counsellor account via magic-link invitation (admin only)."""
     if user["role_type"] != "admin":
         raise HTTPException(403, "Admin access required")
     name = (data.get("name") or "").strip()
     email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
     institution_id = data.get("institution_id")
-    
+
     if not name or not email:
         raise HTTPException(400, "Name and email are required")
-    if not password or len(password) < 8:
-        raise HTTPException(400, "Password must be at least 8 characters")
-    
-    # Check if email already exists
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(400, "Invalid email address")
+
     existing = get_user_by_email(email)
     if existing:
         raise HTTPException(400, "A user with this email already exists")
-    
-    # Create counsellor account
-    pw_hash = hash_password(password)
-    counsellor = create_user(email, name, pw_hash, role_type="counsellor")
-    
-    # Assign to institution if provided
+
     if institution_id:
-        assign_student_to_counsellor.__globals__['_dummy'] = None  # ensure import
-    
+        from backend.database import get_institution_by_id
+        if not get_institution_by_id(institution_id):
+            raise HTTPException(400, "Institution not found")
+
+    placeholder_hash = hash_password(secrets.token_urlsafe(32))
+    counsellor = create_user(email, name, placeholder_hash, role_type="counsellor")
+
+    from backend.services.crypto import hash_token
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_token(token)
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    set_user_invitation(counsellor["id"], token_hash, expires_at)
+
     write_audit(
         user["id"], "admin", "COUNSELLOR_CREATED", "user", counsellor["id"],
         payload={"counsellor_name": name, "counsellor_email": email, "institution_id": institution_id},
         ip=_client_ip(request),
     )
-    
-    # Send invitation email
+
     email_sent, email_error = False, ""
     if email:
+        institution_name = "MindGuard"
+        if institution_id:
+            try:
+                inst = get_institution_by_id(institution_id)
+                if inst:
+                    institution_name = inst.get("name") or institution_name
+            except Exception:
+                pass
+        base = os.getenv("APP_BASE_URL", "https://app.mindguardai.me").rstrip("/") or "https://app.mindguardai.me"
+        invite_url = f"{base}/invite?token={token}"
         context = {
             "counsellor_name": name,
-            "institution_name": "MindGuard",
-            "setup_url": os.getenv("APP_BASE_URL", "https://app.mindguardai.me") + "/setup",
+            "institution_name": institution_name,
+            "invite_url": invite_url,
+            "setup_url": invite_url,
             "support_email": os.getenv("DEMO_NOTIFY_EMAIL", "support@mindguard.ai"),
+            "withdraw_url": f"{base}/privacy",
+            "privacy_url": f"{base}/privacy",
+            "contact_url": f"{base}/contact",
         }
         subject, body = counsellor_invitation_notification(context)
         email_sent, email_error = send_html_email(
             email, subject, body,
             related_type="counsellor_invitation", related_id=counsellor["id"],
-            metadata={"action": "create"},
+            metadata={"action": "create", "invite": True},
         )
-    
+        write_audit(
+            user["id"], "admin", "COUNSELLOR_INVITE_SENT", "user", counsellor["id"],
+            payload={"email_sent": email_sent, "error": email_error or None},
+            ip=_client_ip(request),
+        )
+
     return {
         "ok": True,
         "counsellor": {
@@ -1868,6 +1890,112 @@ async def create_counsellor(data: dict, request: Request, user: dict = Depends(r
         "email_sent": email_sent,
         "email_error": email_error or None,
     }
+
+
+@app.post("/api/auth/invite/verify")
+async def verify_invite(data: dict):
+    """Verify counsellor invitation token is valid (no auth, no consumption)."""
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise HTTPException(400, "Token is required")
+    from backend.services.crypto import hash_token
+    token_hash = hash_token(token)
+    user = get_user_by_invitation_token_hash(token_hash)
+    if not user:
+        raise HTTPException(400, "Invalid or expired invitation")
+    expires_at = user.get("invitation_expires_at")
+    if expires_at:
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) > exp:
+                raise HTTPException(400, "Invitation has expired")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    if user.get("status") not in ("pending", "invited"):
+        raise HTTPException(400, "Invitation already used")
+    return {"ok": True, "email": user["email"], "name": user["name"]}
+
+
+@app.post("/api/auth/invite/accept")
+async def accept_invite(data: dict, request: Request):
+    """Accept counsellor invitation: set password and activate account."""
+    token = (data.get("token") or "").strip()
+    password = data.get("password") or ""
+    if not token or not password:
+        raise HTTPException(400, "Token and password are required")
+    if len(password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    from backend.services.crypto import hash_token
+    token_hash = hash_token(token)
+    user = get_user_by_invitation_token_hash(token_hash)
+    if not user:
+        raise HTTPException(400, "Invalid or expired invitation")
+    expires_at = user.get("invitation_expires_at")
+    if expires_at:
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) > exp:
+                raise HTTPException(400, "Invitation has expired")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    if user.get("status") not in ("pending", "invited"):
+        raise HTTPException(400, "Invitation already used")
+    pw_hash = hash_password(password)
+    update_user_password(user["id"], pw_hash)
+    update_user_status(user["id"], "approved")
+    clear_user_invitation(user["id"])
+    write_audit(
+        user["id"], user["role_type"], "COUNSELLOR_INVITE_ACCEPTED", "user", user["id"],
+        payload={"email": user["email"]},
+        ip=_client_ip(request),
+    )
+    return {"ok": True}
+
+
+@app.post("/api/admin/counsellors/{counsellor_id}/resend-invite")
+async def resend_counsellor_invite(counsellor_id: str, request: Request, user: dict = Depends(require_auth)):
+    """Regenerate invitation token and resend email (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    counsellor = get_user_by_id(counsellor_id)
+    if not counsellor or counsellor["role_type"] != "counsellor":
+        raise HTTPException(404, "Counsellor not found")
+    if counsellor.get("status") == "approved":
+        raise HTTPException(400, "Counsellor already active; no invite needed")
+    from backend.services.crypto import hash_token
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_token(token)
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    set_user_invitation(counsellor_id, token_hash, expires_at)
+    base = os.getenv("APP_BASE_URL", "https://app.mindguardai.me").rstrip("/") or "https://app.mindguardai.me"
+    invite_url = f"{base}/invite?token={token}"
+    institution_name = "MindGuard"
+    context = {
+        "counsellor_name": counsellor.get("name") or "there",
+        "institution_name": institution_name,
+        "invite_url": invite_url,
+        "setup_url": invite_url,
+        "support_email": os.getenv("DEMO_NOTIFY_EMAIL", "support@mindguard.ai"),
+        "withdraw_url": f"{base}/privacy",
+        "privacy_url": f"{base}/privacy",
+        "contact_url": f"{base}/contact",
+    }
+    subject, body = counsellor_invitation_notification(context)
+    email_sent, email_error = send_html_email(
+        counsellor["email"], subject, body,
+        related_type="counsellor_invitation", related_id=counsellor_id,
+        metadata={"action": "resend"},
+    )
+    write_audit(
+        user["id"], "admin", "COUNSELLOR_INVITE_RESENT", "user", counsellor_id,
+        payload={"email_sent": email_sent},
+        ip=_client_ip(request),
+    )
+    return {"ok": True, "email_sent": email_sent, "email_error": email_error or None}
 
 
 @app.get("/api/admin/counsellors")
@@ -1913,6 +2041,14 @@ async def update_counsellor(counsellor_id: str, data: dict, request: Request, us
     if new_status:
         update_user_role(counsellor_id, "counsellor")  # ensure role stays counsellor
         update_user_status(counsellor_id, new_status)
+        if new_status in ("revoked", "suspended"):
+            for a in get_assignments_for_counsellor(counsellor_id, active_only=True):
+                unassign_student_from_counsellor(a["id"])
+            try:
+                from backend.auth import blacklist_token
+                # best-effort: blacklist any active tokens would require store, rely on status check
+            except Exception:
+                pass
         counsellor = get_user_by_id(counsellor_id)
         
         action = "COUNSELLOR_DEACTIVATED" if new_status in ("revoked", "suspended") else "COUNSELLOR_ACTIVATED"
@@ -2342,6 +2478,17 @@ def _require_counsellor(user: dict) -> None:
         PERM_ANALYSIS_RUN, PERM_CONSENT_MANAGE,
         PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW, PERM_DEMO_MANAGE,
     })
+
+
+def _require_counsellor_student_access(user: dict, student_id: str) -> None:
+    """Enforce assignment + valid consent for counsellor access to a student."""
+    if user.get("role_type") == "admin":
+        return
+    from backend.database import has_active_assignment, has_consent_relationship
+    if not has_active_assignment(user["id"], student_id):
+        raise HTTPException(403, "Student not assigned to you")
+    if not has_consent_relationship(student_id, user["id"]):
+        raise HTTPException(403, "No valid consent for this student")
 
 
 def _client_ip(request: Request) -> str:

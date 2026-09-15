@@ -262,6 +262,42 @@ def update_user_role(user_id: str, role_type: str) -> dict | None:
     return get_user_by_id(user_id) if ok else None
 
 
+def set_user_invitation(user_id: str, token_hash: str, expires_at: str) -> bool:
+    """Store hashed invitation token for counsellor magic-link."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET invitation_token_hash = ?, invitation_expires_at = ?, invited_at = ? WHERE id = ?",
+        (token_hash, expires_at, now, user_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def get_user_by_invitation_token_hash(token_hash: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM users WHERE invitation_token_hash = ? LIMIT 1",
+        (token_hash,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def clear_user_invitation(user_id: str) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET invitation_token_hash = NULL, invitation_expires_at = NULL WHERE id = ?",
+        (user_id,),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
 def update_user_status(user_id: str, status: str) -> bool:
     """Set a user's status (e.g. approve/revoke/suspend a counsellor)."""
     conn = get_db()
@@ -1111,10 +1147,22 @@ def get_alert_by_id(alert_id: str) -> dict | None:
 
 
 def has_consent_relationship(student_id: str, counsellor_id: str) -> bool:
+    now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     row = conn.execute(
-        "SELECT 1 FROM consents WHERE student_id = ? AND counsellor_id = ? LIMIT 1",
-        (student_id, counsellor_id),
+        "SELECT 1 FROM consents WHERE student_id = ? AND counsellor_id = ? "
+        "AND status = 'ACCEPTED' AND (expires_at IS NULL OR expires_at > ?) LIMIT 1",
+        (student_id, counsellor_id, now),
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def has_active_assignment(counsellor_id: str, student_id: str) -> bool:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT 1 FROM counsellor_student_assignments WHERE counsellor_id = ? AND student_id = ? AND active = 1 LIMIT 1",
+        (counsellor_id, student_id),
     ).fetchone()
     conn.close()
     return row is not None
@@ -2007,6 +2055,11 @@ def mark_email_outbox_failed(outbox_id: str, error: str, retry_at: str | None = 
     _outbox_set(outbox_id, status="failed", error=error, next_attempt_at=retry_at)
 
 
+def mark_email_outbox_abandoned(outbox_id: str, error: str) -> None:
+    """Mark an outbox row permanently abandoned (never retried, preserves history)."""
+    _outbox_set(outbox_id, status="abandoned", error=error, next_attempt_at=None)
+
+
 def fetch_due_email_outbox(batch_size: int = 50, max_attempts: int = 5) -> list:
     """Rows the worker may process now: queued, or failed and due for retry."""
     now = datetime.now(timezone.utc).isoformat()
@@ -2049,11 +2102,13 @@ def list_email_outbox(limit: int = 200, status: str | None = None) -> list:
 
 
 def count_pending_email_outbox() -> int:
-    """Queued + failed rows awaiting (re)delivery by the worker."""
+    """Queued + retryable failed rows awaiting (re)delivery by the worker."""
+    now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     row = conn.execute(
         "SELECT COUNT(*) AS n FROM email_outbox WHERE status = 'queued' "
-        "OR status = 'failed'"
+        "OR (status = 'failed' AND attempts < 5 AND next_attempt_at <= ?)",
+        (now,),
     ).fetchone()
     conn.close()
     return row["n"] if row else 0
@@ -2153,14 +2208,15 @@ def assign_student_to_counsellor(
     if existing:
         conn.close()
         return get_assignment(existing["id"])
-    row = conn.execute(
+    new_id = str(uuid.uuid4())
+    conn.execute(
         "INSERT INTO counsellor_student_assignments (id, counsellor_id, student_id, institution_id, assigned_by, assigned_at, active) "
         "VALUES (?, ?, ?, ?, ?, ?, 1)",
-        (str(uuid.uuid4()), counsellor_id, student_id, institution_id, assigned_by, now),
+        (new_id, counsellor_id, student_id, institution_id, assigned_by, now),
     )
     conn.commit()
     conn.close()
-    return get_assignment(row.lastrowid)
+    return get_assignment(new_id)
 
 
 def unassign_student_from_counsellor(assignment_id: str) -> bool:

@@ -7,6 +7,7 @@ from backend.database import (
     create_email_event,
     enqueue_email,
     fetch_due_email_outbox,
+    mark_email_outbox_abandoned,
     mark_email_outbox_failed,
     mark_email_outbox_sent,
 )
@@ -102,6 +103,21 @@ def _send_resend(to_email: str, subject: str, body_html: str) -> tuple[bool, str
         return False, str(exc), ""
 
 
+def _is_permanent_error(err: str) -> bool:
+    """Permanent recipient errors that should not be retried."""
+    err_lower = (err or "").lower()
+    permanent_markers = [
+        "invalid `to`",
+        "validation_error",
+        "not a valid rfc 5321",
+        "553 ",
+        "550 5.1.1",
+        "550 5.1.2",
+        "invalid recipient",
+    ]
+    return any(m in err_lower for m in permanent_markers)
+
+
 def _deliver(to_email: str, subject: str, body_html: str) -> tuple[bool, str, str]:
     """Attempt transport via Resend only. No SMTP fallback."""
     ok, err, esp_message_id = False, "", ""
@@ -179,9 +195,11 @@ def process_email_outbox(batch_size: int = 50, max_attempts: int = 5) -> dict:
             sent += 1
         else:
             attempts = int(row.get("attempts") or 0) + 1
-            if attempts >= max_attempts:
-                # Give up after max_attempts - mark as abandoned
-                mark_email_outbox_failed(outbox_id, err, retry_at=None)
+            if _is_permanent_error(err):
+                mark_email_outbox_abandoned(outbox_id, f"permanent: {err}")
+                logger.warning("outbox: permanent failure for %s, abandoning: %s", outbox_id, err)
+            elif attempts >= max_attempts:
+                mark_email_outbox_abandoned(outbox_id, f"exhausted after {attempts} attempts: {err}")
                 logger.warning("outbox: giving up on %s after %s attempts: %s",
                                outbox_id, attempts, err)
             else:

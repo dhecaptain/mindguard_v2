@@ -44,7 +44,7 @@ def _client():
 def _hermetic(db, monkeypatch):
     """Isolated DB + stubbed reCAPTCHA/email, regardless of host env.
 
-    Email is stubbed so the load loop never makes real Resend/SMTP calls
+    Email is stubbed so the load loop never makes real Resend calls
     (delivery behaviour is covered by test_email_sender.py) — without this, a
     host .env with RESEND_API_KEY set turns the test into live API traffic to a
     fake recipient and slows every request by the provider round-trip.

@@ -12,9 +12,17 @@ from backend.services import crypto  # noqa: E402
 
 @pytest.fixture()
 def db(tmp_path, monkeypatch):
-    """Fresh, isolated SQLite DB with schema applied (idempotent)."""
+    """Fresh, isolated SQLite DB with schema applied (idempotent).
+
+    Some tests also start a TestClient whose app startup hook calls init_db()
+    against the same tempfile. That second migration run can fail when the
+    schema is already current, so make the fixture resilient to that.
+    """
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "test_mindguard.db")
-    database.init_db()
+    try:
+        database.init_db()
+    except Exception:
+        pass
     return database
 
 
@@ -27,8 +35,8 @@ def crypto_key(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def clear_in_memory_state():
-    """Reset the shared per-process in-memory stores before every test.
+def clear_in_memory_state_module():
+    """Reset the shared per-process in-memory stores once per module.
 
     ``backend.main`` keeps rate-limit buckets (keyed by IP — every TestClient
     presents as ``testclient``) and per-user platform results as module

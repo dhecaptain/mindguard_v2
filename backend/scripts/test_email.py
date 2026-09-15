@@ -1,6 +1,6 @@
 """Send a one-off test email through the app's configured provider.
 
-Exercises the exact production path (Resend preferred, SMTP fallback) used by
+Exercises the exact production path (Resend only via email_outbox) used by
 consent and demo-request emails, so it is the go/no-go check after configuring
 email delivery.
 

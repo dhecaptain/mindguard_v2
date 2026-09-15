@@ -9,6 +9,7 @@ import TermsPage from './components/auth/TermsPage'
 import MainLayout from './components/layout/MainLayout'
 import AuthCallbackPage from './pages/AuthCallbackPage'
 import ConsentPortalPage from './pages/ConsentPortalPage'
+import InvitePage from './pages/InvitePage'
 import DemoRequestPage from './pages/DemoRequestPage'
 import DashboardPage from './pages/DashboardPage'
 import TextImageAnalysisPage from './pages/TextImageAnalysisPage'
@@ -228,6 +229,10 @@ export default function App() {
   if (window.location.pathname.startsWith('/consent/')) {
     const token = window.location.pathname.split('/consent/')[1]?.split('/')[0] || ''
     return <ConsentPortalPage token={token} />
+  }
+
+  if (window.location.pathname === '/invite' || window.location.pathname.startsWith('/invite/')) {
+    return <InvitePage />
   }
 
   if (window.location.pathname === '/demo' || window.location.pathname === '/demo/') {
