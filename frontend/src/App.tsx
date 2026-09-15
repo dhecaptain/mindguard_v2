@@ -36,6 +36,7 @@ import AlertQueuePage from './pages/AlertQueuePage'
 import ConsentTrackerPage from './pages/ConsentTrackerPage'
 import AuditLogPage from './pages/AuditLogPage'
 import AdminPage from './pages/AdminPage'
+import AdminCounsellorsPage from './pages/AdminCounsellorsPage'
 import NotificationPreferencesPage from './pages/NotificationPreferencesPage'
 import LandingPage from './pages/LandingPage'
 
@@ -80,6 +81,9 @@ function PageRouter() {
   if (role === 'admin') {
     switch (currentPage) {
       case 'admin': return <AdminPage />
+      case 'counsellors': return <AdminCounsellorsPage />
+      case 'institutions': return <ConsentTrackerPage />
+      case 'assignments': return <AdminCounsellorsPage />
       case 'counsellor-dashboard': return <CounsellorDashboardPage />
       case 'students': return <StudentManagementPage />
       case 'batch': return <BatchAnalysisPage />
