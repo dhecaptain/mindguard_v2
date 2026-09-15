@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react'
 import { useAnalysisStore, usePlatformStore, useUiStore } from '../store'
 import { formatPercent, getRiskLabel } from '../types'
+import api from '../api/client'
 
 export default function DashboardPage() {
   const setPage = useUiStore((state) => state.setPage)
@@ -28,6 +30,47 @@ export default function DashboardPage() {
   const unifiedScore = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0
   const unified = getRiskLabel(unifiedScore)
   const single = lastResult ? getRiskLabel(lastResult.prob) : null
+
+  // Social accounts state (loaded from backend /self/social-accounts)
+  const [socialAccounts, setSocialAccounts] = useState<any[]>([])
+  const [hasError, setHasError] = useState<boolean>(false)
+
+  useEffect(() => {
+    api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch((_e: unknown) => {
+      setHasError(true)
+    })
+  }, [])
+
+  const handleAnalyzeSelf = async (platform: string) => {
+    const account = socialAccounts.find((a: any) => a.platform === platform)
+    if (!account) {
+      setHasError(true)
+      return
+    }
+    try {
+      const { data } = await api.post('/self/analyze', {
+        platform,
+        handle: account.handle,
+        text: account.handle,
+      })
+      // Update analytics store with the new analysis
+      useAnalysisStore.getState().updateAnalytics(data.prob, account.handle)
+      // Refresh social accounts to reflect updated state
+      api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch(() => {})
+    } catch (e: unknown) {
+      setHasError(true)
+    }
+  }
+
+  const platformLabels: Record<string, string> = {
+    reddit: 'Reddit',
+    bluesky: 'Bluesky',
+    mastodon: 'Mastodon',
+    youtube: 'YouTube',
+    file: 'File Upload',
+    facebook: 'Facebook',
+    twitter: 'Twitter / X',
+  }
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -90,7 +133,32 @@ export default function DashboardPage() {
         <h3 className="text-[0.86rem] font-bold uppercase text-[#4b5563] mb-[12px]">Next Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-[10px]">
           <ActionButton icon="ti ti-pencil" label="Text / Image Analysis" onClick={() => setPage('text-image')} />
-          <ActionButton icon="ti ti-brand-reddit" label="Run Platform Analysis" onClick={() => setPage('reddit')} />
+
+          <ActionButton
+            icon="ti ti-brand-reddit"
+            label="Run Platform Analysis"
+            onClick={() => {
+              const platformsWithAccounts = Object.keys(platformLabels).filter(
+                (p) => socialAccounts.some((a: any) => a.platform === p)
+              )
+              if (platformsWithAccounts.length === 0) {
+                setHasError(true)
+                return
+              }
+              if (platformsWithAccounts.length === 1) {
+                handleAnalyzeSelf(platformsWithAccounts[0])
+              } else {
+                setHasError(true)
+              }
+            }}
+          />
+
+          {hasError && (
+            <div className="text-[0.78rem] text-[#dc2626] bg-[#fef2f2] rounded-[6px] px-[10px] py-[7px] mb-[8px] border border-[#fecaca]">
+              No connected accounts found. Add accounts via My Accounts first.
+            </div>
+          )}
+
           <ActionButton icon="ti ti-file-report" label="View Unified Profile" onClick={() => setPage('unified')} />
         </div>
       </section>
