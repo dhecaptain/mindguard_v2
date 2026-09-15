@@ -814,24 +814,100 @@ async def analyze_own_account(data: dict, request: Request, user: dict = Depends
     owned_urls = {a["profile_url"] for a in own if a.get("platform") == platform}
     if handle not in owned_handles and handle not in owned_urls:
         raise HTTPException(403, "Handle not owned by you; add it via My Accounts first")
-    text = (data.get("text") or handle or "").strip()
-    if not text:
-        raise HTTPException(400, "No content to analyze")
+    # Attempt to fetch actual platform posts/data for analysis.
+    # If platform data ingestion is not available, report clearly rather than
+    # pretending analysis occurred with zero items (Task #11).
+    posts: list[dict] = []
+    platform_data_available = False
     try:
-        prob, ms = await predict_one(text)
-    except Exception as exc:
-        raise inference_http_error(exc)
-    cls = "Suicidal" if prob >= 0.5 else "Non-Suicidal"
-    save_analysis(user["id"], "self", text, prob, cls)
+        # Find the account entry to get the profile URL
+        account = next((a for a in own if a.get("platform") == platform), None)
+        profile_url = (account or {}).get("profile_url")
+        if not profile_url:
+            raise ValueError("No profile URL for connected account")
+        # Try the scraper worker path (currently broken/missing worker;
+        # gracefully fall through to "unavailable" status).
+        import subprocess, sys
+        from pathlib import Path
+        worker = Path(__file__).resolve().parent.parent / "scraper_worker.py"
+        if worker.exists():
+            result = subprocess.run(
+                [sys.executable, str(worker), platform, profile_url, "3"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0:
+                import json as _json
+                data = _json.loads(result.stdout.strip())
+                if data.get("ok"):
+                    posts = data.get("posts", [])
+                    platform_data_available = True
+        else:
+            logger.info("scraper_worker.py not available; platform data will be reported as unavailable")
+    except Exception as _e:
+        logger.info("Platform data ingestion failed for %s: %s", platform, _e)
+    # If we couldn't retrieve actual platform posts, fall back to analysing
+    # the handle name so the endpoint still returns a deterministic result
+    # rather than always 500'ing, but we flag that platform data was unavailable.
+    if not platform_data_available and not posts:
+        text = (data.get("text") or handle or "").strip()
+        if not text:
+            raise HTTPException(400, "No content to analyze")
+        try:
+            prob, ms = await predict_one(text)
+        except Exception as exc:
+            raise inference_http_error(exc)
+        cls = "Suicidal" if prob >= 0.5 else "Non-Suicidal"
+        save_analysis(user["id"], "self", text, prob, cls)
+        sess = create_analysis_session(
+            student_id=user["id"], counsellor_id=None, institution_id=user.get("institution_id"),
+            consent_id=None, analysis_type="self", platforms=[platform],
+            findings={"prob": prob, "label": cls, "note": "platform_data_unavailable"},
+            risk_score=prob,
+            insights=f"Self analysis for {platform}:{handle} (platform data unavailable)",
+        )
+        write_audit(user["id"], user["role_type"], "SELF_ANALYSIS", "analysis_session", sess["id"],
+                    payload={"platform": platform, "data_available": False}, ip=_client_ip(request))
+        return {"prob": prob, "label": cls, "latency_ms": ms, "session_id": sess["id"],
+                "platform_data_available": False}
+    # Platform data was actually fetched – run model on the retrieved posts.
+    if not posts:
+        raise HTTPException(500, "Platform data fetched but no posts returned")
+    import numpy as np
+    from backend.services.predictor import predict_batch
+    text_col = [clean_text(p.get("text", "")) for p in posts if (p.get("text") or "").strip()]
+    if not text_col:
+        raise HTTPException(500, "No analysable text in fetched posts")
+    probs = await predict_batch(text_col)
+    n_high = sum(1 for p in probs if p >= 0.55)
+    overall = float(np.mean(probs)) if probs else 0.0
+    cls = "Suicidal" if overall >= 0.5 else "Non-Suicidal"
+    # Build a platform-result-like structure.
+    from backend.main import _build_platform_result
+    platform_result = _build_platform_result(posts, platform)
+    platform_result["overall"] = overall
+    platform_result["n_high"] = n_high
+    platform_result["n_posts"] = len(posts)
+    platform_result["platform_key"] = platform
+    platform_result["username"] = handle
+    # Persist a durable analysis session with the actual platform results.
     sess = create_analysis_session(
         student_id=user["id"], counsellor_id=None, institution_id=user.get("institution_id"),
-        consent_id=None, analysis_type="self", platforms=[platform],
-        findings={"prob": prob, "label": cls}, risk_score=prob,
-        insights=f"Self analysis for {platform}:{handle}",
+        consent_id=None, analysis_type="social_wellbeing", platforms=[platform],
+        findings=platform_result, risk_score=overall,
+        insights=f"Platform analysis for {platform}:{handle}; {len(posts)} items reviewed; mean risk={overall:.2f}",
+        recommendations=f"Review {len(posts)} posts from {platform}; {n_high} high-risk items identified.",
     )
     write_audit(user["id"], user["role_type"], "SELF_ANALYSIS", "analysis_session", sess["id"],
-                payload={"platform": platform}, ip=_client_ip(request))
-    return {"prob": prob, "label": cls, "latency_ms": ms, "session_id": sess["id"]}
+                payload={"platform": platform, "data_available": True, "n_posts": len(posts), "n_high": n_high}, ip=_client_ip(request))
+    return {
+        "prob": overall, "label": cls, "latency_ms": 0,
+        "session_id": sess["id"],
+        "platform_data_available": True,
+        "n_posts": len(posts),
+        "n_high": n_high,
+        "overall_risk": overall,
+        "findings": platform_result,
+    }
 
 
 @app.get("/api/v1/students/{student_id}/analysis-sessions")

@@ -18,30 +18,49 @@ export default function DashboardPage() {
     ['Twitter / X', twitter],
   ] as const
 
-  const analysedPlatforms = platformResults.filter(([, result]) => result)
-  const videoAnalysed = Boolean(video?.ok)
-  const platformCount = analysedPlatforms.length + (videoAnalysed ? 1 : 0)
-  const postCount = analysedPlatforms.reduce((sum, [, result]) => sum + (result?.n_posts || 0), videoAnalysed ? 1 : 0)
-  const highRiskCount = analysedPlatforms.reduce((sum, [, result]) => sum + (result?.n_high || 0), video?.ok && video.risk >= 0.55 ? 1 : 0)
+  // Per-platform analysis state from durable sessions
+  // overall: mean risk score, nHigh: high-risk count, nPosts: items analysed,
+  // status: 'connected' | 'analysed' | 'not_connected'
+  const [platformAnalysis, setPlatformAnalysis] = useState<Record<string, {
+    overall?: number
+    nHigh?: number
+    nPosts?: number
+    status: 'connected' | 'analysed' | 'not_connected'
+  }>>({})
+
+  // Count platforms that have been analysed (status === 'analysed')
+  const analysedEntries = Object.entries(platformAnalysis).filter(([, s]) => s.status === 'analysed')
+  const platformCount = analysedEntries.length
+  const postCount = analysedEntries.reduce((sum, [, s]) => sum + (s.nPosts || 0), 0)
+  const highRiskCount = analysedEntries.reduce((sum, [, s]) => sum + (s.nHigh || 0), 0)
+
+  // Compute scores from analysed platforms only
   const scores = [
-    ...analysedPlatforms.map(([, result]) => result!.overall),
-    ...(video?.ok ? [video.risk] : []),
+    ...analysedEntries.map(([, s]) => s.overall).filter(Boolean) as number[],
+    ...(video ? [video.risk] : []) as number[],
   ]
   const unifiedScore = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0
-  const unified = getRiskLabel(unifiedScore)
   const single = lastResult ? getRiskLabel(lastResult.prob) : null
 
   // Social accounts state (loaded from backend /self/social-accounts)
   const [socialAccounts, setSocialAccounts] = useState<any[]>([])
   const [hasError, setHasError] = useState<boolean>(false)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
-  // Platform analysis results from the analysis session
-  const [platformAnalysis, setPlatformAnalysis] = useState<Record<string, { overall?: number; nHigh?: number }>>({})
+  // Analysis history sessions
+  const [analysisSessions, setAnalysisSessions] = useState<any[]>([])
+  const [sessionsLoaded, setSessionsLoaded] = useState<boolean>(false)
 
   useEffect(() => {
     api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch((_e: unknown) => {
       setHasError(true)
     })
+  }, [])
+
+  useEffect(() => {
+    api.get('/self/analysis-sessions').then(({ data }) => {
+      setAnalysisSessions(data.sessions || [])
+      setSessionsLoaded(true)
+    }).catch(() => {})
   }, [])
 
   const handleAnalyzeSelf = async (platform: string) => {
@@ -53,38 +72,52 @@ export default function DashboardPage() {
     setIsAnalyzing(true)
     setHasError(false)
     try {
-      // Step 1: Call the self-analysis endpoint
-      await api.post('/self/analyze', {
-        platform,
-        handle: account.handle,
-        text: account.handle,
-      })
-      // Step 2: Fetch the analysis session to get platform data
+      const body: any = { platform, handle: account.handle, text: account.handle }
+      const resp = await api.post('/self/analyze', body)
+      const data = resp.data
+
       const { data: sessionsData } = await api.get('/self/analysis-sessions')
       const session = sessionsData.sessions.find(
-        (s: any) => s.analysis_type === 'self' && s.platforms_json
+        (s: any) => s.analysis_type === 'social_wellbeing' && s.platforms_json
       )
-      if (session) {
-        const platforms = session.platforms_json ? JSON.parse(session.platforms_json) : []
+
+      if (session && data.platform_data_available) {
         const findings = session.findings_json ? JSON.parse(session.findings_json) : {}
-        // Extract per-platform stats
-        const platformStats: Record<string, { overall?: number; nHigh?: number }> = {}
-        platforms.forEach((p: string) => {
-          const platformLower = p.toLowerCase()
-          // Check each platformLabel key
-          Object.keys({ reddit: 'reddit', bluesky: 'bluesky', mastodon: 'mastodon', instagram: 'instagram', twitter: 'twitter', youtube: 'youtube', facebook: 'facebook', file: 'file' }).forEach(([key, lower]) => {
-            if (platformLower === lower) {
-              const riskScore = findings.risk_score != null ? findings.risk_score : 0
-              platformStats[key] = {
-                overall: riskScore,
-                nHigh: riskScore >= 0.5 ? 1 : (findings.n_high || 0),
-              }
+        const platforms: Record<string, { overall?: number; nHigh?: number; nPosts?: number }> = {}
+        const platformMap: Record<string, string> = {
+          reddit: 'reddit', bluesky: 'bluesky', mastodon: 'mastodon',
+          instagram: 'instagram', twitter: 'twitter', youtube: 'youtube', facebook: 'facebook', file: 'file',
+        }
+        Object.entries(platformMap).forEach(([key, lower]) => {
+          const platformLower = (findings.platform_key || '').toLowerCase()
+          if (platformLower === lower) {
+            platforms[key] = {
+              overall: findings.risk_score != null ? findings.risk_score : 0,
+              nHigh: findings.n_high != null ? findings.n_high : 0,
+              nPosts: findings.n_posts != null ? findings.n_posts : 0,
             }
-          })
+          }
         })
-        setPlatformAnalysis(platformStats)
+        const newPA: Record<string, { overall?: number; nHigh?: number; nPosts?: number; status: 'connected' | 'analysed' | 'not_connected' }> = {}
+        platformResults.forEach(([name]) => {
+          newPA[name] = { overall: platforms[name]?.overall, nHigh: platforms[name]?.nHigh, nPosts: platforms[name]?.nPosts, status: 'analysed' }
+        })
+        setPlatformAnalysis(newPA)
+      } else if (session && !data.platform_data_available) {
+        const newPA: Record<string, { overall?: number; nHigh?: number; nPosts?: number; status: 'connected' | 'analysed' | 'not_connected' }> = {}
+        platformResults.forEach(([name]) => {
+          newPA[name] = { overall: undefined, nHigh: 0, nPosts: 0, status: 'connected' }
+        })
+        setPlatformAnalysis(newPA)
+      } else {
+        const newPA: Record<string, { overall?: number; nHigh?: number; nPosts?: number; status: 'connected' | 'analysed' | 'not_connected' }> = {}
+        platformResults.forEach(([name]) => {
+          const hasAccount = socialAccounts.some((a: any) => a.platform === name)
+          newPA[name] = { overall: undefined, nHigh: 0, nPosts: 0, status: hasAccount ? 'connected' : 'not_connected' }
+        })
+        setPlatformAnalysis(newPA)
       }
-      // Refresh social accounts to reflect updated state
+
       api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch(() => {})
     } catch (e: unknown) {
       setHasError(true)
@@ -92,6 +125,26 @@ export default function DashboardPage() {
       setIsAnalyzing(false)
     }
   }
+
+  // Helper: get per-platform status label
+  const getPlatformStatusLabel = (name: string) => {
+    const stats = platformAnalysis[name] || {}
+    const status = stats.status || 'not_connected'
+    if (status === 'not_connected') return 'Not connected'
+    if (status === 'connected') return 'Connected but not analysed'
+    if (status === 'analysed') return 'Analysed'
+    return status
+  }
+
+  // Unified risk from analysed platforms only (recompute from platformAnalysis)
+  const analysedScores = Object.values(platformAnalysis)
+    .filter(s => s.status === 'analysed' && s.overall !== undefined)
+    .map(s => s.overall!)
+  const finalUnifiedScore = analysedScores.length ? analysedScores.reduce((sum, score) => sum + score, 0) / analysedScores.length : 0
+  const finalUnifiedRisk = analysedScores.length ? getRiskLabel(finalUnifiedScore) : { label: '--', color: '#6b7280' }
+
+  // Video analysed flag (safe null check)
+  const videoAnalysed = Boolean(video?.ok)
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -106,7 +159,7 @@ export default function DashboardPage() {
         <MetricCard label="Platforms Analysed" value={String(platformCount)} icon="ti ti-share" />
         <MetricCard label="Posts / Items Reviewed" value={String(postCount)} icon="ti ti-files" />
         <MetricCard label="High-Risk Items" value={String(highRiskCount)} icon="ti ti-alert-triangle" tone={highRiskCount ? '#f97316' : '#22c55e'} />
-        <MetricCard label="Unified Risk" value={scores.length ? formatPercent(unifiedScore) : '--'} icon="ti ti-activity" tone={scores.length ? unified.color : '#6b7280'} />
+        <MetricCard label="Unified Risk" value={platformCount > 0 ? formatPercent(unifiedScore) : '--'} icon="ti ti-activity" tone={platformCount > 0 ? finalUnifiedRisk.color : '#6b7280'} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-[16px]">
@@ -114,33 +167,79 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between gap-[12px] mb-[14px]">
             <h3 className="text-[0.86rem] font-bold uppercase text-[#4b5563]">Analysis Status</h3>
             {scores.length > 0 && (
-              <span className="text-[0.74rem] font-semibold px-[10px] py-[5px] rounded-full" style={{ color: unified.color, background: `${unified.color}18` }}>
-                {unified.label}
+              <span className="text-[0.74rem] font-semibold px-[10px] py-[5px] rounded-full" style={{ color: finalUnifiedRisk.color, background: `${finalUnifiedRisk.color}18` }}>
+                {finalUnifiedRisk.label}
               </span>
             )}
           </div>
           <div className="space-y-[10px]">
-            {platformResults.map(([name, result]) => {
-              const stats = platformAnalysis[name] || {}
-              const overall = stats.overall
-              const nHigh = stats.nHigh
+            {platformResults.map(([name]) => {
+              const statusLabel = getPlatformStatusLabel(name)
               return (
                 <PlatformRow
                   key={name}
                   name={name}
-                  done={Boolean(result)}
-                  overall={overall}
-                  nHigh={nHigh != null ? nHigh : undefined}
-                  nPosts={result?.n_posts}
+                  done={platformAnalysis[name]?.status === 'analysed'}
+                  overall={platformAnalysis[name]?.overall}
+                  nHigh={platformAnalysis[name]?.nHigh}
+                  nPosts={platformAnalysis[name]?.nPosts}
+                  statusLabel={statusLabel}
                 />
               )
             })}
-            <PlatformRow name="Video" done={videoAnalysed} overall={video?.ok ? video.risk : undefined} />
+            <PlatformRow name="Video" done={videoAnalysed} overall={video?.ok ? video.risk : undefined} statusLabel={videoAnalysed ? 'Analysed' : ''} />
           </div>
         </section>
 
         <section className="bg-white rounded-[10px] border border-[#d1d5db] p-[16px]">
-          <h3 className="text-[0.86rem] font-bold uppercase text-[#4b5563] mb-[14px]">Recent Single-Item Analysis</h3>
+          <h3 className="text-[0.86rem] font-bold uppercase text-[#4b5563] mb-[14px]">Analysis History</h3>
+          {sessionsLoaded && (
+            <div className="space-y-[8px] max-h-[200px] overflow-y-auto">
+              {analysisSessions.length === 0 ? (
+                <div className="text-[0.78rem] text-[#9ca3af] py-[18px]">
+                  No analysis sessions found.
+                </div>
+              ) : (
+                analysisSessions.slice(0, 10).map((s: any, idx: number) => {
+                  const sessionDate = s.created_at ? new Date(s.created_at).toLocaleDateString() : 'Unknown date'
+                  const platforms = s.platforms_json ? (JSON.parse(s.platforms_json) as string[]).join(', ') : 'unknown'
+                  const riskLabel = s.findings_json ? (() => {
+                    const f = JSON.parse(s.findings_json)
+                    if (f.risk_score !== undefined) return getRiskLabel(f.risk_score).label
+                    if (f.overall !== undefined) return getRiskLabel(f.overall).label
+                    return '--'
+                  })() : '--'
+                  const nHigh = s.findings_json ? (() => {
+                    const f = JSON.parse(s.findings_json)
+                    return f.n_high ?? f.n_posts ? (f.n_high || 0) : 0
+                  })() : 0
+                  const nPosts = s.findings_json ? (() => {
+                    const f = JSON.parse(s.findings_json)
+                    return f.n_posts || 0
+                  })() : 0
+                  return (
+                    <div key={idx} className="p-[12px] border-b border-[#e5e7eb] hover:bg-[#f8fafc] cursor-pointer transition-colors">
+                      <div className="flex justify-between items-start">
+                        <div className="text-[0.8rem] font-semibold text-[#1f2937]">
+                          {sessionDate} • {platforms}
+                        </div>
+                        <div className="text-[0.72rem] text-[#6b7280]">
+                          {riskLabel} risk
+                        </div>
+                      </div>
+                      <div className="text-[0.72rem] text-[#9ca3af] mt-[4px]">
+                        {nPosts} items analysed, {nHigh} high-risk
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-[10px] border border-[#d1d5db] p-[16px]">
+          <h3 className="text-[0.86rem] font-bold uppercase text-[#4b5563] mb-[12px]">Recent Single-Item Analysis</h3>
           {lastResult && single ? (
             <div>
               <div className="text-[2.2rem] leading-none font-semibold" style={{ color: single.color }}>
@@ -175,7 +274,6 @@ export default function DashboardPage() {
                 setHasError(true)
                 return
               }
-              // Use the first connected account's platform for analysis.
               const firstAccount = socialAccounts[0]
               if (!firstAccount?.platform) {
                 setHasError(true)
@@ -213,7 +311,7 @@ function MetricCard({ label, value, icon, tone = '#0F766E' }: { label: string; v
   )
 }
 
-function PlatformRow({ name, done, overall, nHigh, nPosts }: { name: string; done: boolean; overall?: number; nHigh?: number; nPosts?: number }) {
+function PlatformRow({ name, done, overall, nHigh, nPosts, statusLabel }: { name: string; done: boolean; overall?: number; nHigh?: number; nPosts?: number; statusLabel?: string }) {
   const safePosts = nPosts != null ? nPosts - (nHigh || 0) : 0
   const highRisk = nHigh != null ? nHigh : 0
   const barWidth = overall != null ? Math.max(1, Math.min(100, overall * 100)) : 0
@@ -232,6 +330,7 @@ function PlatformRow({ name, done, overall, nHigh, nPosts }: { name: string; don
         <span className="text-[0.72rem] font-semibold text-[#1f2937]">{highRisk}</span>
         <span className="text-[0.65rem] text-[#6b7280]">high / {safePosts > 0 ? safePosts : ''} safe</span>
       </div>
+      <div className="text-[0.68rem] text-[#6b7280] mt-[2px]">{statusLabel}</div>
     </div>
   )
 }
@@ -251,7 +350,7 @@ function ActionButton({ icon, label, onClick, disabled, loading }: { icon: strin
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled || loading}
-      className="flex items-center justify-center gap-[8px] rounded-[8px] border border-[#d1d5db] bg-white px-[14px] py-[11px] text-[0.82rem] font-semibold text-[#4b5563] hover:border-[#0F766E] hover:text-[#0F766E]"
+      className="flex items-center justify-center gap-[8px] rounded-[8x] border border-[#d1d5db] bg-white px-[14px] py-[11px] text-[0.82rem] font-semibold text-[#4b5563] hover:border-[#0F766E] hover:text-[#0F766E]"
     >
       <i className={`${icon} text-[16px]`} />
       {loading ? (
