@@ -835,22 +835,46 @@ async def analyze_own_account(data: dict, request: Request, user: dict = Depends
 
 
 @app.get("/api/v1/students/{student_id}/analysis-sessions")
-async def list_analysis_sessions(student_id: str, user: dict = Depends(require_auth)):
-    if user["role_type"] not in ("counsellor", "admin", "school_admin") and user["id"] != student_id:
-        _require_counsellor(user)
-        _require_counsellor_student_access(user, student_id)
-    elif user["id"] != student_id and user["role_type"] not in ("admin",):
-        try:
-            _require_counsellor_student_access(user, student_id)
-        except HTTPException:
-            if user["id"] != student_id:
-                raise
-    return {"sessions": get_analysis_sessions_for_student(student_id)}
+async def list_analysis_sessions(
+    student_id: str, user: dict = Depends(require_auth), limit: int = 50, offset: int = 0
+):
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    if user["id"] == student_id:
+        pass
+    elif user["role_type"] == "admin":
+        pass
+    else:
+        from backend.database import has_active_assignment
+        if not has_active_assignment(user["id"], student_id):
+            raise HTTPException(403, "Student not assigned to you")
+        # history remains auditable even after consent revoked; only new analysis requires valid consent
+    sessions = get_analysis_sessions_for_student(student_id, limit=limit, offset=offset)
+    total = len(get_analysis_sessions_for_student(student_id, limit=1000, offset=0))
+    return {"sessions": sessions, "total": total, "limit": limit, "offset": offset}
 
 
 @app.get("/api/self/analysis-sessions")
-async def list_own_analysis_sessions(user: dict = Depends(require_auth)):
-    return {"sessions": get_analysis_sessions_for_student(user["id"])}
+async def list_own_analysis_sessions(user: dict = Depends(require_auth), limit: int = 50, offset: int = 0):
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    sessions = get_analysis_sessions_for_student(user["id"], limit=limit, offset=offset)
+    total = len(get_analysis_sessions_for_student(user["id"], limit=1000, offset=0))
+    return {"sessions": sessions, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/v1/analysis-sessions/{session_id}")
+async def get_single_analysis_session(session_id: str, user: dict = Depends(require_auth)):
+    sess = get_analysis_session(session_id)
+    if not sess:
+        raise HTTPException(404, "Session not found")
+    student_id = sess["student_id"]
+    if user["id"] == student_id or user["role_type"] == "admin":
+        return {"session": sess}
+    if user.get("institution_id") and sess.get("institution_id") and user["institution_id"] != sess["institution_id"]:
+        raise HTTPException(403, "Session not in your institution")
+    _require_counsellor_student_access(user, student_id)
+    return {"session": sess}
 
 
 @app.post("/api/auth/logout")
@@ -2359,12 +2383,10 @@ async def revoke_counsellor_student(data: dict, request: Request, user: dict = D
 
 @app.get("/api/counsellor/students/{student_id}")
 async def get_student_detail(student_id: str, user: dict = Depends(require_auth)):
-    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
-    if user["role_type"] != "admin" and not has_consent_relationship(student_id, user["id"]):
-        raise HTTPException(403, "You do not have a consent relationship with this student")
+    _require_counsellor_student_access(user, student_id)
     from backend.database import get_analyses
     analyses = get_analyses(student_id, limit=50)
     rolling = get_rolling_risk(student_id)
@@ -2605,14 +2627,20 @@ def _require_counsellor(user: dict) -> None:
 
 
 def _require_counsellor_student_access(user: dict, student_id: str) -> None:
-    """Enforce assignment + valid consent for counsellor access to a student."""
+    """Centralized counsellor→student authz: active + assigned + consent + institution."""
     if user.get("role_type") == "admin":
         return
-    from backend.database import has_active_assignment, has_consent_relationship
+    _require_counsellor(user)
+    from backend.database import has_active_assignment, has_consent_relationship, get_user_by_id
     if not has_active_assignment(user["id"], student_id):
         raise HTTPException(403, "Student not assigned to you")
     if not has_consent_relationship(student_id, user["id"]):
         raise HTTPException(403, "No valid consent for this student")
+    counsellor_inst = user.get("institution_id")
+    if counsellor_inst:
+        student = get_user_by_id(student_id)
+        if student and student.get("institution_id") and student.get("institution_id") != counsellor_inst:
+            raise HTTPException(403, "Student not in your institution")
 
 
 def _client_ip(request: Request) -> str:
@@ -3007,10 +3035,10 @@ async def v1_portal_revoke_consent(token: str, request: Request):
 
 @app.get("/api/v1/students/{student_id}/accounts")
 async def v1_list_accounts(student_id: str, user: dict = Depends(require_auth)):
-    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    _require_counsellor_student_access(user, student_id)
     accounts = get_linked_accounts(student_id)
     return {"accounts": accounts, "total": len(accounts)}
 
@@ -3022,10 +3050,10 @@ async def v1_create_account(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    _require_counsellor_student_access(user, student_id)
 
     platform = (data.get("platform") or "").strip().lower()
     if not platform:
@@ -3060,10 +3088,10 @@ async def v1_delete_account(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    _require_counsellor_student_access(user, student_id)
 
     ok = revoke_linked_account(account_id)
     if not ok:
@@ -3146,10 +3174,10 @@ async def v1_dispose_alert(
 
 @app.get("/api/v1/students/{student_id}/timeline")
 async def v1_student_timeline(student_id: str, user: dict = Depends(require_auth)):
-    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    _require_counsellor_student_access(user, student_id)
 
     history = get_rolling_risk_history(student_id)
     alerts = get_alerts(user["id"], status=None)
@@ -3177,10 +3205,10 @@ async def v1_student_timeline(student_id: str, user: dict = Depends(require_auth
 
 @app.get("/api/v1/students/{student_id}/notes")
 async def v1_list_notes(student_id: str, user: dict = Depends(require_auth)):
-    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    _require_counsellor_student_access(user, student_id)
     notes = get_notes(student_id)
     return {"notes": notes, "total": len(notes)}
 
@@ -3192,10 +3220,10 @@ async def v1_create_note(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    _require_counsellor(user)
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    _require_counsellor_student_access(user, student_id)
 
     body = (data.get("body") or "").strip()
     if not body:
@@ -3553,11 +3581,28 @@ async def v1_student_analyze(
     request: Request,
     user: dict = Depends(require_auth),
 ):
-    _require_counsellor(user)
     _check_analysis_rate_limit(user["id"])
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(404, "Student not found")
+    _require_counsellor_student_access(user, student_id)
+    requested_platform = (data.get("platform") or "").strip()
+    if requested_platform:
+        from backend.services.consent_gate import get_active_consent
+        consent = get_active_consent(student_id)
+        if consent:
+            try:
+                import json as _json
+                consented = set(_json.loads(consent.get("platforms_json") or "[]"))
+            except Exception:
+                consented = set()
+            if consented and requested_platform not in consented:
+                raise HTTPException(400, f"Platform {requested_platform} not in consented platforms: {', '.join(sorted(consented))}")
+            if data.get("platforms"):
+                req_set = set(data.get("platforms") if isinstance(data.get("platforms"), list) else [])
+                extra = req_set - consented
+                if extra:
+                    raise HTTPException(400, f"Invalid platforms: {', '.join(sorted(extra))}")
 
     try:
         result = run_consented_student_analysis(

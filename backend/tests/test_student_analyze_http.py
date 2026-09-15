@@ -68,6 +68,7 @@ def _posts(n: int = 2, score: float = 0.3) -> list[dict]:
 def test_blocks_student_without_active_consent(db, client):
     counsellor = _make_user(db, "c1@school.edu", "counsellor")
     student = _make_user(db, "s1@school.edu", "student")
+    database.assign_student_to_counsellor(counsellor["id"], student["id"])
     token = _login(client, "c1@school.edu")
 
     resp = client.post(
@@ -82,6 +83,7 @@ def test_blocks_student_without_active_consent(db, client):
 def test_runs_analysis_with_active_consent(db, client):
     counsellor = _make_user(db, "c2@school.edu", "counsellor")
     student = _make_user(db, "s2@school.edu", "student")
+    database.assign_student_to_counsellor(counsellor["id"], student["id"])
     _grant_active_consent(db, student["id"], counsellor["id"])
     token = _login(client, "c2@school.edu")
 
@@ -115,6 +117,7 @@ def test_student_detail_reports_missing_consent_for_ui_gating(db, client):
     counsellor = _make_user(db, "c5@school.edu", "counsellor")
     student = _make_user(db, "s5@school.edu", "student")
     db.create_consent(student["id"], counsellor["id"], "student@school.edu", "student", ["reddit"])
+    database.assign_student_to_counsellor(counsellor["id"], student["id"])
     token = _login(client, "c5@school.edu")
 
     resp = client.get(
@@ -150,6 +153,7 @@ def test_blocks_unauthenticated(db, client):
 def test_blocks_pending_counsellor_at_permission_layer(db, client):
     counsellor = db.create_user("c4@school.edu", "C4", hash_password("pw-12345"), role_type="counsellor")
     student = _make_user(db, "s4@school.edu", "student")
+    database.assign_student_to_counsellor(counsellor["id"], student["id"])
     _grant_active_consent(db, student["id"], counsellor["id"])
     token = _login(client, "c4@school.edu")
 
@@ -164,6 +168,7 @@ def test_blocks_pending_counsellor_at_permission_layer(db, client):
 def test_rejects_malformed_posts(db, client):
     counsellor = _make_user(db, "c5@school.edu", "counsellor")
     student = _make_user(db, "s5@school.edu", "student")
+    database.assign_student_to_counsellor(counsellor["id"], student["id"])
     _grant_active_consent(db, student["id"], counsellor["id"])
     token = _login(client, "c5@school.edu")
 
