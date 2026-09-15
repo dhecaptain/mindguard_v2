@@ -45,6 +45,8 @@ def test_counsellor_sees_only_consent_linked_students(db, client, monkeypatch):
     s2 = _make(db, "s2@school.edu", "student")
     s3 = _make(db, "s3@school.edu", "student")
 
+    database.assign_student_to_counsellor(a["id"], s1["id"])
+    database.assign_student_to_counsellor(b["id"], s2["id"])
     database.create_consent(s1["id"], a["id"], "s1@school.edu", "student", ["reddit"])
     database.create_consent(s2["id"], b["id"], "s2@school.edu", "student", ["reddit"])
 
@@ -52,7 +54,7 @@ def test_counsellor_sees_only_consent_linked_students(db, client, monkeypatch):
     resp = client.get("/api/counsellor/students", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     emails = {s["email"] for s in resp.json()}
-    assert emails == {"s1@school.edu"}, f"expected only consent-linked student, got {emails}"
+    assert emails == {"s1@school.edu"}, f"expected only assigned student, got {emails}"
 
 
 def test_counsellor_with_no_consents_sees_empty_list(db, client, monkeypatch):

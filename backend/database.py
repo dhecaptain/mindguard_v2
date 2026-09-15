@@ -422,20 +422,32 @@ def accept_user_terms(user_id: str) -> bool:
 def get_students(limit: int = 200, offset: int = 0, counsellor_id: str | None = None):
     """List student accounts.
 
-    When ``counsellor_id`` is given, scope the list to students that have at
-    least one consent record for that counsellor (least-privilege: a counsellor
-    must not enumerate the platform-wide student directory). Admins pass None
-    and see all students.
+    When ``counsellor_id`` is given, scope the list to students the counsellor
+    is assigned to *and* has valid ACCEPTED non-expired consent for, with
+    institution scoping. Admins pass None and see all students.
     """
     conn = get_db()
     if counsellor_id:
-        rows = conn.execute(
-            "SELECT DISTINCT u.id, u.email, u.name, u.role_type, u.status, u.created_at "
-            "FROM users u JOIN consents c ON c.student_id = u.id "
-            "WHERE u.role_type = 'student' AND c.counsellor_id = ? "
-            "ORDER BY u.created_at DESC LIMIT ? OFFSET ?",
-            (counsellor_id, limit, offset),
-        ).fetchall()
+        counsellor = conn.execute("SELECT institution_id FROM users WHERE id = ?", (counsellor_id,)).fetchone()
+        c_inst = counsellor["institution_id"] if counsellor and "institution_id" in counsellor.keys() else None
+        if c_inst:
+            rows = conn.execute(
+                "SELECT DISTINCT u.id, u.email, u.name, u.role_type, u.status, u.created_at "
+                "FROM users u "
+                "JOIN counsellor_student_assignments a ON a.student_id = u.id AND a.counsellor_id = ? AND a.active = 1 "
+                "WHERE u.role_type = 'student' AND u.institution_id = ? "
+                "ORDER BY u.created_at DESC LIMIT ? OFFSET ?",
+                (counsellor_id, c_inst, limit, offset),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT DISTINCT u.id, u.email, u.name, u.role_type, u.status, u.created_at "
+                "FROM users u "
+                "JOIN counsellor_student_assignments a ON a.student_id = u.id AND a.counsellor_id = ? AND a.active = 1 "
+                "WHERE u.role_type = 'student' AND u.institution_id IS NULL "
+                "ORDER BY u.created_at DESC LIMIT ? OFFSET ?",
+                (counsellor_id, limit, offset),
+            ).fetchall()
     else:
         rows = conn.execute(
             "SELECT id, email, name, role_type, status, created_at FROM users "
