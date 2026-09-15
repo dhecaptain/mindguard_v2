@@ -36,8 +36,12 @@ const COUNSELLOR_NAV_BASE = [
 ] as const
 
 const ADMIN_NAV_ITEMS = [
-  { key: 'admin', icon: 'ti ti-shield-check', label: 'Admin Panel' },
-  ...COUNSELLOR_NAV_BASE,
+  { key: 'admin', icon: 'ti ti-shield-check', label: 'Dashboard' },
+  { key: 'counsellors', icon: 'ti ti-stethoscope', label: 'Counsellors' },
+  { key: 'consent-tracker', icon: 'ti ti-file-check', label: 'Consent' },
+  { key: 'students', icon: 'ti ti-users', label: 'Students' },
+  { key: 'audit-log', icon: 'ti ti-history', label: 'Audit' },
+  ...COUNSELLOR_NAV_BASE.filter((i) => !['consent-tracker', 'students', 'audit-log'].includes(i.key)),
 ]
 
 function RolePill({ role }: { role?: string }) {
