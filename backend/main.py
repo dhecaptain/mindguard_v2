@@ -3368,6 +3368,38 @@ async def v1_admin_list_students(
     return {"students": out, "total": len(out)}
 
 
+@app.get("/api/admin/available-students")
+async def available_students(user: dict = Depends(require_auth)):
+    """List approved students not assigned to any counsellor."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    from backend.database import get_db, get_all_users, get_assignments_for_counsellor
+    import json
+    conn = get_db()
+    # Get all approved students from users table
+    all_students = conn.execute(
+        "SELECT id, email, name, role_type, status FROM users WHERE role_type = 'student' AND status = 'approved' ORDER BY name"
+    ).fetchall()
+    assigned_ids = set()
+    # Get all active assignments to find which students are already assigned
+    rows = conn.execute(
+        "SELECT DISTINCT student_id FROM counsellor_student_assignments WHERE active = 1"
+    ).fetchall()
+    assigned_ids = {r["student_id"] for r in rows}
+    out = []
+    for s in all_students:
+        if s["id"] not in assigned_ids:
+            out.append({
+                "id": s["id"],
+                "email": s["email"],
+                "name": s["name"],
+                "role_type": s["role_type"],
+                "status": s["status"],
+            })
+    conn.close()
+    return {"students": out, "total": len(out)}
+
+
 @app.get("/api/v1/admin/institutions")
 async def v1_admin_list_institutions(user: dict = Depends(require_auth)):
     require_any_permission(user, {PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW})

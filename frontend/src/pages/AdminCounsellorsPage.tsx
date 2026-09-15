@@ -59,7 +59,7 @@ export default function AdminCounsellorsPage() {
 
   const loadStudents = async () => {
     try {
-      const { data } = await api.get('/v1/admin/students', { params: { limit: 500 } })
+      const { data } = await api.get('/admin/available-students')
       setStudents(data.students ?? data ?? [])
     } catch {}
   }
