@@ -147,7 +147,7 @@ def test_counsellor_audit_log_returns_relevant_entries(db):
 def test_admin_audit_endpoint_returns_entries(db):
     """Regression: the admin panel audit trail must return logged actions."""
     admin = _approved_user(db, "a7@school.edu", "admin")
-    student = _approved_user(db, "s7@school.edu", "student")
+    student = db.create_user("s7@school.edu", "s7", hash_password("pw-12345"), role_type="student")
 
     with TestClient(app) as client:
         client.post(

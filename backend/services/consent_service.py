@@ -138,7 +138,9 @@ def verify_consent_token(consent: dict, token: str) -> bool:
             return False
         expected = consent.get("signed_token_hash") or ""
         return bool(expected) and hmac.compare_digest(hash_token(token), expected)
-    return consent.get("magic_token") == token and len(token) == 36  # legacy uuid4 magic token
+    return len(consent.get("magic_token") or "") == 36 and hmac.compare_digest(
+        consent.get("magic_token") or "", token
+    )
 
 
 def view_count(consent_id: str) -> int:
@@ -338,6 +340,7 @@ def accept_consent(
     platforms: list | None = None,
     user_agent: str | None = None,
     token: str | None = None,
+    social_accounts: dict | None = None,
 ) -> dict:
     """Transition PENDING/VIEWED -> ACCEPTED with signature and optional platform list."""
     consent = get_consent_by_id(consent_id)
@@ -376,6 +379,14 @@ def accept_consent(
     )
     create_consent_event(consent_id, "accepted", actor_type="recipient",
                          metadata={"signature": signature_name, "ip": ip, "user_agent": user_agent})
+    
+    # Save social accounts if provided (only if consent is accepted)
+    if social_accounts and consent.get("student_id"):
+        from backend.database import save_social_account
+        for platform, handle in social_accounts.items():
+            if handle and platform in final_platforms:
+                save_social_account(consent["student_id"], platform, handle, None)
+    
     _notify_consent_response(updated, accepted=True, token=token)
     return updated
 

@@ -20,13 +20,14 @@ def _approved_user(db, email: str, role: str) -> dict:
 
 def test_admin_status_changes_notify_and_audit(db, monkeypatch):
     admin = _approved_user(db, "admin@school.edu", "admin")
-    student = _approved_user(db, "student@school.edu", "student")
+    student = db.create_user("student@school.edu", "student", hash_password("pw-12345"), role_type="student")
     sent = []
 
     def fake_send(to_email, subject, body_html, **kwargs):
         sent.append((to_email, subject, kwargs))
         return True, ""
 
+    monkeypatch.setattr("backend.services.email_sender.send_html_email", fake_send)
     monkeypatch.setattr("backend.main.send_html_email", fake_send)
     headers = {"Authorization": f"Bearer {create_access_token(admin['id'], admin['role_type'])}"}
 
