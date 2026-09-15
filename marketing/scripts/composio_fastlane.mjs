@@ -22,13 +22,8 @@ export async function runDemoEngine(payload) {
       text: `🚀 *New Demo Request*\n*Name:* ${name || '—'}\n*Institution:* ${institution || '—'} (${score || 'STANDARD'})\n*Email hash:* \`${work_email_hash || '—'}\``,
     })
   }
-  if (work_email && String(process.env.COMPOSIO_AUTO_SEND_GMAIL).toLowerCase() !== 'false') {
-    await execute('GMAIL_SEND_EMAIL', {
-      recipient_email: work_email,
-      subject: 'MindGuard — Demo Request Received',
-      body: `Hi ${name || 'there'},\n\nThanks for requesting a demo for ${institution || 'your institution'}. We'll walk you through the consent workflow and dashboard.\n\n— MindGuard (https://www.mindguardai.me)`,
-    })
-  }
+  // NOTE: Gmail sending has been removed. All application email must go through
+  // the central Resend email service. Demo confirmation is handled by the backend.
   return { ok: true, score }
 }
 

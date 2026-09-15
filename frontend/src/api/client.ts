@@ -21,15 +21,18 @@ let _reloading401 = false
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401 && !_reloading401) {
+    if (err.response?.status === 401) {
+      clearToken()
       const onAuthRoute =
         window.location.pathname.startsWith('/auth/') ||
         window.location.pathname.startsWith('/consent/') ||
         window.location.pathname === '/demo'
-      if (!onAuthRoute) {
+      if (!onAuthRoute && !_reloading401) {
         _reloading401 = true
-        clearToken()
         window.location.href = '/'
+        window.setTimeout(() => {
+          _reloading401 = false
+        }, 2000)
       }
     }
     const msg = err.response?.data?.detail || err.message || 'Request failed'

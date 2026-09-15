@@ -1,15 +1,13 @@
 import logging
 import os
 import re
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from backend.database import (
     bump_email_outbox_attempts,
     create_email_event,
     enqueue_email,
     fetch_due_email_outbox,
+    mark_email_outbox_abandoned,
     mark_email_outbox_failed,
     mark_email_outbox_sent,
 )
@@ -31,8 +29,30 @@ def is_resend_configured() -> bool:
     return bool(get_secret("RESEND_API_KEY"))
 
 
-def is_smtp_configured() -> bool:
-    return bool(get_secret("SMTP_USER")) and bool(get_secret("SMTP_PASSWORD"))
+def get_email_provider_status() -> dict:
+    """Return safe, non-secret diagnostics for readiness and health checks."""
+    sender = get_email_from()
+    addresses = re.findall(r"<([^>]+)>|(\S+@\S+)", sender)
+    sender_address = ""
+    if addresses:
+        sender_address = addresses[0][0] or addresses[0][1]
+    sender_domain = sender_address.rsplit("@", 1)[-1].lower() if "@" in sender_address else ""
+    resend_configured = is_resend_configured()
+    sender_valid = bool(sender_address and sender_domain and "." in sender_domain)
+    if resend_configured and not sender_valid:
+        message = "EMAIL_FROM must contain a valid address on a verified Resend domain."
+    elif resend_configured:
+        message = "Resend is configured; verify the sender domain in the Resend dashboard."
+    else:
+        message = "Resend is not configured. Set RESEND_API_KEY in .env."
+    return {
+        "provider": "resend" if resend_configured else None,
+        "resend_configured": resend_configured,
+        "webhook_configured": bool(get_secret("RESEND_WEBHOOK_SECRET")),
+        "sender": sender,
+        "sender_valid": sender_valid,
+        "message": message,
+    }
 
 
 def get_email_from() -> str:
@@ -54,33 +74,6 @@ def get_email_from() -> str:
             value,
         )
     return value
-
-
-def _send_smtp(to_email: str, subject: str, body_html: str) -> tuple[bool, str]:
-    if not is_smtp_configured():
-        return False, "SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD in .env."
-
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = get_secret("SMTP_USER")
-    smtp_password = get_secret("SMTP_PASSWORD")
-
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = get_email_from()
-        msg["To"] = to_email
-        msg.attach(MIMEText(body_html, "html", "utf-8"))
-
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(get_email_from(), to_email, msg.as_string())
-
-        return True, ""
-    except Exception as exc:
-        return False, str(exc)
 
 
 def _send_resend(to_email: str, subject: str, body_html: str) -> tuple[bool, str, str]:
@@ -110,15 +103,29 @@ def _send_resend(to_email: str, subject: str, body_html: str) -> tuple[bool, str
         return False, str(exc), ""
 
 
+def _is_permanent_error(err: str) -> bool:
+    """Permanent recipient errors that should not be retried."""
+    err_lower = (err or "").lower()
+    permanent_markers = [
+        "invalid `to`",
+        "validation_error",
+        "not a valid rfc 5321",
+        "553 ",
+        "550 5.1.1",
+        "550 5.1.2",
+        "invalid recipient",
+    ]
+    return any(m in err_lower for m in permanent_markers)
+
+
 def _deliver(to_email: str, subject: str, body_html: str) -> tuple[bool, str, str]:
-    """Attempt transport (Resend preferred, SMTP fallback). No side effects."""
+    """Attempt transport via Resend only. No SMTP fallback."""
     ok, err, esp_message_id = False, "", ""
 
     if is_resend_configured():
         ok, err, esp_message_id = _send_resend(to_email, subject, body_html)
-
-    if not ok:
-        ok, err = _send_smtp(to_email, subject, body_html)
+    else:
+        err = "Resend is not configured. Set RESEND_API_KEY in .env."
 
     return ok, err, esp_message_id
 
@@ -134,11 +141,9 @@ def send_html_email(
     """Send an HTML email through the write-ahead outbox (Remediation P1-1).
 
     The message is persisted to ``email_outbox`` first (crash-safe), then
-    delivered synchronously (Resend primary, SMTP fallback). The outbox row is
-    marked ``sent``/``failed`` and, when ``related_type``/``related_id`` are
-    provided, delivery is logged to the ``email_events`` table (append-only
-    deliverability trail, Brief §9). Rows that fail and are left ``queued``
-    (process crash mid-send) are retried by the background worker.
+    delivered synchronously via Resend. The outbox row is marked ``sent``/``failed``
+    and, when ``related_type``/``related_id`` are provided, delivery is logged to
+    the ``email_events`` table (append-only deliverability trail, Brief §9).
 
     Returns ``(ok, error)`` — on success the error slot is empty.
     """
@@ -190,11 +195,19 @@ def process_email_outbox(batch_size: int = 50, max_attempts: int = 5) -> dict:
             sent += 1
         else:
             attempts = int(row.get("attempts") or 0) + 1
-            bump_email_outbox_attempts(outbox_id)
-            retry_at = (
-                datetime.now(timezone.utc) + timedelta(seconds=min(2**attempts, 300) * 60)
-            ).isoformat()
-            mark_email_outbox_failed(outbox_id, err, retry_at=retry_at)
+            if _is_permanent_error(err):
+                mark_email_outbox_abandoned(outbox_id, f"permanent: {err}")
+                logger.warning("outbox: permanent failure for %s, abandoning: %s", outbox_id, err)
+            elif attempts >= max_attempts:
+                mark_email_outbox_abandoned(outbox_id, f"exhausted after {attempts} attempts: {err}")
+                logger.warning("outbox: giving up on %s after %s attempts: %s",
+                               outbox_id, attempts, err)
+            else:
+                bump_email_outbox_attempts(outbox_id)
+                retry_at = (
+                    datetime.now(timezone.utc) + timedelta(seconds=min(2**attempts, 300) * 60)
+                ).isoformat()
+                mark_email_outbox_failed(outbox_id, err, retry_at=retry_at)
             failed += 1
         if row.get("related_type"):
             create_email_event(

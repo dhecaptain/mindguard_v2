@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getConsents, createConsent, dispatchConsent, cancelConsent, remindConsent, exportConsents } from '../api/counsellor'
+import { getConsents, createConsent, dispatchConsent, cancelConsent, remindConsent, exportConsents, recordConsentDecision } from '../api/counsellor'
 import { getStudents } from '../api/counsellor'
 import RosterPanel from '../components/consent/RosterPanel'
 import ConsentDetailDrawer from '../components/consent/ConsentDetailDrawer'
@@ -302,6 +302,8 @@ export default function ConsentTrackerPage() {
   const [bulkNotice, setBulkNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [detailConsentId, setDetailConsentId] = useState<string | null>(null)
+  const [decideConsentId, setDecideConsentId] = useState<string | null>(null)
+  const [decideSignature, setDecideSignature] = useState('')
 
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(0) }, 300)
@@ -713,6 +715,54 @@ export default function ConsentTrackerPage() {
                           )}
                           {(consent.status === 'PENDING' || consent.status === 'VIEWED') && (
                             <>
+                              {decideConsentId === consent.id ? (
+                                <div className="flex items-center gap-[6px]">
+                                  <input
+                                    autoFocus
+                                    value={decideSignature}
+                                    onChange={(e) => setDecideSignature(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Escape') setDecideConsentId(null) }}
+                                    placeholder="Recipient name"
+                                    title="Name of the person who gave their decision (optional)"
+                                    className="w-[130px] rounded-[6px] border border-[#e5e7eb] px-[8px] py-[4px] text-[0.72rem] focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
+                                  />
+                                  <button
+                                    onClick={() => handleAction(
+                                      () => recordConsentDecision(consent.id, 'ACCEPTED', decideSignature.trim() || undefined),
+                                      consent.id,
+                                    )}
+                                    disabled={isActing}
+                                    className="px-[10px] py-[4px] bg-[#0F766E] text-white rounded-[6px] text-[0.72rem] font-semibold cursor-pointer hover:bg-[#0d5c56] transition-colors disabled:opacity-50"
+                                  >
+                                    {isActing ? '...' : 'Accept'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleAction(
+                                      () => recordConsentDecision(consent.id, 'DECLINED', decideSignature.trim() || undefined),
+                                      consent.id,
+                                    )}
+                                    disabled={isActing}
+                                    className="px-[10px] py-[4px] bg-[#fee2e2] text-[#991b1b] rounded-[6px] text-[0.72rem] font-semibold cursor-pointer hover:bg-[#fecaca] transition-colors disabled:opacity-50"
+                                  >
+                                    Decline
+                                  </button>
+                                  <button
+                                    onClick={() => { setDecideConsentId(null); setDecideSignature('') }}
+                                    className="text-[0.72rem] font-semibold text-[#6b7280] cursor-pointer hover:text-[#374151] bg-transparent border-none"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => { setDecideConsentId(consent.id); setDecideSignature('') }}
+                                  disabled={isActing}
+                                  title="Record the recipient's decision collected on paper or verbally"
+                                  className="px-[10px] py-[4px] bg-[#f0fdfa] text-[#0F766E] border border-[#99f6e4] rounded-[6px] text-[0.72rem] font-semibold cursor-pointer hover:bg-[#ccfbf1] transition-colors disabled:opacity-50"
+                                >
+                                  Record decision
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleAction(() => remindConsent(consent.id), consent.id)}
                                 disabled={isActing}

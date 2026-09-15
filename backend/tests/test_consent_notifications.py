@@ -61,7 +61,7 @@ def test_confirmation_failure_does_not_block_acceptance(monkeypatch, db):
     s = _seed(db)
 
     def fake_send(to, subject, body, **kwargs):
-        return False, "SMTP is not configured"
+        return False, "Resend is not configured"
 
     monkeypatch.setattr(consent_service, "send_html_email", fake_send)
 

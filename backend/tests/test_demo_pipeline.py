@@ -76,7 +76,7 @@ def test_demo_request_migration_column_exists(db):
 
 
 def test_send_html_email_logs_demo_request_event(db, monkeypatch):
-    # Hermetic: the developer's real .env may configure SMTP/Resend, which would
+    # Hermetic: the developer's real .env may configure Resend, which would
     # make this send succeed and defeat the "failed" assertion. Force no transport.
     from backend.services import email_sender
 
@@ -86,7 +86,7 @@ def test_send_html_email_logs_demo_request_event(db, monkeypatch):
         related_type="demo_request", related_id="demo-1",
         metadata={"event": "confirmation"},
     )
-    assert ok is False  # no SMTP/Resend configured in tests
+    assert ok is False  # no Resend configured in tests
     assert "not configured" in err
     events = db.get_db().execute(
         "SELECT * FROM email_events WHERE related_type = 'demo_request'"

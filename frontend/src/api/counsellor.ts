@@ -132,12 +132,14 @@ export async function analyzeStudent(
   return data
 }
 
-export async function approveStudent(id: string): Promise<void> {
-  await api.post('/counsellor/students/approve', { id })
+export async function approveStudent(id: string): Promise<{ ok: boolean; email_sent: boolean; email_error?: string | null }> {
+  const { data } = await api.post('/counsellor/students/approve', { id })
+  return data
 }
 
-export async function revokeStudent(id: string): Promise<void> {
-  await api.post('/counsellor/students/revoke', { id })
+export async function revokeStudent(id: string): Promise<{ ok: boolean; email_sent: boolean; email_error?: string | null }> {
+  const { data } = await api.post('/counsellor/students/revoke', { id })
+  return data
 }
 
 export async function getReferrals(): Promise<Referral[]> {
@@ -185,7 +187,15 @@ export async function getConsents(params?: {
   limit?: number
   offset?: number
 }): Promise<ConsentListResponse> {
-  const { data } = await api.get('/v1/consents', { params })
+  // Backend expects snake_case query params (date_from / date_to).
+  const { dateFrom, dateTo, ...rest } = params ?? {}
+  const { data } = await api.get('/v1/consents', {
+    params: {
+      ...rest,
+      ...(dateFrom ? { date_from: dateFrom } : {}),
+      ...(dateTo ? { date_to: dateTo } : {}),
+    },
+  })
   return { consents: data.consents ?? data, total: data.total ?? data.length ?? 0 }
 }
 
@@ -195,8 +205,13 @@ export async function exportConsents(params?: {
   dateFrom?: string
   dateTo?: string
 }): Promise<Blob> {
+  const { dateFrom, dateTo, ...rest } = params ?? {}
   const { data } = await api.get('/v1/consents/export', {
-    params,
+    params: {
+      ...rest,
+      ...(dateFrom ? { date_from: dateFrom } : {}),
+      ...(dateTo ? { date_to: dateTo } : {}),
+    },
     responseType: 'blob',
   })
   return data
@@ -231,6 +246,19 @@ export async function cancelConsent(consentId: string): Promise<void> {
 
 export async function remindConsent(consentId: string): Promise<Partial<Consent>> {
   const { data } = await api.post(`/v1/consents/${consentId}/remind`)
+  return data
+}
+
+/** Record the recipient's decision from the tracker (paper/verbal consent). */
+export async function recordConsentDecision(
+  consentId: string,
+  decision: 'ACCEPTED' | 'DECLINED',
+  signatureName?: string,
+): Promise<{ ok: boolean; status: string; email_sent: boolean }> {
+  const { data } = await api.post(`/v1/consents/${consentId}/decision`, {
+    decision,
+    signature_name: signatureName || undefined,
+  })
   return data
 }
 

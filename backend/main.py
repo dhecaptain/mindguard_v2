@@ -41,11 +41,16 @@ from backend.models.schemas import (
     MuteGroupRequest, NOTIFICATION_TYPES,
     DemoRequestCreate, DemoRequestUpdate,
 )
-from backend.services.email_sender import process_email_outbox, send_html_email
+from backend.services.email_sender import (
+    get_email_provider_status,
+    process_email_outbox,
+    send_html_email,
+)
 from backend.services.predictor import predict_one, predict_batch, InferenceUnavailableError
 from backend.services.webhook_service import handle_webhook
 from backend.services.email_templates import (
-    demo_request_confirmation, demo_request_notification,
+    demo_request_confirmation, demo_request_notification, student_status_notification,
+    counsellor_invitation_notification,
 )
 from backend.services.predictor import predict_one, predict_batch
 from backend.utils import clean_text, risk_label, detect_socioeconomic, calibrate_risk_score, RESOURCES, US_STATE_RESOURCES, TEAM_MEMBERS
@@ -54,6 +59,7 @@ from backend.database import (
     ensure_user_approved,
     get_user_by_email, get_user_by_id, create_user,
     get_students, update_student_status,
+    update_user_status, set_user_invitation, get_user_by_invitation_token_hash, clear_user_invitation,
     save_analysis, get_analytics,
     create_referral, get_referrals, update_referral,
     send_message, get_conversation, get_conversations, mark_read, mark_all_read,
@@ -72,7 +78,7 @@ from backend.database import (
     update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
     update_user_password, update_user_role,
-    get_institution_by_id, list_institutions, list_students,
+    get_institution_by_id, list_institutions, create_institution, list_students,
     get_student_by_id,
     create_demo_request, get_demo_request, list_demo_requests, update_demo_request,
     # groups
@@ -83,9 +89,14 @@ from backend.database import (
     mark_group_message_read, mark_all_group_messages_read,
     # notification preferences
     get_notification_preferences, set_notification_preference, should_notify,
+    # social accounts & assignments
+    save_social_account, get_social_accounts, delete_social_account,
+    assign_student_to_counsellor, unassign_student_from_counsellor,
+    get_assignment, get_assignments_for_counsellor, get_assignments_for_student,
+    count_counsellors, get_active_consent_count, get_accepted_consent_count,
 )
 from backend.services.consent_service import (
-    dispatch_consent, remind_consent, record_view, accept_consent, decline_consent, revoke_consent,
+    dispatch_consent, remind_consent, record_consent_decision, record_view, accept_consent, decline_consent, revoke_consent,
     verify_consent_token, remaining_views,
     process_consent_reminders, process_expired_consents,
     dispatch_consents_for_students, consents_to_csv,
@@ -378,6 +389,14 @@ async def startup():
     seed_defaults()
     _bootstrap_admins()
     logger.info("Database initialized and seeded")
+    email_status = get_email_provider_status()
+    logger.info(
+        "email delivery configured: provider=%s resend=%s webhook=%s sender=%s",
+        email_status["provider"],
+        email_status["resend_configured"],
+        email_status["webhook_configured"],
+        email_status["sender"],
+    )
     asyncio.create_task(_consent_maintenance_loop())
     asyncio.create_task(_email_drain_loop())
 
@@ -458,7 +477,12 @@ async def healthz():
     """Liveness/readiness probe (Delivery Brief §12) — includes a DB check."""
     db = health_check()
     ok = db.get("db") == "ok"
-    return {"status": "ok" if ok else "degraded", "version": "2.0.0", "db": db}
+    return {
+        "status": "ok" if ok else "degraded",
+        "version": "2.0.0",
+        "db": db,
+        "email": get_email_provider_status(),
+    }
 
 
 
@@ -1781,6 +1805,346 @@ async def get_unified(user: dict = Depends(require_auth)):
     return {"platforms": platforms, "unified_score": unified}
 
 
+# ── Counsellor management routes (admin only) ───────────────────────────────
+
+@app.post("/api/admin/counsellors")
+async def create_counsellor(data: dict, request: Request, user: dict = Depends(require_auth)):
+    """Create a new counsellor account via magic-link invitation (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    institution_id = data.get("institution_id")
+
+    if not name or not email:
+        raise HTTPException(400, "Name and email are required")
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(400, "Invalid email address")
+
+    existing = get_user_by_email(email)
+    if existing:
+        raise HTTPException(400, "A user with this email already exists")
+
+    if institution_id:
+        from backend.database import get_institution_by_id
+        if not get_institution_by_id(institution_id):
+            raise HTTPException(400, "Institution not found")
+
+    placeholder_hash = hash_password(secrets.token_urlsafe(32))
+    counsellor = create_user(email, name, placeholder_hash, role_type="counsellor")
+
+    from backend.services.crypto import hash_token
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_token(token)
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    set_user_invitation(counsellor["id"], token_hash, expires_at)
+
+    write_audit(
+        user["id"], "admin", "COUNSELLOR_CREATED", "user", counsellor["id"],
+        payload={"counsellor_name": name, "counsellor_email": email, "institution_id": institution_id},
+        ip=_client_ip(request),
+    )
+
+    email_sent, email_error = False, ""
+    if email:
+        institution_name = "MindGuard"
+        if institution_id:
+            try:
+                inst = get_institution_by_id(institution_id)
+                if inst:
+                    institution_name = inst.get("name") or institution_name
+            except Exception:
+                pass
+        base = os.getenv("APP_BASE_URL", "https://app.mindguardai.me").rstrip("/") or "https://app.mindguardai.me"
+        invite_url = f"{base}/invite?token={token}"
+        context = {
+            "counsellor_name": name,
+            "institution_name": institution_name,
+            "invite_url": invite_url,
+            "setup_url": invite_url,
+            "support_email": os.getenv("DEMO_NOTIFY_EMAIL", "support@mindguard.ai"),
+            "withdraw_url": f"{base}/privacy",
+            "privacy_url": f"{base}/privacy",
+            "contact_url": f"{base}/contact",
+        }
+        subject, body = counsellor_invitation_notification(context)
+        email_sent, email_error = send_html_email(
+            email, subject, body,
+            related_type="counsellor_invitation", related_id=counsellor["id"],
+            metadata={"action": "create", "invite": True},
+        )
+        write_audit(
+            user["id"], "admin", "COUNSELLOR_INVITE_SENT", "user", counsellor["id"],
+            payload={"email_sent": email_sent, "error": email_error or None},
+            ip=_client_ip(request),
+        )
+
+    return {
+        "ok": True,
+        "counsellor": {
+            "id": counsellor["id"],
+            "name": counsellor["name"],
+            "email": counsellor["email"],
+            "status": counsellor["status"],
+        },
+        "email_sent": email_sent,
+        "email_error": email_error or None,
+    }
+
+
+@app.post("/api/auth/invite/verify")
+async def verify_invite(data: dict):
+    """Verify counsellor invitation token is valid (no auth, no consumption)."""
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise HTTPException(400, "Token is required")
+    from backend.services.crypto import hash_token
+    token_hash = hash_token(token)
+    user = get_user_by_invitation_token_hash(token_hash)
+    if not user:
+        raise HTTPException(400, "Invalid or expired invitation")
+    expires_at = user.get("invitation_expires_at")
+    if expires_at:
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) > exp:
+                raise HTTPException(400, "Invitation has expired")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    if user.get("status") not in ("pending", "invited"):
+        raise HTTPException(400, "Invitation already used")
+    return {"ok": True, "email": user["email"], "name": user["name"]}
+
+
+@app.post("/api/auth/invite/accept")
+async def accept_invite(data: dict, request: Request):
+    """Accept counsellor invitation: set password and activate account."""
+    token = (data.get("token") or "").strip()
+    password = data.get("password") or ""
+    if not token or not password:
+        raise HTTPException(400, "Token and password are required")
+    if len(password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    from backend.services.crypto import hash_token
+    token_hash = hash_token(token)
+    user = get_user_by_invitation_token_hash(token_hash)
+    if not user:
+        raise HTTPException(400, "Invalid or expired invitation")
+    expires_at = user.get("invitation_expires_at")
+    if expires_at:
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) > exp:
+                raise HTTPException(400, "Invitation has expired")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    if user.get("status") not in ("pending", "invited"):
+        raise HTTPException(400, "Invitation already used")
+    pw_hash = hash_password(password)
+    update_user_password(user["id"], pw_hash)
+    update_user_status(user["id"], "approved")
+    clear_user_invitation(user["id"])
+    write_audit(
+        user["id"], user["role_type"], "COUNSELLOR_INVITE_ACCEPTED", "user", user["id"],
+        payload={"email": user["email"]},
+        ip=_client_ip(request),
+    )
+    return {"ok": True}
+
+
+@app.post("/api/admin/counsellors/{counsellor_id}/resend-invite")
+async def resend_counsellor_invite(counsellor_id: str, request: Request, user: dict = Depends(require_auth)):
+    """Regenerate invitation token and resend email (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    counsellor = get_user_by_id(counsellor_id)
+    if not counsellor or counsellor["role_type"] != "counsellor":
+        raise HTTPException(404, "Counsellor not found")
+    if counsellor.get("status") == "approved":
+        raise HTTPException(400, "Counsellor already active; no invite needed")
+    from backend.services.crypto import hash_token
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_token(token)
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    set_user_invitation(counsellor_id, token_hash, expires_at)
+    base = os.getenv("APP_BASE_URL", "https://app.mindguardai.me").rstrip("/") or "https://app.mindguardai.me"
+    invite_url = f"{base}/invite?token={token}"
+    institution_name = "MindGuard"
+    context = {
+        "counsellor_name": counsellor.get("name") or "there",
+        "institution_name": institution_name,
+        "invite_url": invite_url,
+        "setup_url": invite_url,
+        "support_email": os.getenv("DEMO_NOTIFY_EMAIL", "support@mindguard.ai"),
+        "withdraw_url": f"{base}/privacy",
+        "privacy_url": f"{base}/privacy",
+        "contact_url": f"{base}/contact",
+    }
+    subject, body = counsellor_invitation_notification(context)
+    email_sent, email_error = send_html_email(
+        counsellor["email"], subject, body,
+        related_type="counsellor_invitation", related_id=counsellor_id,
+        metadata={"action": "resend"},
+    )
+    write_audit(
+        user["id"], "admin", "COUNSELLOR_INVITE_RESENT", "user", counsellor_id,
+        payload={"email_sent": email_sent},
+        ip=_client_ip(request),
+    )
+    return {"ok": True, "email_sent": email_sent, "email_error": email_error or None}
+
+
+@app.get("/api/admin/counsellors")
+async def list_counsellors(user: dict = Depends(require_auth)):
+    """List all counsellors (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, email, name, role_type, status, created_at FROM users "
+        "WHERE role_type = 'counsellor' ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    
+    result = []
+    for row in rows:
+        assignments = get_assignments_for_counsellor(row["id"])
+        result.append({
+            "id": row["id"],
+            "email": row["email"],
+            "name": row["name"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "assigned_student_count": len(assignments),
+        })
+    return result
+
+
+@app.patch("/api/admin/counsellors/{counsellor_id}")
+async def update_counsellor(counsellor_id: str, data: dict, request: Request, user: dict = Depends(require_auth)):
+    """Update a counsellor's status (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    counsellor = get_user_by_id(counsellor_id)
+    if not counsellor or counsellor["role_type"] != "counsellor":
+        raise HTTPException(404, "Counsellor not found")
+    
+    new_status = data.get("status")
+    if new_status and new_status not in ("approved", "revoked", "suspended"):
+        raise HTTPException(400, "Invalid status")
+    
+    old_status = counsellor.get("status")
+    if new_status:
+        update_user_role(counsellor_id, "counsellor")  # ensure role stays counsellor
+        update_user_status(counsellor_id, new_status)
+        if new_status in ("revoked", "suspended"):
+            for a in get_assignments_for_counsellor(counsellor_id, active_only=True):
+                unassign_student_from_counsellor(a["id"])
+            try:
+                from backend.auth import blacklist_token
+                # best-effort: blacklist any active tokens would require store, rely on status check
+            except Exception:
+                pass
+        counsellor = get_user_by_id(counsellor_id)
+        
+        action = "COUNSELLOR_DEACTIVATED" if new_status in ("revoked", "suspended") else "COUNSELLOR_ACTIVATED"
+        write_audit(
+            user["id"], "admin", action, "user", counsellor_id,
+            payload={"previous_status": old_status, "new_status": new_status},
+            ip=_client_ip(request),
+        )
+    
+    return {"ok": True, "counsellor": counsellor}
+
+
+@app.post("/api/admin/assignments")
+async def create_assignment(data: dict, request: Request, user: dict = Depends(require_auth)):
+    """Assign a student to a counsellor (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    counsellor_id = data.get("counsellor_id")
+    student_id = data.get("student_id")
+    institution_id = data.get("institution_id")
+    
+    if not counsellor_id or not student_id:
+        raise HTTPException(400, "Counsellor ID and student ID are required")
+    
+    counsellor = get_user_by_id(counsellor_id)
+    student = get_user_by_id(student_id)
+    
+    if not counsellor or counsellor["role_type"] != "counsellor":
+        raise HTTPException(404, "Counsellor not found")
+    if not student or student["role_type"] != "student":
+        raise HTTPException(404, "Student not found")
+    
+    assignment = assign_student_to_counsellor(
+        counsellor_id, student_id, institution_id, user["id"]
+    )
+    
+    write_audit(
+        user["id"], "admin", "STUDENT_ASSIGNED", "user", student_id,
+        payload={"counsellor_id": counsellor_id, "institution_id": institution_id},
+        ip=_client_ip(request),
+    )
+    
+    return {"ok": True, "assignment": assignment}
+
+
+@app.delete("/api/admin/assignments/{assignment_id}")
+async def remove_assignment(assignment_id: str, request: Request, user: dict = Depends(require_auth)):
+    """Remove a student-counsellor assignment (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    
+    assignment = get_assignment(assignment_id)
+    if not assignment:
+        raise HTTPException(404, "Assignment not found")
+    
+    ok = unassign_student_from_counsellor(assignment_id)
+    if not ok:
+        raise HTTPException(404, "Assignment not found")
+    
+    write_audit(
+        user["id"], "admin", "STUDENT_UNASSIGNED", "user", assignment["student_id"],
+        payload={"counsellor_id": assignment["counsellor_id"]},
+        ip=_client_ip(request),
+    )
+    
+    return {"ok": True}
+
+
+@app.get("/api/admin/assignments")
+async def list_assignments(counsellor_id: str | None = None, student_id: str | None = None, user: dict = Depends(require_auth)):
+    """List assignments (admin only)."""
+    if user["role_type"] != "admin":
+        raise HTTPException(403, "Admin access required")
+    
+    if counsellor_id:
+        assignments = get_assignments_for_counsellor(counsellor_id)
+    elif student_id:
+        assignments = get_assignments_for_student(student_id)
+    else:
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT csa.*, u_c.name as counsellor_name, u_c.email as counsellor_email, "
+            "u_s.name as student_name, u_s.email as student_email, "
+            "i.name as institution_name "
+            "FROM counsellor_student_assignments csa "
+            "JOIN users u_c ON csa.counsellor_id = u_c.id "
+            "JOIN users u_s ON csa.student_id = u_s.id "
+            "LEFT JOIN institutions i ON csa.institution_id = i.id "
+            "WHERE csa.active = 1 ORDER BY csa.assigned_at DESC"
+        ).fetchall()
+        conn.close()
+        assignments = [dict(r) for r in rows]
+    
+    return assignments
+
+
 # ── Counsellor routes ─────────────────────────────────────────────────
 
 @app.get("/api/counsellor/students")
@@ -1791,31 +2155,82 @@ async def get_counsellor_students(user: dict = Depends(require_auth)):
 
 
 @app.post("/api/counsellor/students/approve")
-async def approve_counsellor_student(data: dict, user: dict = Depends(require_auth)):
+async def approve_counsellor_student(data: dict, request: Request, user: dict = Depends(require_auth)):
     if user["role_type"] not in ("counsellor", "admin"):
         raise HTTPException(403, "Counsellor or admin access required")
     sid = data.get("id")
     if not sid:
         raise HTTPException(400, "Student ID required")
+    student = get_user_by_id(sid)
+    if not student:
+        raise HTTPException(404, "Student not found")
+    # Prevent duplicate emails: only send if status actually changes
+    if student.get("status") == "approved":
+        return {"ok": True, "status": "approved", "email_sent": False, "email_error": None,
+                "note": "Student already approved"}
     ok = update_student_status(sid, "approved")
     if not ok:
         raise HTTPException(404, "Student not found")
     _safe_notify(sid, "Account Approved", "Your account has been approved by a counsellor.", "approval")
-    return {"ok": True}
+    email_sent, email_error = False, ""
+    if student.get("email"):
+        context = {
+            "student_name": student.get("name", ""),
+            "institution_name": "MindGuard",
+            "login_url": os.getenv("APP_BASE_URL", "https://app.mindguardai.me"),
+            "support_email": os.getenv("DEMO_NOTIFY_EMAIL", "support@mindguard.ai"),
+        }
+        subject, body = student_status_notification(context, approved=True)
+        email_sent, email_error = send_html_email(
+            student["email"], subject, body,
+            related_type="student_status", related_id=sid,
+            metadata={"status": "approved"},
+        )
+    write_audit(
+        user["id"], user["role_type"], "STUDENT_APPROVED", "user", sid,
+        payload={"status": "approved", "email_sent": email_sent},
+        ip=_client_ip(request),
+    )
+    return {"ok": True, "status": "approved", "email_sent": email_sent, "email_error": email_error or None}
 
 
 @app.post("/api/counsellor/students/revoke")
-async def revoke_counsellor_student(data: dict, user: dict = Depends(require_auth)):
+async def revoke_counsellor_student(data: dict, request: Request, user: dict = Depends(require_auth)):
     if user["role_type"] not in ("counsellor", "admin"):
         raise HTTPException(403, "Counsellor or admin access required")
     sid = data.get("id")
     if not sid:
         raise HTTPException(400, "Student ID required")
+    student = get_user_by_id(sid)
+    if not student:
+        raise HTTPException(404, "Student not found")
+    # Prevent duplicate emails: only send if status actually changes
+    if student.get("status") == "revoked":
+        return {"ok": True, "status": "revoked", "email_sent": False, "email_error": None,
+                "note": "Student already revoked"}
     ok = update_student_status(sid, "revoked")
     if not ok:
         raise HTTPException(404, "Student not found")
     _safe_notify(sid, "Account Revoked", "Your account access has been revoked.", "general")
-    return {"ok": True}
+    email_sent, email_error = False, ""
+    if student.get("email"):
+        context = {
+            "student_name": student.get("name", ""),
+            "institution_name": "MindGuard",
+            "support_email": os.getenv("DEMO_NOTIFY_EMAIL", "support@mindguard.ai"),
+        }
+        subject, body = student_status_notification(context, approved=False)
+        email_sent, email_error = send_html_email(
+            student["email"], subject, body,
+            related_type="student_status", related_id=sid,
+            metadata={"status": "revoked"},
+        )
+    write_audit(
+        user["id"], user["role_type"], "STUDENT_REVOKED", "user", sid,
+        payload={"status": "revoked", "email_sent": email_sent},
+        ip=_client_ip(request),
+    )
+    return {"ok": True, "status": "revoked", "email_sent": email_sent, "email_error": email_error or None}
 
 
 @app.get("/api/counsellor/students/{student_id}")
@@ -1958,7 +2373,8 @@ async def send_counsellor_message(data: dict, user: dict = Depends(require_auth)
 async def counsellor_dashboard(user: dict = Depends(require_auth)):
     if user["role_type"] not in ("counsellor", "admin"):
         raise HTTPException(403, "Counsellor or admin access required")
-    return get_counsellor_dashboard(user["id"])
+    is_admin = user["role_type"] == "admin"
+    return get_counsellor_dashboard(user["id"], is_admin=is_admin)
 
 
 # ── Notifications routes ─────────────────────────────────────────────
@@ -2062,6 +2478,17 @@ def _require_counsellor(user: dict) -> None:
         PERM_ANALYSIS_RUN, PERM_CONSENT_MANAGE,
         PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW, PERM_DEMO_MANAGE,
     })
+
+
+def _require_counsellor_student_access(user: dict, student_id: str) -> None:
+    """Enforce assignment + valid consent for counsellor access to a student."""
+    if user.get("role_type") == "admin":
+        return
+    from backend.database import has_active_assignment, has_consent_relationship
+    if not has_active_assignment(user["id"], student_id):
+        raise HTTPException(403, "Student not assigned to you")
+    if not has_consent_relationship(student_id, user["id"]):
+        raise HTTPException(403, "No valid consent for this student")
 
 
 def _client_ip(request: Request) -> str:
@@ -2243,6 +2670,58 @@ async def v1_remind_consent(
     }
 
 
+@app.post(
+    "/api/v1/consents/{consent_id}/decision",
+    responses={
+        200: {"description": "Decision recorded on behalf of the recipient"},
+        400: {"description": "Invalid decision value or consent state"},
+        403: {"description": "Access denied"},
+        404: {"description": "Consent not found"},
+    },
+)
+async def v1_record_consent_decision(
+    consent_id: str,
+    data: dict,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    """Record the consent decision from the tracker (paper/verbal consent).
+
+    Lets a counsellor log the recipient's decision collected outside the
+    portal. The outcome, signature name and actor are written to the immutable
+    audit trail and a confirmation email is sent to the recipient.
+    """
+    _require_counsellor(user)
+    consent = get_consent_by_id(consent_id)
+    if not consent:
+        raise HTTPException(404, "Consent not found")
+    if consent["counsellor_id"] != user["id"] and user["role_type"] != "admin":
+        raise HTTPException(403, "Access denied")
+    decision = (data.get("decision") or "").strip().upper()
+    if decision not in ("ACCEPTED", "DECLINED"):
+        raise HTTPException(400, "decision must be 'ACCEPTED' or 'DECLINED'")
+    signature_name = (data.get("signature_name") or "").strip() or None
+    try:
+        updated = record_consent_decision(
+            consent_id,
+            actor_id=user["id"],
+            decision=decision,
+            signature_name=signature_name,
+            ip=_client_ip(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:
+        logger.error("record_consent_decision error: %s", exc)
+        raise HTTPException(500, "Failed to record decision")
+    return {
+        "ok": True,
+        "status": updated["status"],
+        "email_sent": bool(updated.get("email_sent")) if isinstance(updated, dict) else False,
+        "consent_url": updated.get("consent_url", ""),
+    }
+
+
 @app.post("/api/v1/consents/{consent_id}/cancel")
 async def v1_cancel_consent(
     consent_id: str,
@@ -2318,6 +2797,16 @@ async def v1_portal_accept_consent(token: str, data: dict, request: Request):
     if not signature_name:
         raise HTTPException(400, "signature_name is required")
     platforms = data.get("platforms")
+    social_accounts = data.get("social_accounts")
+
+    # Validate that submitted platforms are in the requested platforms
+    if platforms and social_accounts:
+        requested = set(platforms if isinstance(platforms, list) else [])
+        submitted = set(social_accounts.keys())
+        extra = submitted - requested
+        if extra:
+            logger.warning("Consent %s: rejected platforms not in request: %s", consent["id"], extra)
+            raise HTTPException(400, f"Invalid platforms: {', '.join(sorted(extra))}")
 
     try:
         updated = accept_consent(
@@ -2327,6 +2816,7 @@ async def v1_portal_accept_consent(token: str, data: dict, request: Request):
             platforms=platforms,
             user_agent=_client_user_agent(request),
             token=token,
+            social_accounts=social_accounts,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
@@ -2713,6 +3203,29 @@ async def v1_admin_list_institutions(user: dict = Depends(require_auth)):
         }
         for i in insts
     ]}
+
+
+@app.post("/api/v1/admin/institutions", status_code=201)
+async def v1_admin_create_institution(
+    data: dict,
+    request: Request,
+    user: dict = Depends(require_auth),
+):
+    require_any_permission(user, {PERM_ROSTER_UPLOAD, PERM_STUDENTS_VIEW})
+    name = (data.get("name") or "").strip()
+    inst_type = (data.get("type") or "university").strip().lower()
+    if not name:
+        raise HTTPException(400, "Institution name is required")
+    if len(name) > 200:
+        raise HTTPException(400, "Institution name is too long")
+    institution = create_institution(name, inst_type)
+    write_audit(
+        user["id"], user["role_type"], "INSTITUTION_CREATED",
+        "institution", institution["id"],
+        payload={"type": inst_type},
+        ip=_client_ip(request),
+    )
+    return institution
 
 
 # ── Consent maintenance (manual trigger) ──────────────────────────────

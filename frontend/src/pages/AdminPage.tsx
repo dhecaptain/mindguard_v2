@@ -21,12 +21,22 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [users, setUsers] = useState<SystemUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
+  const [usersError, setUsersError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const loadUsers = () => {
+    setLoadingUsers(true)
+    setUsersError(null)
     api.get('/admin/users')
       .then(({ data }) => setUsers(data))
-      .catch(() => {})
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : 'Unable to load users'
+        setUsersError(msg)
+      })
       .finally(() => setLoadingUsers(false))
+  }
+
+  useEffect(() => {
+    loadUsers()
   }, [])
 
   const handleBroadcast = async () => {
@@ -149,6 +159,15 @@ export default function AdminPage() {
             <div className="w-[18px] h-[18px] border-2 border-[#e5e7eb] border-t-[#0F766E] rounded-full animate-spin" />
             Loading...
           </div>
+        ) : usersError ? (
+          <div className="flex flex-col gap-[10px]">
+            <div className="flex items-center gap-[8px] px-[12px] py-[10px] bg-[#fee2e2] border border-[#fca5a5] rounded-[8px] text-[0.82rem] text-[#991b1b]">
+              <i className="ti ti-alert-circle text-[16px]" />Unable to load dashboard data: {usersError}
+            </div>
+            <button onClick={loadUsers} className="self-start px-[14px] py-[7px] bg-[#0F766E] text-white rounded-[8px] text-[0.78rem] font-semibold hover:bg-[#115E59]">Retry</button>
+          </div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-[16px] text-[#6b7280] text-[0.82rem]">No users found. Invite a counsellor or wait for registrations.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[0.8rem]">

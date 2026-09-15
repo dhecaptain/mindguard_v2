@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useCounsellorStore } from '../store/counsellorStore'
 import { getDashboard } from '../api/counsellor'
 import { useUiStore } from '../store'
@@ -18,6 +18,7 @@ function formatDate(d: string) {
 export default function CounsellorDashboardPage() {
   const { dashboard, setDashboard, setLoading, loading } = useCounsellorStore()
   const setPage = useUiStore((s) => s.setPage)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadDashboard()
@@ -25,10 +26,13 @@ export default function CounsellorDashboardPage() {
 
   const loadDashboard = async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await getDashboard()
       setDashboard(data)
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load the dashboard.')
+    }
     setLoading(false)
   }
 
@@ -41,7 +45,21 @@ export default function CounsellorDashboardPage() {
     )
   }
 
-  if (!dashboard) return null
+  if (!dashboard) {
+    return (
+      <div role="alert" className="rounded-[10px] border border-[#fca5a5] bg-[#fef2f2] px-[16px] py-[14px] text-[0.84rem] text-[#991b1b]">
+        <div className="font-semibold">Dashboard unavailable</div>
+        <div className="mt-[4px]">{error || 'No dashboard data was returned.'}</div>
+        <button
+          type="button"
+          onClick={loadDashboard}
+          className="mt-[10px] rounded-[7px] bg-[#991b1b] px-[12px] py-[6px] text-[0.78rem] font-semibold text-white"
+        >
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-[16px]">
