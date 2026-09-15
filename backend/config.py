@@ -30,11 +30,6 @@ REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
 REDDIT_CLIENT_SECRET = get_secret("REDDIT_CLIENT_SECRET")
 YOUTUBE_API_KEY = get_secret("YOUTUBE_API_KEY")
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = get_secret("SMTP_USER")
-SMTP_PASSWORD = get_secret("SMTP_PASSWORD")
-
 # ── Consent, PII & email delivery (Delivery Brief §7–8) ──────────────
 # AES-256-GCM key, 64 hex chars. Production MUST set this via a secret manager.
 ENCRYPTION_KEY = get_secret("ENCRYPTION_KEY")

@@ -16,6 +16,14 @@ export async function getInstitutions(): Promise<Institution[]> {
   return data.institutions ?? data
 }
 
+export async function createInstitution(
+  name: string,
+  type = 'university',
+): Promise<Institution> {
+  const { data } = await api.post('/v1/admin/institutions', { name, type })
+  return data
+}
+
 export async function getRosterStudents(
   institutionId?: string,
   limit = 500,

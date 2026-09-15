@@ -78,8 +78,9 @@ def _direct_demo(p: dict):
         return
     sheet = os.getenv("GOOGLE_SHEETS_CRM_ID").strip()
     demo_chan = os.getenv("SLACK_CHANNEL_DEMO", "#demo-requests")
-    auto_gmail = os.getenv("COMPOSIO_AUTO_SEND_GMAIL", "true").lower() != "false"
-    # These use `composio execute` synchronously; failures are logged not raised
+    # These use `composio execute` synchronously; failures are logged not raised.
+    # NOTE: Gmail sending has been removed. All application email must go through
+    # the central Resend email service (backend/services/email_sender.py).
     def _exec(slug, data):
         try:
             subprocess.run(["composio", "execute", slug, "-d", json.dumps(data)], timeout=20, capture_output=True)
@@ -87,8 +88,6 @@ def _direct_demo(p: dict):
             logger.warning("composio execute %s failed: %s", slug, e)
     _exec("GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND", {"spreadsheetId": sheet, "range": "Sheet1!A:E", "valueInputOption": "USER_ENTERED", "values": [[p["name"], p["work_email_hash"], p["institution"], p["score"], p.get("demo_id", "")]]})
     _exec("SLACK_SEND_MESSAGE", {"channel": demo_chan, "text": f"🚀 Demo: {p['name']} {p['institution']} {p['score']} hash:{p['work_email_hash']}"})
-    if auto_gmail and p.get("work_email"):
-        _exec("GMAIL_SEND_EMAIL", {"recipient_email": p["work_email"], "subject": "MindGuard — Demo Request Received", "body": f"Hi {p['name'] or 'there'},\n\nThanks for requesting a demo for {p['institution'] or 'your institution'}. We'll walk you through the consent workflow.\n\n— MindGuard https://www.mindguardai.me"})
 
 def trigger_triage_fastlane(*, student_id: str, rolling_score: float, platform: str, actor: dict):
     if rolling_score < 0.65:

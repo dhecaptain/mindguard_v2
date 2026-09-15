@@ -12,6 +12,9 @@ const HIGHLIGHT: Record<string, string> = {
   DEMO_REQUEST_CREATED: 'bg-[#ede9fe] text-[#5b21b6]',
   DEMO_REQUEST_UPDATED: 'bg-[#ede9fe] text-[#5b21b6]',
   ROSTER_UPLOAD: 'bg-[#ccfbf1] text-[#115e59]',
+  STUDENT_APPROVED: 'bg-[#d1fae5] text-[#065f46]',
+  STUDENT_REVOKED: 'bg-[#fee2e2] text-[#991b1b]',
+  INSTITUTION_CREATED: 'bg-[#ccfbf1] text-[#115e59]',
 }
 
 function formatTime(d: string) {
@@ -48,7 +51,7 @@ export default function AuditTrailPanel() {
   useEffect(() => { load() }, [load])
 
   const filtered = events.filter((e) =>
-    /^(TERMS_ACCEPTED|USER_REGISTERED|CONSENT_|DEMO_REQUEST_|ROSTER_UPLOAD|DEMO_REQUEST_CREATED|DEMO_REQUEST_UPDATED)/.test(e.action))
+    /^(TERMS_ACCEPTED|USER_REGISTERED|CONSENT_|DEMO_REQUEST_|ROSTER_UPLOAD|STUDENT_APPROVED|STUDENT_REVOKED|INSTITUTION_CREATED)/.test(e.action))
 
   return (
     <div className="bg-white rounded-xl border border-[rgba(229,231,235,0.7)] overflow-hidden">

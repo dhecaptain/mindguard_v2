@@ -262,6 +262,55 @@ def update_user_role(user_id: str, role_type: str) -> dict | None:
     return get_user_by_id(user_id) if ok else None
 
 
+def set_user_invitation(user_id: str, token_hash: str, expires_at: str) -> bool:
+    """Store hashed invitation token for counsellor magic-link."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET invitation_token_hash = ?, invitation_expires_at = ?, invited_at = ? WHERE id = ?",
+        (token_hash, expires_at, now, user_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def get_user_by_invitation_token_hash(token_hash: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM users WHERE invitation_token_hash = ? LIMIT 1",
+        (token_hash,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def clear_user_invitation(user_id: str) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET invitation_token_hash = NULL, invitation_expires_at = NULL WHERE id = ?",
+        (user_id,),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def update_user_status(user_id: str, status: str) -> bool:
+    """Set a user's status (e.g. approve/revoke/suspend a counsellor)."""
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET status = ? WHERE id = ?",
+        (status, user_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
 def get_user_by_referral_code(code: str) -> dict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM users WHERE referral_code = ?", (code.upper(),)).fetchone()
@@ -610,42 +659,90 @@ def mark_notification_read(nid: str, user_id: str):
     conn.close()
 
 
-def get_counsellor_dashboard(counsellor_id: str):
+def get_counsellor_dashboard(counsellor_id: str, is_admin: bool = False):
+    """Get dashboard stats for a counsellor or admin.
+
+    For admins, returns institution-wide statistics.
+    For counsellors, returns statistics scoped to their assignments.
+    """
     conn = get_db()
-    counsellor = conn.execute("SELECT institution_id FROM users WHERE id = ?", (counsellor_id,)).fetchone()
-    inst_id = counsellor["institution_id"] if counsellor and counsellor["institution_id"] else None
-    if inst_id:
+
+    if is_admin:
+        # Admin sees institution-wide statistics
         total_students = conn.execute(
-            "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND institution_id = ?", (inst_id,)
+            "SELECT COUNT(*) FROM users WHERE role_type = 'student'"
         ).fetchone()[0]
         pending = conn.execute(
-            "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending' AND institution_id = ?", (inst_id,)
+            "SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending'"
         ).fetchone()[0]
-        crisis_flags = conn.execute(
-            "SELECT COUNT(*) FROM analyses a JOIN users u ON a.user_id = u.id "
-            "WHERE a.prob >= 0.75 AND a.created_at >= datetime('now', '-7 days') AND u.institution_id = ?",
-            (inst_id,),
-        ).fetchone()[0]
-    else:
-        total_students = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student'").fetchone()[0]
-        pending = conn.execute("SELECT COUNT(*) FROM users WHERE role_type = 'student' AND status = 'pending'").fetchone()[0]
         crisis_flags = conn.execute(
             "SELECT COUNT(*) FROM analyses WHERE prob >= 0.75 AND created_at >= datetime('now', '-7 days')"
         ).fetchone()[0]
-    open_referrals = conn.execute("SELECT COUNT(*) FROM referrals WHERE counsellor_id = ? AND status = 'open'", (counsellor_id,)).fetchone()[0]
-    recent_referrals = conn.execute(
-        "SELECT r.*, u.name as student_name FROM referrals r JOIN users u ON r.student_id = u.id "
-        "WHERE r.counsellor_id = ? ORDER BY r.created_at DESC LIMIT 5",
-        (counsellor_id,),
-    ).fetchall()
-    conn.close()
-    return {
-        "total_students": total_students,
-        "pending_approvals": pending,
-        "open_referrals": open_referrals,
-        "crisis_flags_7d": crisis_flags,
-        "recent_referrals": [dict(r) for r in recent_referrals],
-    }
+        active_counsellors = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE role_type = 'counsellor' AND status = 'approved'"
+        ).fetchone()[0]
+        active_consents = get_active_consent_count()
+        accepted_consents = get_accepted_consent_count()
+        open_referrals = conn.execute(
+            "SELECT COUNT(*) FROM referrals WHERE status = 'open'"
+        ).fetchone()[0]
+        recent_referrals = conn.execute(
+            "SELECT r.*, u.name as student_name FROM referrals r JOIN users u ON r.student_id = u.id "
+            "WHERE r.status = 'open' ORDER BY r.created_at DESC LIMIT 5"
+        ).fetchall()
+        recent_audit = conn.execute(
+            "SELECT * FROM audit_log ORDER BY occurred_at DESC LIMIT 10"
+        ).fetchall()
+        conn.close()
+        return {
+            "total_students": total_students,
+            "pending_approvals": pending,
+            "active_counsellors": active_counsellors,
+            "active_consents": active_consents,
+            "accepted_consents": accepted_consents,
+            "open_referrals": open_referrals,
+            "crisis_flags_7d": crisis_flags,
+            "recent_referrals": [dict(r) for r in recent_referrals],
+            "recent_audit": [dict(r) for r in recent_audit],
+            "is_admin": True,
+        }
+    else:
+        # Counsellor sees their assigned students only
+        total_students = conn.execute(
+            "SELECT COUNT(*) FROM counsellor_student_assignments WHERE counsellor_id = ? AND active = 1",
+            (counsellor_id,),
+        ).fetchone()[0]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM users u "
+            "JOIN counsellor_student_assignments a ON u.id = a.student_id "
+            "WHERE a.counsellor_id = ? AND a.active = 1 AND u.status = 'pending'",
+            (counsellor_id,),
+        ).fetchone()[0]
+        crisis_flags = conn.execute(
+            "SELECT COUNT(*) FROM analyses a "
+            "JOIN counsellor_student_assignments asg ON a.user_id = asg.student_id "
+            "WHERE asg.counsellor_id = ? AND a.prob >= 0.75 "
+            "AND a.created_at >= datetime('now', '-7 days')",
+            (counsellor_id,),
+        ).fetchone()[0]
+        open_referrals = conn.execute(
+            "SELECT COUNT(*) FROM referrals WHERE counsellor_id = ? AND status = 'open'",
+            (counsellor_id,),
+        ).fetchone()[0]
+        recent_referrals = conn.execute(
+            "SELECT r.*, u.name as student_name FROM referrals r JOIN users u ON r.student_id = u.id "
+            "WHERE r.counsellor_id = ? ORDER BY r.created_at DESC LIMIT 5",
+            (counsellor_id,),
+        ).fetchall()
+        conn.close()
+        return {
+            "total_students": total_students,
+            "pending_approvals": pending,
+            "open_referrals": open_referrals,
+            "crisis_flags_7d": crisis_flags,
+            "recent_referrals": [dict(r) for r in recent_referrals],
+            "is_admin": False,
+        }
 
 
 # ── Institution functions ─────────────────────────────────────────────
@@ -1059,6 +1156,16 @@ def has_consent_relationship(student_id: str, counsellor_id: str) -> bool:
     return row is not None
 
 
+def has_active_assignment(counsellor_id: str, student_id: str) -> bool:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT 1 FROM counsellor_student_assignments WHERE counsellor_id = ? AND student_id = ? AND active = 1 LIMIT 1",
+        (counsellor_id, student_id),
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
 def dispose_alert(
     alert_id: str,
     disposition: str,
@@ -1117,40 +1224,29 @@ def write_audit(
 
 
 def get_audit_log(counsellor_id: str, limit: int = 100) -> list:
-    """Return audit entries where actor is the counsellor or target is one of their students.
+    """Return audit entries relevant to this staff member, newest first.
 
-    Scoped to the counsellor's institution to avoid leaking cross-institution data.
-    Consent workflow entries are matched via consents owned by this counsellor.
+    The baseline schema keeps institution ownership on roster ``students``
+    rows — there is no ``users.institution_id`` column, so scoping by it would
+    crash with ``no such column`` (this took down the counsellor Audit Log
+    page). Scope instead to what the schema guarantees:
+      * entries where this user is the actor, plus
+      * entries targeting students who have a consent with this counsellor, plus
+      * consent-workflow entries on consents this counsellor owns.
     """
     conn = get_db()
-    counsellor = conn.execute("SELECT institution_id FROM users WHERE id = ?", (counsellor_id,)).fetchone()
-    inst_id = counsellor["institution_id"] if counsellor and counsellor["institution_id"] else None
-    if inst_id:
-        student_ids = [
-            r["id"] for r in conn.execute(
-                "SELECT id FROM users WHERE role_type = 'student' AND institution_id = ?", (inst_id,)
-            ).fetchall()
-        ]
-    else:
-        student_ids = [
-            r["id"] for r in conn.execute(
-                "SELECT id FROM users WHERE role_type = 'student' LIMIT 500",
-            ).fetchall()
-        ]
-    if len(student_ids) > 500:
-        student_ids = student_ids[:500]
-    placeholders = ",".join("?" * len(student_ids)) if student_ids else "''"
-    query = f"""
+    query = """
         SELECT * FROM audit_log
         WHERE actor_id = ?
-           OR target_id IN ({placeholders})
+           OR (target_type = 'user' AND target_id IN (
+               SELECT c.student_id FROM consents c WHERE c.counsellor_id = ?
+           ))
            OR (target_type = 'consent' AND target_id IN (
                SELECT id FROM consents WHERE counsellor_id = ?
            ))
         ORDER BY occurred_at DESC LIMIT ?
     """
-    params = [counsellor_id] + student_ids + [counsellor_id, limit]
-    rows = conn.execute(query, params).fetchall()
+    rows = conn.execute(query, (counsellor_id, counsellor_id, counsellor_id, limit)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -1957,6 +2053,11 @@ def mark_email_outbox_failed(outbox_id: str, error: str, retry_at: str | None = 
     _outbox_set(outbox_id, status="failed", error=error, next_attempt_at=retry_at)
 
 
+def mark_email_outbox_abandoned(outbox_id: str, error: str) -> None:
+    """Mark an outbox row permanently abandoned (never retried, preserves history)."""
+    _outbox_set(outbox_id, status="abandoned", error=error, next_attempt_at=None)
+
+
 def fetch_due_email_outbox(batch_size: int = 50, max_attempts: int = 5) -> list:
     """Rows the worker may process now: queued, or failed and due for retry."""
     now = datetime.now(timezone.utc).isoformat()
@@ -1999,11 +2100,13 @@ def list_email_outbox(limit: int = 200, status: str | None = None) -> list:
 
 
 def count_pending_email_outbox() -> int:
-    """Queued + failed rows awaiting (re)delivery by the worker."""
+    """Queued + retryable failed rows awaiting (re)delivery by the worker."""
+    now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     row = conn.execute(
         "SELECT COUNT(*) AS n FROM email_outbox WHERE status = 'queued' "
-        "OR status = 'failed'"
+        "OR (status = 'failed' AND attempts < 5 AND next_attempt_at <= ?)",
+        (now,),
     ).fetchone()
     conn.close()
     return row["n"] if row else 0
@@ -2028,3 +2131,211 @@ def get_email_events(related_type: str | None = None, related_id: str | None = N
         ).fetchall()
     conn.close()
     return [_decrypt_email_event_row(dict(r)) for r in rows]
+
+
+# ── Student social accounts ─────────────────────────────────────────
+
+def save_social_account(student_id: str, platform: str, handle: str | None, profile_url: str | None) -> dict:
+    """Save or update a student's social media account."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM student_social_accounts WHERE student_id = ? AND platform = ?",
+        (student_id, platform),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE student_social_accounts SET handle = ?, profile_url = ?, updated_at = ?, active = 1 "
+            "WHERE student_id = ? AND platform = ?",
+            (handle, profile_url, now, student_id, platform),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO student_social_accounts (id, student_id, platform, handle, profile_url, active, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+            (str(uuid.uuid4()), student_id, platform, handle, profile_url, now, now),
+        )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM student_social_accounts WHERE student_id = ? AND platform = ?",
+        (student_id, platform),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_social_accounts(student_id: str) -> list:
+    """Get all social accounts for a student."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM student_social_accounts WHERE student_id = ? AND active = 1 ORDER BY created_at DESC",
+        (student_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_social_account(student_id: str, platform: str) -> bool:
+    """Delete (deactivate) a social account."""
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE student_social_accounts SET active = 0, updated_at = ? WHERE student_id = ? AND platform = ?",
+        (datetime.now(timezone.utc).isoformat(), student_id, platform),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+# ── Counsellor-student assignments ──────────────────────────────────
+
+def assign_student_to_counsellor(
+    counsellor_id: str,
+    student_id: str,
+    institution_id: str | None = None,
+    assigned_by: str | None = None,
+) -> dict | None:
+    """Assign a student to a counsellor."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM counsellor_student_assignments WHERE counsellor_id = ? AND student_id = ? AND active = 1",
+        (counsellor_id, student_id),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return get_assignment(existing["id"])
+    new_id = str(uuid.uuid4())
+    conn.execute(
+        "INSERT INTO counsellor_student_assignments (id, counsellor_id, student_id, institution_id, assigned_by, assigned_at, active) "
+        "VALUES (?, ?, ?, ?, ?, ?, 1)",
+        (new_id, counsellor_id, student_id, institution_id, assigned_by, now),
+    )
+    conn.commit()
+    conn.close()
+    return get_assignment(new_id)
+
+
+def unassign_student_from_counsellor(assignment_id: str) -> bool:
+    """Unassign a student from a counsellor (soft delete)."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE counsellor_student_assignments SET active = 0, unassigned_at = ? WHERE id = ?",
+        (now, assignment_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def get_assignment(assignment_id: str) -> dict | None:
+    """Get a specific assignment."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT csa.*, u_c.name as counsellor_name, u_c.email as counsellor_email, "
+        "u_s.name as student_name, u_s.email as student_email, "
+        "i.name as institution_name "
+        "FROM counsellor_student_assignments csa "
+        "JOIN users u_c ON csa.counsellor_id = u_c.id "
+        "JOIN users u_s ON csa.student_id = u_s.id "
+        "LEFT JOIN institutions i ON csa.institution_id = i.id "
+        "WHERE csa.id = ?",
+        (assignment_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_assignments_for_counsellor(counsellor_id: str, active_only: bool = True) -> list:
+    """Get all assignments for a counsellor."""
+    conn = get_db()
+    if active_only:
+        rows = conn.execute(
+            "SELECT csa.*, u_s.name as student_name, u_s.email as student_email, "
+            "i.name as institution_name "
+            "FROM counsellor_student_assignments csa "
+            "JOIN users u_s ON csa.student_id = u_s.id "
+            "LEFT JOIN institutions i ON csa.institution_id = i.id "
+            "WHERE csa.counsellor_id = ? AND csa.active = 1 "
+            "ORDER BY csa.assigned_at DESC",
+            (counsellor_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT csa.*, u_s.name as student_name, u_s.email as student_email, "
+            "i.name as institution_name "
+            "FROM counsellor_student_assignments csa "
+            "JOIN users u_s ON csa.student_id = u_s.id "
+            "LEFT JOIN institutions i ON csa.institution_id = i.id "
+            "WHERE csa.counsellor_id = ? "
+            "ORDER BY csa.assigned_at DESC",
+            (counsellor_id,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_assignments_for_student(student_id: str, active_only: bool = True) -> list:
+    """Get all counsellors assigned to a student."""
+    conn = get_db()
+    if active_only:
+        rows = conn.execute(
+            "SELECT csa.*, u_c.name as counsellor_name, u_c.email as counsellor_email, "
+            "i.name as institution_name "
+            "FROM counsellor_student_assignments csa "
+            "JOIN users u_c ON csa.counsellor_id = u_c.id "
+            "LEFT JOIN institutions i ON csa.institution_id = i.id "
+            "WHERE csa.student_id = ? AND csa.active = 1 "
+            "ORDER BY csa.assigned_at DESC",
+            (student_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT csa.*, u_c.name as counsellor_name, u_c.email as counsellor_email, "
+            "i.name as institution_name "
+            "FROM counsellor_student_assignments csa "
+            "JOIN users u_c ON csa.counsellor_id = u_c.id "
+            "LEFT JOIN institutions i ON csa.institution_id = i.id "
+            "WHERE csa.student_id = ? "
+            "ORDER BY csa.assigned_at DESC",
+            (student_id,),
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def count_counsellors() -> int:
+    """Count active counsellors."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE role_type = 'counsellor' AND status = 'approved'"
+    ).fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+
+def get_active_consent_count() -> int:
+    """Count active consents."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM consents WHERE status IN ('PENDING', 'VIEWED', 'ACCEPTED') "
+        "AND (expires_at IS NULL OR expires_at > ?)",
+        (datetime.now(timezone.utc).isoformat(),),
+    ).fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+
+def get_accepted_consent_count() -> int:
+    """Count accepted consents."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM consents WHERE status = 'ACCEPTED' "
+        "AND (expires_at IS NULL OR expires_at > ?)",
+        (datetime.now(timezone.utc).isoformat(),),
+    ).fetchone()
+    conn.close()
+    return row[0] if row else 0

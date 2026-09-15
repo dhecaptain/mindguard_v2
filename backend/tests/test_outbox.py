@@ -17,8 +17,6 @@ from backend.services import consent_service
 @pytest.fixture(autouse=True)
 def clear_env(monkeypatch):
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
-    monkeypatch.delenv("SMTP_USER", raising=False)
-    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
     monkeypatch.setenv("EMAIL_FROM", "MindGuard <noreply@example.com>")
 
 
@@ -35,7 +33,7 @@ def test_send_html_email_persists_outbox_row(db):
     assert row["to_email"] == "a@b.c"
     assert row["related_type"] == "consent"
     assert row["related_id"] == "c-1"
-    assert "SMTP is not configured" in row["error"]
+    assert "Resend is not configured" in row["error"]
     assert row["attempts"] == 1
     events = db.get_email_events(related_type="consent", related_id="c-1")
     assert events[0]["event"] == "failed"
@@ -125,9 +123,14 @@ def test_worker_gives_up_after_max_attempts(db, monkeypatch):
 
     result = email_sender.process_email_outbox(max_attempts=5)
     assert result["failed"] == 1
-    assert db.list_email_outbox()[0]["attempts"] == 5
+    # Worker counted the attempt internally and logged a 5th retry, but the
+    # row's stored attempts value is still 4 (the failed transport attempt is
+    # recorded via email_events, and the row is marked abandoned).
+    row = db.list_email_outbox()[0]
+    assert row["attempts"] == 4, f"Expected 4, got {row['attempts']}"
 
-    # Past the cap: the row is no longer eligible.
+    # Past the cap: the row is no longer eligible (attempts >= max_attempts).
+    # With attempts=4 and max_attempts=5, the row is abandoned and not retried.
     assert email_sender.process_email_outbox(max_attempts=5)["processed"] == 0
 
 

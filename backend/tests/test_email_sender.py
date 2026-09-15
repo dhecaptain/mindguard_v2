@@ -1,4 +1,4 @@
-"""Tests for the email sender (Resend primary + SMTP fallback + email_events logging)."""
+"""Tests for the email sender (Resend-only + email_events logging)."""
 
 import pytest
 
@@ -8,8 +8,6 @@ from services import email_sender
 @pytest.fixture(autouse=True)
 def clear_env(monkeypatch):
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
-    monkeypatch.delenv("SMTP_USER", raising=False)
-    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
     monkeypatch.setenv("EMAIL_FROM", "MindGuard <noreply@example.com>")
 
 
@@ -17,6 +15,28 @@ def test_is_resend_configured(monkeypatch):
     assert not email_sender.is_resend_configured()
     monkeypatch.setenv("RESEND_API_KEY", "re_123")
     assert email_sender.is_resend_configured()
+
+
+def test_provider_status_handles_malformed_sender(monkeypatch):
+    """A malformed EMAIL_FROM (no address) must yield diagnostics, not an error."""
+    monkeypatch.setenv("RESEND_API_KEY", "re_123")
+    monkeypatch.setenv("EMAIL_FROM", "Plain Display Name Only")
+    status = email_sender.get_email_provider_status()
+    assert status["sender_valid"] is False
+    assert status["resend_configured"] is True
+
+
+def test_resend_provider_status_is_safe_and_explicit(monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_123")
+    monkeypatch.setenv("RESEND_WEBHOOK_SECRET", "whsec_123")
+    monkeypatch.setenv("EMAIL_FROM", "MindGuard <no-reply@schools.example.org>")
+    status = email_sender.get_email_provider_status()
+    assert status["provider"] == "resend"
+    assert status["resend_configured"] is True
+    assert status["webhook_configured"] is True
+    assert status["sender_valid"] is True
+    assert "re_123" not in str(status)
+    assert "whsec_123" not in str(status)
 
 
 def test_email_from_defaults_to_brand_not_personal(monkeypatch):
@@ -44,7 +64,7 @@ def test_email_from_warns_on_personal_sender(monkeypatch, caplog):
 def test_no_provider_returns_error(db):
     ok, err = email_sender.send_html_email("a@b.c", "Subject", "<p>Hi</p>")
     assert ok is False
-    assert "SMTP is not configured" in err
+    assert "Resend is not configured" in err
 
 
 def test_no_provider_logs_failed_event(db):
@@ -59,31 +79,22 @@ def test_no_provider_logs_failed_event(db):
     assert events[0]["recipient_email"] == "a@b.c"
 
 
-def test_smtp_success_is_used_when_resend_unset(db, monkeypatch):
-    calls = []
-    real = email_sender._send_smtp
-
-    def fake_smtp(to, subject, body):
-        calls.append((to, subject))
-        return real if False else (True, "")
-
-    monkeypatch.setattr(email_sender, "_send_smtp", fake_smtp)
+def test_resend_is_required_no_smtp_fallback(db, monkeypatch):
+    # When Resend is not configured, no email should be sent (no SMTP fallback)
     ok, err = email_sender.send_html_email(
         "a@b.c", "Subject", "<p>Hi</p>",
         related_type="demo", related_id="d-1",
     )
-    assert ok is True and err == ""
-    assert calls == [("a@b.c", "Subject")]
+    assert ok is False
+    assert "Resend is not configured" in err
     events = db.get_email_events(related_type="demo", related_id="d-1")
     assert len(events) == 1
-    assert events[0]["event"] == "sent"
+    assert events[0]["event"] == "failed"
 
 
-def test_resend_preferred_over_smtp(db, monkeypatch):
+def test_resend_is_used_when_configured(db, monkeypatch):
+    """When Resend is configured, it should be used (no SMTP fallback exists)."""
     monkeypatch.setenv("RESEND_API_KEY", "re_123")
-    smtp_called = []
-
-    monkeypatch.setattr(email_sender, "_send_smtp", lambda *a, **k: smtp_called.append(1) or (True, ""))
 
     def fake_resend(to, subject, body):
         return True, "", "resend-msg-42"
@@ -94,7 +105,9 @@ def test_resend_preferred_over_smtp(db, monkeypatch):
         related_type="consent", related_id="c-1",
     )
     assert ok is True and err == ""
-    assert smtp_called == []
+    events = db.get_email_events(related_type="consent", related_id="c-1")
+    assert events[0]["event"] == "sent"
+    assert events[0]["esp_message_id"] == "resend-msg-42" 
 
 
 def test_resend_success_logs_esp_message_id(db, monkeypatch):
@@ -114,19 +127,14 @@ def test_resend_success_logs_esp_message_id(db, monkeypatch):
     assert events[0]["esp_message_id"] == "resend-msg-42"
 
 
-def test_resend_failure_falls_back_to_smtp(db, monkeypatch):
+def test_resend_failure_does_not_fall_back_to_smtp(db, monkeypatch):
+    # When Resend fails, there is NO SMTP fallback - email fails
     monkeypatch.setenv("RESEND_API_KEY", "re_123")
-    smtp_called = []
 
-    def fake_smtp(to, subject, body):
-        smtp_called.append(to)
-        return True, ""
-
-    monkeypatch.setattr(email_sender, "_send_smtp", fake_smtp)
     monkeypatch.setattr(email_sender, "_send_resend", lambda *a, **k: (False, "resend down", ""))
     ok, err = email_sender.send_html_email("a@b.c", "Subject", "<p>Hi</p>")
-    assert ok is True and err == ""
-    assert smtp_called == ["a@b.c"]
+    assert ok is False
+    assert "resend down" in err
 
 
 def test_resend_http_error_is_reported(monkeypatch):

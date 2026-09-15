@@ -277,6 +277,31 @@ export default function StudentManagementPage() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [studentDetail, setStudentDetail] = useState<StudentDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'warn' | 'err'; text: string } | null>(null)
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+
+  const handleStatusChange = async (studentId: string, action: 'approve' | 'revoke') => {
+    setActionLoadingId(studentId)
+    setNotice(null)
+    try {
+      const result = action === 'approve'
+        ? await approveStudent(studentId)
+        : await revokeStudent(studentId)
+      updateStudentStatus(studentId, action === 'approve' ? 'approved' : 'revoked')
+      if (result.email_sent) {
+        setNotice({ tone: 'ok', text: `Student ${action === 'approve' ? 'approved' : 'revoked'} — notification email sent.` })
+      } else {
+        setNotice({
+          tone: 'warn',
+          text: `Student ${action === 'approve' ? 'approved' : 'revoked'}, but the notification email could not be sent${result.email_error ? `: ${result.email_error}` : '.'}`,
+        })
+      }
+    } catch (e) {
+      setNotice({ tone: 'err', text: e instanceof Error ? e.message : `Failed to ${action} student.` })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
 
   useEffect(() => {
     if (students.length === 0) {
@@ -333,6 +358,15 @@ export default function StudentManagementPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-[rgba(229,231,235,0.7)] overflow-hidden">
+        {notice && (
+          <div className={`m-[16px] mb-0 rounded-[8px] border px-[12px] py-[9px] text-[0.8rem] ${
+            notice.tone === 'ok' ? 'bg-[#ecfdf5] border-[#bbf7d0] text-[#065f46]'
+            : notice.tone === 'warn' ? 'bg-[#fff7ed] border-[#fed7aa] text-[#9a3412]'
+            : 'bg-[#fef2f2] border-[#fecaca] text-[#991b1b]'
+          }`} role="status">
+            <i className={`ti ${notice.tone === 'ok' ? 'ti-circle-check' : 'ti-alert-circle'} text-[14px] mr-[6px]`} />{notice.text}
+          </div>
+        )}
         <div className="flex items-center justify-between px-[20px] py-[14px] border-b border-[#f1f5f9]">
           <div className="flex items-center gap-[8px]">
             <i className="ti ti-list text-[16px] text-[#6b7280]" />
@@ -392,17 +426,19 @@ export default function StudentManagementPage() {
                     <td className="py-[12px] px-[20px]" onClick={(e) => e.stopPropagation()}>
                       {student.status === 'pending' ? (
                         <button
-                          onClick={() => approveStudent(student.id).then(() => updateStudentStatus(student.id, 'approved')).catch((e) => alert(e.message))}
-                          className="text-[#0F766E] font-bold cursor-pointer hover:underline bg-transparent border-none text-[0.82rem]"
+                          onClick={() => handleStatusChange(student.id, 'approve')}
+                          disabled={actionLoadingId === student.id}
+                          className="text-[#0F766E] font-bold cursor-pointer hover:underline bg-transparent border-none text-[0.82rem] disabled:opacity-50"
                         >
-                          Approve
+                          {actionLoadingId === student.id ? '…' : 'Approve'}
                         </button>
                       ) : student.status === 'approved' ? (
                         <button
-                          onClick={() => revokeStudent(student.id).then(() => updateStudentStatus(student.id, 'revoked')).catch((e) => alert(e.message))}
-                          className="text-[#9ca3af] cursor-pointer hover:text-[#6b7280] bg-transparent border-none text-[0.82rem]"
+                          onClick={() => handleStatusChange(student.id, 'revoke')}
+                          disabled={actionLoadingId === student.id}
+                          className="text-[#9ca3af] cursor-pointer hover:text-[#6b7280] bg-transparent border-none text-[0.82rem] disabled:opacity-50"
                         >
-                          Revoke
+                          {actionLoadingId === student.id ? '…' : 'Revoke'}
                         </button>
                       ) : (
                         <span className="text-[#d1d5db]">Revoked</span>

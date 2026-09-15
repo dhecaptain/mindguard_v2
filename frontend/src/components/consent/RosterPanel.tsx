@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   commitRoster,
+  createInstitution,
   getInstitutions,
   getRosterStudents,
   runConsentMaintenance,
@@ -32,6 +33,9 @@ export default function RosterPanel() {
   const [sendOnUpload, setSendOnUpload] = useState(false)
   const [maintaining, setMaintaining] = useState(false)
   const [maintenanceMsg, setMaintenanceMsg] = useState<string | null>(null)
+  const [newInstitutionName, setNewInstitutionName] = useState('')
+  const [creatingInstitution, setCreatingInstitution] = useState(false)
+  const [showAddInstitution, setShowAddInstitution] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const loadInstitutions = useCallback(async () => {
@@ -61,7 +65,10 @@ export default function RosterPanel() {
   useEffect(() => { loadStudents() }, [loadStudents])
 
   const handleUpload = async () => {
-    if (!file) return
+    if (!file || !institutionId) {
+      setError(institutions.length ? 'Select an institution before uploading.' : 'Create an institution before uploading.')
+      return
+    }
     setUploading(true)
     setSummary(null)
     setDispatch(null)
@@ -81,6 +88,27 @@ export default function RosterPanel() {
       setError(e.message)
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleCreateInstitution = async () => {
+    const name = newInstitutionName.trim()
+    if (!name) {
+      setError('Enter an institution name.')
+      return
+    }
+    setCreatingInstitution(true)
+    setError(null)
+    try {
+      const institution = await createInstitution(name)
+      setInstitutions((current) => [...current, institution].sort((a, b) => a.name.localeCompare(b.name)))
+      setInstitutionId(institution.id)
+      setNewInstitutionName('')
+      setShowAddInstitution(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create the institution.')
+    } finally {
+      setCreatingInstitution(false)
     }
   }
 
@@ -127,11 +155,51 @@ export default function RosterPanel() {
               onChange={(e) => setInstitutionId(e.target.value)}
               className="w-full rounded-[8px] border border-[#e5e7eb] px-[10px] py-[8px] text-[0.82rem] text-[#1f2937] bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]"
             >
-              {institutions.map((i) => (
-                <option key={i.id} value={i.id}>{i.name}</option>
-              ))}
-            </select>
-          </div>
+              <option value="">Select institution...</option>
+            {institutions.map((i) => (
+              <option key={i.id} value={i.id}>{i.name}</option>
+            ))}
+          </select>
+          {institutions.length === 0 && (
+            <p className="text-[0.72rem] text-[#92400e] mt-[4px]">No institutions yet — add one below to upload a roster.</p>
+          )}
+          {showAddInstitution || institutions.length === 0 ? (
+            <div className="mt-[6px] flex gap-[6px]">
+              <input
+                value={newInstitutionName}
+                onChange={(e) => setNewInstitutionName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateInstitution() } }}
+                placeholder="Institution name"
+                className="min-w-0 flex-1 rounded-[7px] border border-[#e5e7eb] px-[8px] py-[6px] text-[0.78rem]"
+              />
+              <button
+                type="button"
+                onClick={handleCreateInstitution}
+                disabled={creatingInstitution}
+                className="rounded-[7px] bg-[#0F766E] px-[9px] py-[6px] text-[0.74rem] font-semibold text-white disabled:opacity-50"
+              >
+                {creatingInstitution ? '...' : 'Add'}
+              </button>
+              {institutions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setShowAddInstitution(false); setNewInstitutionName('') }}
+                  className="rounded-[7px] border border-[#e5e7eb] bg-white px-[9px] py-[6px] text-[0.74rem] font-semibold text-[#6b7280]"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAddInstitution(true)}
+              className="mt-[6px] text-[0.74rem] font-semibold text-[#0F766E] bg-transparent border-none cursor-pointer hover:underline"
+            >
+              + Add new institution
+            </button>
+          )}
+        </div>
           <div>
             <label className="block text-[0.78rem] font-semibold text-[#374151] mb-[4px]">CSV file</label>
             <input

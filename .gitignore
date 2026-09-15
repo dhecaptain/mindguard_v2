@@ -82,3 +82,5 @@ MINDGUARD_DEV_GUIDE.md
 frontend/npm-cache/
 logs/
 graphify-out/
+extracted/
+impeccable-*.tgz

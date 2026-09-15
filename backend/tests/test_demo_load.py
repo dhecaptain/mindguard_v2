@@ -3,6 +3,12 @@
 The endpoint deliberately caps a single IP at 5 requests/hour (anti-abuse).
 This test proves the rest of the pipeline sustains >= 50 requests/minute across
 distinct clients, and that the per-IP cap still trips at the 6th request.
+
+Hermetic by construction: the ``db`` fixture points SQLite at a temp file so the
+test never depends on the host's ``MINDGUARD_DB_DIR`` (a read-only/ Railway-style
+dir made these tests fail with "attempt to write a readonly database"), and
+reCAPTCHA verification is stubbed so the outcome doesn't hinge on whether
+``RECAPTCHA_SECRET`` happens to be configured.
 """
 
 import time
@@ -34,7 +40,27 @@ def _client():
     return TestClient(app, raise_server_exceptions=True)
 
 
-def test_single_ip_capped_at_five_per_hour():
+@pytest.fixture()
+def _hermetic(db, monkeypatch):
+    """Isolated DB + stubbed reCAPTCHA/email, regardless of host env.
+
+    Email is stubbed so the load loop never makes real Resend calls
+    (delivery behaviour is covered by test_email_sender.py) — without this, a
+    host .env with RESEND_API_KEY set turns the test into live API traffic to a
+    fake recipient and slows every request by the provider round-trip.
+    """
+
+    async def _ok(token):
+        return True
+
+    monkeypatch.setattr("backend.main.verify_recaptcha_token", _ok)
+    monkeypatch.setattr(
+        "backend.main.send_html_email",
+        lambda *args, **kwargs: (True, ""),
+    )
+
+
+def test_single_ip_capped_at_five_per_hour(_hermetic):
     _rate_store.clear()
     with _client() as client:
         statuses = []
@@ -45,7 +71,7 @@ def test_single_ip_capped_at_five_per_hour():
     assert statuses[5] == 429
 
 
-def test_endpoint_sustains_fifty_per_minute_across_clients(monkeypatch):
+def test_endpoint_sustains_fifty_per_minute_across_clients(_hermetic, monkeypatch):
     _rate_store.clear()
     counter = {"n": 0}
 

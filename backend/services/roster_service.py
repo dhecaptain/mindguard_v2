@@ -38,7 +38,6 @@ _ALIASES = {
     "studentid": "student_id",
     "id": "student_id",
     "student_id": "student_id",
-    "studentfirstview": "student_first_name",
     "studentfirstname": "student_first_name",
     "first_name": "student_first_name",
     "firstname": "student_first_name",
