@@ -298,6 +298,87 @@ def clear_user_invitation(user_id: str) -> bool:
     return ok
 
 
+def update_user_onboarding(
+    user_id: str,
+    user_category: str,
+    institution_id: str | None = None,
+    parent_guardian_id: str | None = None,
+) -> bool:
+    """Set onboarding category and institutional/parent links."""
+    allowed = {"pending", "adult", "minor", "parent", "institution_managed"}
+    if user_category not in allowed:
+        user_category = "pending"
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE users SET user_category = ?, institution_id = ?, parent_guardian_id = ?, onboarding_completed_at = ? WHERE id = ?",
+        (user_category, institution_id, parent_guardian_id, now, user_id),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def create_analysis_session(
+    student_id: str,
+    counsellor_id: str | None,
+    institution_id: str | None,
+    consent_id: str | None,
+    analysis_type: str,
+    platforms: list,
+    findings: dict | None = None,
+    risk_score: float | None = None,
+    insights: str | None = None,
+    recommendations: str | None = None,
+) -> dict:
+    sid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO analysis_sessions (id, student_id, counsellor_id, institution_id, consent_id, started_at, completed_at, analysis_type, platforms_json, findings_json, risk_score, insights, recommendations, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            sid,
+            student_id,
+            counsellor_id,
+            institution_id,
+            consent_id,
+            now,
+            now,
+            analysis_type,
+            json.dumps(platforms) if platforms else None,
+            json.dumps(findings) if findings else None,
+            risk_score,
+            insights,
+            recommendations,
+            now,
+            now,
+        ),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM analysis_sessions WHERE id = ?", (sid,)).fetchone()
+    conn.close()
+    return dict(row) if row else {"id": sid}
+
+
+def get_analysis_sessions_for_student(student_id: str, limit: int = 50) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM analysis_sessions WHERE student_id = ? ORDER BY created_at DESC LIMIT ?",
+        (student_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_analysis_session(session_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute("SELECT * FROM analysis_sessions WHERE id = ?", (session_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def update_user_status(user_id: str, status: str) -> bool:
     """Set a user's status (e.g. approve/revoke/suspend a counsellor)."""
     conn = get_db()

@@ -60,6 +60,7 @@ from backend.database import (
     get_user_by_email, get_user_by_id, create_user,
     get_students, update_student_status,
     update_user_status, set_user_invitation, get_user_by_invitation_token_hash, clear_user_invitation,
+    update_user_onboarding, create_analysis_session, get_analysis_sessions_for_student, get_analysis_session,
     save_analysis, get_analytics,
     create_referral, get_referrals, update_referral,
     send_message, get_conversation, get_conversations, mark_read, mark_all_read,
@@ -707,14 +708,19 @@ async def change_password(req: ChangePasswordRequest, request: Request, user: di
 
 @app.get("/api/auth/me")
 async def get_me(user: dict = Depends(require_auth)):
-    return UserResponse(
-        email=user["email"],
-        name=user["name"],
-        role=user["role_type"].capitalize(),
-        role_type=user["role_type"],
-        referral_code=user.get("referral_code") or _generate_referral_code(),
-        terms_accepted=bool(user.get("terms_accepted_at")),
-    )
+    return {
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role_type"].capitalize(),
+        "role_type": user["role_type"],
+        "referral_code": user.get("referral_code") or _generate_referral_code(),
+        "terms_accepted": bool(user.get("terms_accepted_at")),
+        "user_category": user.get("user_category") or "pending",
+        "institution_id": user.get("institution_id"),
+        "onboarding_completed": bool(user.get("onboarding_completed_at")),
+        "id": user["id"],
+        "status": user.get("status"),
+    }
 
 
 @app.post("/api/auth/terms")
@@ -727,6 +733,124 @@ async def accept_terms(request: Request, user: dict = Depends(require_auth)):
         )
         logger.info("Terms accepted: user=%s", user["id"])
     return {"ok": True}
+
+
+@app.post("/api/auth/onboarding")
+async def complete_onboarding(data: dict, request: Request, user: dict = Depends(require_auth)):
+    """Explicit age/status declaration for individual vs institution-managed flow."""
+    category = (data.get("user_category") or data.get("category") or "").strip().lower()
+    allowed = {"adult", "minor", "parent", "institution_managed", "pending"}
+    if category not in allowed:
+        raise HTTPException(400, f"user_category must be one of {', '.join(sorted(allowed))}")
+    institution_id = data.get("institution_id")
+    parent_email = (data.get("parent_email") or "").strip().lower()
+    if category == "minor" and not parent_email:
+        raise HTTPException(400, "parent_email is required for minors")
+    if parent_email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", parent_email):
+        raise HTTPException(400, "Invalid parent_email")
+    parent_id = None
+    if parent_email:
+        parent_user = get_user_by_email(parent_email)
+        if parent_user:
+            parent_id = parent_user["id"]
+    if institution_id:
+        from backend.database import get_institution_by_id
+        if not get_institution_by_id(institution_id):
+            raise HTTPException(400, "Institution not found")
+    ok = update_user_onboarding(user["id"], category, institution_id, parent_id)
+    if not ok:
+        raise HTTPException(500, "Failed to update onboarding")
+    write_audit(user["id"], user["role_type"], "ONBOARDING_COMPLETED", "user", user["id"],
+                payload={"category": category, "institution_id": institution_id}, ip=_client_ip(request))
+    fresh = get_user_by_id(user["id"])
+    return {"ok": True, "user": fresh}
+
+
+@app.get("/api/self/social-accounts")
+async def get_own_social_accounts(user: dict = Depends(require_auth)):
+    from backend.database import get_social_accounts
+    return {"accounts": get_social_accounts(user["id"])}
+
+
+@app.post("/api/self/social-accounts")
+async def add_own_social_account(data: dict, request: Request, user: dict = Depends(require_auth)):
+    platform = (data.get("platform") or "").strip()
+    handle = (data.get("handle") or "").strip()
+    profile_url = (data.get("profile_url") or "").strip()
+    if not platform:
+        raise HTTPException(400, "platform is required")
+    if not handle and not profile_url:
+        raise HTTPException(400, "handle or profile_url required")
+    if len(platform) > 32 or len(handle) > 128 or len(profile_url) > 512:
+        raise HTTPException(400, "Field too long")
+    from backend.database import save_social_account
+    acc = save_social_account(user["id"], platform, handle, profile_url)
+    write_audit(user["id"], user["role_type"], "SOCIAL_ACCOUNT_UPSERT", "user", user["id"],
+                payload={"platform": platform}, ip=_client_ip(request))
+    return {"ok": True, "account": acc}
+
+
+@app.delete("/api/self/social-accounts/{platform}")
+async def delete_own_social_account(platform: str, request: Request, user: dict = Depends(require_auth)):
+    from backend.database import delete_social_account
+    ok = delete_social_account(user["id"], platform)
+    if not ok:
+        raise HTTPException(404, "Account not found")
+    write_audit(user["id"], user["role_type"], "SOCIAL_ACCOUNT_DELETED", "user", user["id"],
+                payload={"platform": platform}, ip=_client_ip(request))
+    return {"ok": True}
+
+
+@app.post("/api/self/analyze")
+async def analyze_own_account(data: dict, request: Request, user: dict = Depends(require_auth)):
+    """Individual may analyze only own connected accounts (ownership enforced)."""
+    platform = (data.get("platform") or "").strip()
+    handle = (data.get("handle") or "").strip()
+    if not platform or not handle:
+        raise HTTPException(400, "platform and handle required")
+    from backend.database import get_social_accounts
+    own = get_social_accounts(user["id"])
+    owned_handles = {a["handle"] for a in own if a.get("platform") == platform}
+    owned_urls = {a["profile_url"] for a in own if a.get("platform") == platform}
+    if handle not in owned_handles and handle not in owned_urls:
+        raise HTTPException(403, "Handle not owned by you; add it via My Accounts first")
+    text = (data.get("text") or handle or "").strip()
+    if not text:
+        raise HTTPException(400, "No content to analyze")
+    try:
+        prob, ms = await predict_one(text)
+    except Exception as exc:
+        raise inference_http_error(exc)
+    cls = "Suicidal" if prob >= 0.5 else "Non-Suicidal"
+    save_analysis(user["id"], "self", text, prob, cls)
+    sess = create_analysis_session(
+        student_id=user["id"], counsellor_id=None, institution_id=user.get("institution_id"),
+        consent_id=None, analysis_type="self", platforms=[platform],
+        findings={"prob": prob, "label": cls}, risk_score=prob,
+        insights=f"Self analysis for {platform}:{handle}",
+    )
+    write_audit(user["id"], user["role_type"], "SELF_ANALYSIS", "analysis_session", sess["id"],
+                payload={"platform": platform}, ip=_client_ip(request))
+    return {"prob": prob, "label": cls, "latency_ms": ms, "session_id": sess["id"]}
+
+
+@app.get("/api/v1/students/{student_id}/analysis-sessions")
+async def list_analysis_sessions(student_id: str, user: dict = Depends(require_auth)):
+    if user["role_type"] not in ("counsellor", "admin", "school_admin") and user["id"] != student_id:
+        _require_counsellor(user)
+        _require_counsellor_student_access(user, student_id)
+    elif user["id"] != student_id and user["role_type"] not in ("admin",):
+        try:
+            _require_counsellor_student_access(user, student_id)
+        except HTTPException:
+            if user["id"] != student_id:
+                raise
+    return {"sessions": get_analysis_sessions_for_student(student_id)}
+
+
+@app.get("/api/self/analysis-sessions")
+async def list_own_analysis_sessions(user: dict = Depends(require_auth)):
+    return {"sessions": get_analysis_sessions_for_student(user["id"])}
 
 
 @app.post("/api/auth/logout")
@@ -2799,14 +2923,30 @@ async def v1_portal_accept_consent(token: str, data: dict, request: Request):
     platforms = data.get("platforms")
     social_accounts = data.get("social_accounts")
 
-    # Validate that submitted platforms are in the requested platforms
-    if platforms and social_accounts:
-        requested = set(platforms if isinstance(platforms, list) else [])
-        submitted = set(social_accounts.keys())
-        extra = submitted - requested
+    # Validate platforms and social accounts are within original consent scope
+    import json as _json
+    try:
+        original = set(_json.loads(consent.get("platforms_json") or "[]"))
+    except Exception:
+        original = set()
+    if platforms is not None:
+        if not isinstance(platforms, list):
+            raise HTTPException(400, "Invalid platforms format")
+        submitted_set = set(platforms)
+        extra = submitted_set - original
         if extra:
-            logger.warning("Consent %s: rejected platforms not in request: %s", consent["id"], extra)
+            logger.warning("Consent %s: rejected platforms not in original request: %s", consent["id"], extra)
             raise HTTPException(400, f"Invalid platforms: {', '.join(sorted(extra))}")
+        requested = submitted_set
+    else:
+        requested = original
+    if social_accounts:
+        if not isinstance(social_accounts, dict):
+            raise HTTPException(400, "Invalid social_accounts format")
+        extra_sa = set(social_accounts.keys()) - requested
+        if extra_sa:
+            logger.warning("Consent %s: rejected social platforms not in request: %s", consent["id"], extra_sa)
+            raise HTTPException(400, f"Invalid platforms: {', '.join(sorted(extra_sa))}")
 
     try:
         updated = accept_consent(
@@ -3431,6 +3571,22 @@ async def v1_student_analyze(
         raise
     except Exception as exc:
         raise inference_http_error(exc)
+
+    try:
+        sess = create_analysis_session(
+            student_id=student_id,
+            counsellor_id=user["id"],
+            institution_id=student.get("institution_id") or user.get("institution_id"),
+            consent_id=result.get("risk_record", {}).get("consent_id") if isinstance(result.get("risk_record"), dict) else None,
+            analysis_type="counsellor_student",
+            platforms=[data.get("platform")] if data.get("platform") else [],
+            findings={"posts": data.get("posts"), "result": result},
+            risk_score=result.get("rolling_score"),
+            insights=f"Rolling risk {result.get('rolling_score'):.2f} on {data.get('platform')}" if result.get("rolling_score") is not None else None,
+        )
+        result["session_id"] = sess["id"]
+    except Exception as e:
+        logger.warning("analysis session persist failed: %s", e)
 
     return result
 

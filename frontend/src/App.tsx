@@ -10,6 +10,8 @@ import MainLayout from './components/layout/MainLayout'
 import AuthCallbackPage from './pages/AuthCallbackPage'
 import ConsentPortalPage from './pages/ConsentPortalPage'
 import InvitePage from './pages/InvitePage'
+import OnboardingPage from './pages/OnboardingPage'
+import MyAccountsPage from './pages/MyAccountsPage'
 import DemoRequestPage from './pages/DemoRequestPage'
 import DashboardPage from './pages/DashboardPage'
 import TextImageAnalysisPage from './pages/TextImageAnalysisPage'
@@ -130,6 +132,7 @@ function PageRouter() {
     case 'resources': return <CrisisResourcesPage />
     case 'team': return <TeamPage />
     case 'communications': return <StudentCommunicationsPage />
+    case 'my-accounts': return <MyAccountsPage />
     case 'notification-preferences': return <NotificationPreferencesPage />
     default: return <DashboardPage />
   }
@@ -248,6 +251,11 @@ export default function App() {
 
   if (!termsAccepted) {
     return <TermsPage onAccepted={() => {}} />
+  }
+
+  const userCat = (useAuthStore.getState().user as unknown as { user_category?: string })?.user_category
+  if (userCat === 'pending' || !userCat) {
+    return <OnboardingPage onComplete={() => window.location.reload()} />
   }
 
   return <AuthenticatedApp />
