@@ -362,11 +362,11 @@ def create_analysis_session(
     return dict(row) if row else {"id": sid}
 
 
-def get_analysis_sessions_for_student(student_id: str, limit: int = 50) -> list:
+def get_analysis_sessions_for_student(student_id: str, limit: int = 50, offset: int = 0) -> list:
     conn = get_db()
     rows = conn.execute(
-        "SELECT * FROM analysis_sessions WHERE student_id = ? ORDER BY created_at DESC LIMIT ?",
-        (student_id, limit),
+        "SELECT * FROM analysis_sessions WHERE student_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        (student_id, limit, offset),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]

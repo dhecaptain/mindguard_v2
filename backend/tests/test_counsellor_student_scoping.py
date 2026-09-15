@@ -85,6 +85,7 @@ def test_student_detail_requires_consent_relationship(db, client, monkeypatch):
     b = _make(db, "scope5@school.edu", "counsellor")
     s = _make(db, "s7@school.edu", "student")
     database.create_consent(s["id"], a["id"], "s7@school.edu", "student", ["reddit"])
+    database.assign_student_to_counsellor(a["id"], s["id"])
 
     outsider = _token(client, "scope5@school.edu")
     resp = client.get(f"/api/counsellor/students/{s['id']}", headers={"Authorization": f"Bearer {outsider}"})
@@ -93,3 +94,18 @@ def test_student_detail_requires_consent_relationship(db, client, monkeypatch):
     owner = _token(client, "scope4@school.edu")
     resp = client.get(f"/api/counsellor/students/{s['id']}", headers={"Authorization": f"Bearer {owner}"})
     assert resp.status_code == 200, resp.text
+
+
+def test_unassigned_but_consented_denied(db, client, monkeypatch):
+    monkeypatch.delenv("RECAPTCHA_SECRET", raising=False)
+    a = _make(db, "unass_c1@school.edu", "counsellor")
+    s = _make(db, "unass_s1@school.edu", "student")
+    database.create_consent(s["id"], a["id"], "unass_s1@school.edu", "student", ["reddit"])
+    # no assignment
+    token = _token(client, "unass_c1@school.edu")
+    resp = client.get(f"/api/counsellor/students/{s['id']}", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403
+    resp2 = client.get(f"/api/v1/students/{s['id']}/timeline", headers={"Authorization": f"Bearer {token}"})
+    assert resp2.status_code == 403
+    resp3 = client.get(f"/api/v1/students/{s['id']}/notes", headers={"Authorization": f"Bearer {token}"})
+    assert resp3.status_code == 403
