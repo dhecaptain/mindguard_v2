@@ -2442,6 +2442,7 @@ async def create_counsellor_referral(data: dict, request: Request, user: dict = 
     student = get_user_by_id(student_id)
     if not student or student["role_type"] != "student":
         raise HTTPException(400, "Invalid student ID")
+    _require_counsellor_student_access(user, student_id)
     referral = create_referral(user["id"], student_id, urgency, notes)
     _safe_notify(student_id, "Referral Created", f"A counsellor has created a {urgency}-urgency referral for you.", "referral")
     write_audit(
@@ -2494,6 +2495,9 @@ async def get_counsellor_conversations(user: dict = Depends(require_auth)):
 async def get_counsellor_conversation(other_id: str, user: dict = Depends(require_auth)):
     if user["role_type"] not in ("counsellor", "admin"):
         raise HTTPException(403, "Counsellor or admin access required")
+    other = get_user_by_id(other_id)
+    if other and other["role_type"] == "student":
+        _require_counsellor_student_access(user, other_id)
     mark_all_read(user["id"], other_id)
     return get_conversation(user["id"], other_id)
 
@@ -2508,6 +2512,9 @@ async def send_counsellor_message(data: dict, user: dict = Depends(require_auth)
         raise HTTPException(400, "Receiver ID required")
     if not message:
         raise HTTPException(400, "Message cannot be empty")
+    receiver = get_user_by_id(receiver_id)
+    if receiver and receiver["role_type"] == "student":
+        _require_counsellor_student_access(user, receiver_id)
     msg = send_message(user["id"], receiver_id, message)
     _safe_notify(receiver_id, "New Message", f"New message from {user['name']}", "general")
     return msg
@@ -2627,7 +2634,7 @@ def _require_counsellor(user: dict) -> None:
 
 
 def _require_counsellor_student_access(user: dict, student_id: str) -> None:
-    """Centralized counsellor→student authz: active + assigned + consent + institution."""
+    """Centralized counsellor→student authz: active + assigned + consent + institution (fail-closed)."""
     if user.get("role_type") == "admin":
         return
     _require_counsellor(user)
@@ -2637,10 +2644,14 @@ def _require_counsellor_student_access(user: dict, student_id: str) -> None:
     if not has_consent_relationship(student_id, user["id"]):
         raise HTTPException(403, "No valid consent for this student")
     counsellor_inst = user.get("institution_id")
-    if counsellor_inst:
-        student = get_user_by_id(student_id)
-        if student and student.get("institution_id") and student.get("institution_id") != counsellor_inst:
-            raise HTTPException(403, "Student not in your institution")
+    student = get_user_by_id(student_id)
+    student_inst = student.get("institution_id") if student else None
+    if counsellor_inst and student_inst and counsellor_inst != student_inst:
+        raise HTTPException(403, "Student not in your institution")
+    if counsellor_inst and not student_inst:
+        raise HTTPException(403, "Student not in your institution")
+    if not counsellor_inst and student_inst:
+        raise HTTPException(403, "Student not in your institution")
 
 
 def _client_ip(request: Request) -> str:
@@ -3587,7 +3598,7 @@ async def v1_student_analyze(
         raise HTTPException(404, "Student not found")
     _require_counsellor_student_access(user, student_id)
     requested_platform = (data.get("platform") or "").strip()
-    if requested_platform:
+    if requested_platform or data.get("platforms"):
         from backend.services.consent_gate import get_active_consent
         consent = get_active_consent(student_id)
         if consent:
@@ -3596,8 +3607,8 @@ async def v1_student_analyze(
                 consented = set(_json.loads(consent.get("platforms_json") or "[]"))
             except Exception:
                 consented = set()
-            if consented and requested_platform not in consented:
-                raise HTTPException(400, f"Platform {requested_platform} not in consented platforms: {', '.join(sorted(consented))}")
+            if requested_platform and requested_platform not in consented:
+                raise HTTPException(400, f"Platform {requested_platform} not in consented platforms: {', '.join(sorted(consented)) if consented else 'none'}")
             if data.get("platforms"):
                 req_set = set(data.get("platforms") if isinstance(data.get("platforms"), list) else [])
                 extra = req_set - consented
