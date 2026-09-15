@@ -2151,6 +2151,7 @@ async def list_counsellors(user: dict = Depends(require_auth)):
     """List all counsellors (admin only)."""
     if user["role_type"] != "admin":
         raise HTTPException(403, "Admin access required")
+    from backend.database import get_db
     conn = get_db()
     rows = conn.execute(
         "SELECT id, email, name, role_type, status, created_at FROM users "
