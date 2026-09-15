@@ -7,7 +7,7 @@ type PageKey =
   | 'resources' | 'team'
   | 'students' | 'referrals' | 'communications' | 'counsellor-dashboard'
   | 'alert-queue' | 'consent-tracker' | 'audit-log'
-  | 'admin'
+  | 'admin' | 'my-accounts'
   | 'notification-preferences'
 
 function _initialPage(): PageKey {

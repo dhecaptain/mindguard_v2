@@ -351,6 +351,13 @@ def accept_consent(
         raise ValueError(f"Cannot accept consent in status {consent['status']}")
 
     now = datetime.now(timezone.utc).isoformat()
+    try:
+        original_platforms = set(json.loads(consent.get("platforms_json") or "[]"))
+    except Exception:
+        original_platforms = set()
+    if platforms is not None:
+        if set(platforms) - original_platforms:
+            raise ValueError(f"Invalid platforms: {', '.join(sorted(set(platforms) - original_platforms))}")
     final_platforms = platforms if platforms is not None else json.loads(
         consent.get("platforms_json") or "[]"
     )
