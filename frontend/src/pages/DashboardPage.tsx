@@ -35,6 +35,8 @@ export default function DashboardPage() {
   const [socialAccounts, setSocialAccounts] = useState<any[]>([])
   const [hasError, setHasError] = useState<boolean>(false)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
+  // Platform analysis results from the analysis session
+  const [platformAnalysis, setPlatformAnalysis] = useState<Record<string, { overall?: number; nHigh?: number }>>({})
 
   useEffect(() => {
     api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch((_e: unknown) => {
@@ -51,13 +53,37 @@ export default function DashboardPage() {
     setIsAnalyzing(true)
     setHasError(false)
     try {
-      const { data } = await api.post('/self/analyze', {
+      // Step 1: Call the self-analysis endpoint
+      await api.post('/self/analyze', {
         platform,
         handle: account.handle,
         text: account.handle,
       })
-      // Update analytics store with the new analysis
-      useAnalysisStore.getState().updateAnalytics(data.prob, account.handle)
+      // Step 2: Fetch the analysis session to get platform data
+      const { data: sessionsData } = await api.get('/self/analysis-sessions')
+      const session = sessionsData.sessions.find(
+        (s: any) => s.analysis_type === 'self' && s.platforms_json
+      )
+      if (session) {
+        const platforms = session.platforms_json ? JSON.parse(session.platforms_json) : []
+        const findings = session.findings_json ? JSON.parse(session.findings_json) : {}
+        // Extract per-platform stats
+        const platformStats: Record<string, { overall?: number; nHigh?: number }> = {}
+        platforms.forEach((p: string) => {
+          const platformLower = p.toLowerCase()
+          // Check each platformLabel key
+          Object.keys({ reddit: 'reddit', bluesky: 'bluesky', mastodon: 'mastodon', instagram: 'instagram', twitter: 'twitter', youtube: 'youtube', facebook: 'facebook', file: 'file' }).forEach(([key, lower]) => {
+            if (platformLower === lower) {
+              const riskScore = findings.risk_score != null ? findings.risk_score : 0
+              platformStats[key] = {
+                overall: riskScore,
+                nHigh: riskScore >= 0.5 ? 1 : (findings.n_high || 0),
+              }
+            }
+          })
+        })
+        setPlatformAnalysis(platformStats)
+      }
       // Refresh social accounts to reflect updated state
       api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch(() => {})
     } catch (e: unknown) {
@@ -94,9 +120,21 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="space-y-[10px]">
-            {platformResults.map(([name, result]) => (
-              <PlatformRow key={name} name={name} done={Boolean(result)} overall={result?.overall} nHigh={result?.n_high} nPosts={result?.n_posts} />
-            ))}
+            {platformResults.map(([name, result]) => {
+              const stats = platformAnalysis[name] || {}
+              const overall = stats.overall
+              const nHigh = stats.nHigh
+              return (
+                <PlatformRow
+                  key={name}
+                  name={name}
+                  done={Boolean(result)}
+                  overall={overall}
+                  nHigh={nHigh != null ? nHigh : undefined}
+                  nPosts={result?.n_posts}
+                />
+              )
+            })}
             <PlatformRow name="Video" done={videoAnalysed} overall={video?.ok ? video.risk : undefined} />
           </div>
         </section>
