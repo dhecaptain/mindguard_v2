@@ -1147,12 +1147,10 @@ def get_alert_by_id(alert_id: str) -> dict | None:
 
 
 def has_consent_relationship(student_id: str, counsellor_id: str) -> bool:
-    now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     row = conn.execute(
-        "SELECT 1 FROM consents WHERE student_id = ? AND counsellor_id = ? "
-        "AND status = 'ACCEPTED' AND (expires_at IS NULL OR expires_at > ?) LIMIT 1",
-        (student_id, counsellor_id, now),
+        "SELECT 1 FROM consents WHERE student_id = ? AND counsellor_id = ? LIMIT 1",
+        (student_id, counsellor_id),
     ).fetchone()
     conn.close()
     return row is not None
