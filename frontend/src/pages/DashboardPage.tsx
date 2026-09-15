@@ -95,9 +95,9 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-[10px]">
             {platformResults.map(([name, result]) => (
-              <PlatformRow key={name} name={name} done={Boolean(result)} detail={result ? `${result.n_posts} posts, ${formatPercent(result.overall)} overall` : 'Not analysed'} />
+              <PlatformRow key={name} name={name} done={Boolean(result)} overall={result?.overall} nHigh={result?.n_high} nPosts={result?.n_posts} />
             ))}
-            <PlatformRow name="Video" done={videoAnalysed} detail={video?.ok ? `1 item, ${formatPercent(video.risk)} risk` : 'Not analysed'} />
+            <PlatformRow name="Video" done={videoAnalysed} overall={video?.ok ? video.risk : undefined} />
           </div>
         </section>
 
@@ -175,14 +175,25 @@ function MetricCard({ label, value, icon, tone = '#0F766E' }: { label: string; v
   )
 }
 
-function PlatformRow({ name, done, detail }: { name: string; done: boolean; detail: string }) {
+function PlatformRow({ name, done, overall, nHigh, nPosts }: { name: string; done: boolean; overall?: number; nHigh?: number; nPosts?: number }) {
+  const safePosts = nPosts != null ? nPosts - (nHigh || 0) : 0
+  const highRisk = nHigh != null ? nHigh : 0
+  const barWidth = overall != null ? Math.max(1, Math.min(100, overall * 100)) : 0
   return (
     <div className="flex items-center justify-between gap-[12px] rounded-[8px] bg-[#f8fafc] px-[12px] py-[9px]">
       <div className="flex items-center gap-[8px]">
         <span className={`w-[8px] h-[8px] rounded-full ${done ? 'bg-[#22c55e]' : 'bg-[#cbd5e1]'}`} />
         <span className="text-[0.8rem] font-semibold text-[#1f2937]">{name}</span>
       </div>
-      <span className="text-[0.72rem] text-[#6b7280] text-right">{detail}</span>
+      <div className="flex-1 flex h-[24px] items-center gap-[4px]">
+        <div className="flex-1 rounded-[4px] bg-[#e2e8f0]" style={{ width: `${barWidth}%` }}>
+          <div className="rounded-[4px] bg-[#ffedcc]" style={{ width: `${highRisk > 0 ? highRisk / Math.max(nPosts || 1, 1) * 100 : 0}%` }} />
+        </div>
+      </div>
+      <div className="text-right">
+        <span className="text-[0.72rem] font-semibold text-[#1f2937]">{highRisk}</span>
+        <span className="text-[0.65rem] text-[#6b7280]">high / {safePosts > 0 ? safePosts : ''} safe</span>
+      </div>
     </div>
   )
 }
