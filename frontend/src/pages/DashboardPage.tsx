@@ -34,6 +34,7 @@ export default function DashboardPage() {
   // Social accounts state (loaded from backend /self/social-accounts)
   const [socialAccounts, setSocialAccounts] = useState<any[]>([])
   const [hasError, setHasError] = useState<boolean>(false)
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
 
   useEffect(() => {
     api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch((_e: unknown) => {
@@ -47,6 +48,8 @@ export default function DashboardPage() {
       setHasError(true)
       return
     }
+    setIsAnalyzing(true)
+    setHasError(false)
     try {
       const { data } = await api.post('/self/analyze', {
         platform,
@@ -59,6 +62,8 @@ export default function DashboardPage() {
       api.get('/self/social-accounts').then(({ data }) => setSocialAccounts(data.accounts || [])).catch(() => {})
     } catch (e: unknown) {
       setHasError(true)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
@@ -138,6 +143,9 @@ export default function DashboardPage() {
                 setHasError(true)
                 return
               }
+              if (isAnalyzing) {
+                return // already running; ignore further clicks
+              }
               handleAnalyzeSelf(firstAccount.platform)
             }}
           />
@@ -188,15 +196,21 @@ function MiniStat({ label, value, tone = '#0F766E' }: { label: string; value: nu
   )
 }
 
-function ActionButton({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+function ActionButton({ icon, label, onClick, disabled, loading }: { icon: string; label: string; onClick: () => void; disabled?: boolean; loading?: boolean }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled || loading}
       className="flex items-center justify-center gap-[8px] rounded-[8px] border border-[#d1d5db] bg-white px-[14px] py-[11px] text-[0.82rem] font-semibold text-[#4b5563] hover:border-[#0F766E] hover:text-[#0F766E]"
     >
       <i className={`${icon} text-[16px]`} />
-      {label}
+      {loading ? (
+        <i className="ti ti-loader ti-spin text-[16px] mx-1" />
+      ) : (
+        <i className={`${icon} text-[16px]`} />
+      )}
+      {loading ? 'Analysing…' : label}
     </button>
   )
 }
