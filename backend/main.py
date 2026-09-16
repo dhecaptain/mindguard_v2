@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import httpx
 import jwt
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
@@ -1016,6 +1017,29 @@ async def google_auth(data: dict, request: Request):
         "terms_accepted": bool(user.get("terms_accepted_at")),
         "access_token": token,
     }
+
+
+# ── Mastodon handle normalization ──────────────────────────────────────
+# Parses Mastodon handles of the form @username@instance and derives
+# the profile URL (https://instance/@username).  Used when saving social
+# accounts and when the profile_url is not pre‑stored.
+_MASTODON_HANDLE_RE = re.compile(r"^@([^@]+)@([^@]+)$")
+
+
+def _normalize_mastodon_handle(handle: str | None) -> tuple[str | None, str | None, str | None]:
+    """Return (canonical_handle, instance, profile_url) for a Mastodon handle.
+
+    If the handle is not a Mastodon handle, returns (handle, None, None).
+    """
+    if not handle:
+        return None, None, None
+    m = _MASTODON_HANDLE_RE.match(handle)
+    if m:
+        username, instance = m.group(1), m.group(2)
+        canonical = f"@{username}@{instance}"
+        profile_url = f"https://{instance}/@{username}"
+        return canonical, instance, profile_url
+    return handle, None, None
 
 
 # ── Analysis routes ──────────────────────────────────────────────────

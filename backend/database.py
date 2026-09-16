@@ -2228,8 +2228,43 @@ def get_email_events(related_type: str | None = None, related_id: str | None = N
 
 # ── Student social accounts ─────────────────────────────────────────
 
+import re as _re
+
+_MASTODON_HANDLE_RE = _re.compile(r"^@([^@]+)@([^@]+)$")
+
+
+def _normalize_mastodon_handle(handle: str | None) -> tuple[str | None, str | None, str | None]:
+    """Parse a Mastodon handle ``@username@instance`` and return
+    ``(canonical_handle, instance, profile_url)``.
+
+    If the handle is not a Mastodon handle, returns ``(handle, None, None)``.
+    """
+    if not handle:
+        return None, None, None
+    m = _MASTODON_HANDLE_RE.match(handle)
+    if m:
+        username, instance = m.group(1), m.group(2)
+        canonical = f"@{username}@{instance}"
+        profile_url = f"https://{instance}/@{username}"
+        return canonical, instance, profile_url
+    return handle, None, None
+
+
 def save_social_account(student_id: str, platform: str, handle: str | None, profile_url: str | None) -> dict:
     """Save or update a student's social media account."""
+    # Normalize Mastodon handles: @username@instance -> derive profile_url
+    normalized_handle: str | None
+    instance: str | None
+    derived_profile_url: str | None
+    normalized_handle, instance, derived_profile_url = _normalize_mastodon_handle(handle)
+
+    # Use the derived profile_url for Mastodon if we don't already have one
+    if platform == "mastodon" and not profile_url and derived_profile_url:
+        profile_url = derived_profile_url
+    # Also normalize the handle stored in DB so future lookups work
+    if platform == "mastodon" and normalized_handle:
+        handle = normalized_handle
+
     now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     existing = conn.execute(
