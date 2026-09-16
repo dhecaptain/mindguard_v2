@@ -67,6 +67,9 @@ for _uid, email, name, role in ACCOUNTS:
     # Staff accounts must be approved to exercise permissions (permissions.py
     # blocks ``pending`` accounts); mirror how real staff get provisioned.
     conn.execute("UPDATE users SET status = 'approved' WHERE email = ?", (email,))
+    # Institutional staff skip the individual onboarding gate; mark them as
+    # institution-managed so the frontend routes straight into the staff app.
+    conn.execute("UPDATE users SET user_category = 'institution_managed' WHERE email = ?", (email,))
     conn.commit()
     conn.close()
 

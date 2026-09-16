@@ -12,6 +12,10 @@ import ConsentPortalPage from './pages/ConsentPortalPage'
 import InvitePage from './pages/InvitePage'
 import OnboardingPage from './pages/OnboardingPage'
 import MyAccountsPage from './pages/MyAccountsPage'
+import AdultDashboardPage from './pages/AdultDashboardPage'
+import AdultAccountsPage from './pages/AdultAccountsPage'
+import AnalysisHistoryPage from './pages/AnalysisHistoryPage'
+import AnalysisSessionPage from './pages/AnalysisSessionPage'
 import DemoRequestPage from './pages/DemoRequestPage'
 import DashboardPage from './pages/DashboardPage'
 import TextImageAnalysisPage from './pages/TextImageAnalysisPage'
@@ -77,6 +81,7 @@ function IdleWarningModal({ countdown, onStay, onLogout }: { countdown: number; 
 function PageRouter() {
   const { currentPage } = useUiStore()
   const role = useAuthStore((s) => s.user?.role_type?.toLowerCase())
+  const userCategory = useAuthStore((s) => s.user?.user_category)
 
   if (role === 'admin') {
     switch (currentPage) {
@@ -130,6 +135,10 @@ function PageRouter() {
     }
   }
 
+  if (userCategory === 'adult') {
+    return <AdultPageRouter />
+  }
+
   switch (currentPage) {
     case 'dashboard': return <DashboardPage />
     case 'text-image': return <TextImageAnalysisPage />
@@ -142,6 +151,23 @@ function PageRouter() {
   }
 }
 
+function AdultPageRouter() {
+  const { currentPage } = useUiStore()
+
+  switch (currentPage) {
+    case 'dashboard': return <AdultDashboardPage />
+    case 'my-accounts': return <AdultAccountsPage />
+    case 'self-history': return <AnalysisHistoryPage />
+    case 'self-session': return <AnalysisSessionPage />
+    case 'text-image': return <TextImageAnalysisPage />
+    case 'resources': return <CrisisResourcesPage />
+    case 'team': return <TeamPage />
+    case 'communications': return <StudentCommunicationsPage />
+    case 'notification-preferences': return <NotificationPreferencesPage />
+    default: return <AdultDashboardPage />
+  }
+}
+
 function AuthenticatedApp() {
   const { logout } = useAuthStore()
   const [showWarning, setShowWarning] = useState(false)
@@ -150,7 +176,7 @@ function AuthenticatedApp() {
 
   const handleLogout = useCallback(async () => {
     setShowWarning(false)
-    try { await apiLogout() } catch {}
+    try { await apiLogout() } catch {/* eslint-disable no-empty */}{}
     logout()
   }, [logout])
 
@@ -216,7 +242,7 @@ export default function App() {
       setInitialized(true)
     }
     boot()
-  }, [])
+  }, [setAuth, setLoading, setPage, setTermsAccepted])
 
   if (!initialized || loading) {
     return (

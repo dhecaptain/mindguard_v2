@@ -4,6 +4,7 @@ Covers consent platform expansion, ownership, assignment, invite, durable sessio
 """
 
 import os
+from datetime import datetime, timezone
 
 os.environ.setdefault("JWT_SECRET", "product-arch-test-secret")
 os.environ.setdefault("ENCRYPTION_KEY", "b" * 64)
@@ -39,16 +40,14 @@ def test_consent_cannot_expand_platforms(db, monkeypatch):
     counsellor = _user(db, "c_exp@school.edu", "counsellor")
     student = _user(db, "s_exp@school.edu", "student")
     consent = database.create_consent(student["id"], counsellor["id"], "s_exp@school.edu", "student", ["Reddit"])
-    dispatched = consent_service.dispatch_consent(consent["id"], counsellor["id"])
-    token = dispatched["magic_token"] if "magic_token" in dispatched else database.get_consent_by_id(consent["id"]).get("magic_token")
+    consent_service.dispatch_consent(consent["id"], counsellor["id"])
     # dispatch uses signed token now
     from backend.database import get_consent_by_id
     c = get_consent_by_id(consent["id"])
     # get signed token hash lookup
-    import backend.database as d
     # use portal accept with expanded platforms
     with TestClient(app) as client:
-        resp = client.post(f"/api/v1/portal/consents/{c.get('magic_token') or 'invalid'}/accept", json={"signature_name": "Test", "platforms": ["Reddit", "Instagram", "Evil"], "social_accounts": {"Evil": "x"}})
+        client.post(f"/api/v1/portal/consents/{c.get('magic_token') or 'invalid'}/accept", json={"signature_name": "Test", "platforms": ["Reddit", "Instagram", "Evil"], "social_accounts": {"Evil": "x"}})
         # we need valid token, so fetch via get_consent_by_token
         # instead test via service directly: accept should reject
         pass
@@ -62,7 +61,7 @@ def test_consent_cannot_expand_platforms(db, monkeypatch):
     # need fresh consent
     student2 = _user(db, "s_exp2@school.edu", "student")
     c2 = database.create_consent(student2["id"], counsellor["id"], "s_exp2@school.edu", "student", ["Reddit", "Bluesky"])
-    dispatched2 = consent_service.dispatch_consent(c2["id"], counsellor["id"])
+    consent_service.dispatch_consent(c2["id"], counsellor["id"])
     ok = consent_service.accept_consent(c2["id"], "Test2", "127.0.0.1", platforms=["Reddit"], social_accounts={"Reddit": "u_test"})
     assert ok["status"] == "ACCEPTED"
     assert "Reddit" in ok["platforms_json"]
@@ -73,27 +72,71 @@ def test_self_social_ownership_enforced(db):
     b = _user(db, "self2@school.edu", "student")
     from backend.database import save_social_account
     save_social_account(a["id"], "Instagram", "alice123", None)
-    # b tries to analyze alice's handle via self endpoint
+    # b has NOT connected any account, so b's self-analysis must never return a
+    # fabricated score for a platform b does not own. a's session is isolated.
+    from backend.services import self_analysis
+
+    async def fake_reddit_ok(user_id):
+        return {
+            "platform": "reddit",
+            "status": "ok",
+            "message": "OK",
+            "posts": [
+                {
+                    "platform": "reddit",
+                    "text": "a public post about dealing with hard weeks and finding better routines",
+                    "risk_score": 0.1,
+                    "level": "low",
+                    "date": datetime.now(timezone.utc).isoformat(),
+                    "url": "https://reddit.com/user/self1/1",
+                }
+            ],
+        }
+
     with TestClient(app) as client:
         token_b = _token(b)
-        resp = client.post("/api/self/analyze", json={"platform": "Instagram", "handle": "alice123", "text": "hello"}, headers={"Authorization": f"Bearer {token_b}"})
-        assert resp.status_code == 403
-        # a can analyze own
+        # b declares adult category so the gate itself doesn't block.
+        database.update_user_onboarding(b["id"], "adult")
+        resp = client.post(
+            "/api/self/analyze",
+            json={"platform": "Instagram", "handle": "alice123", "text": "hello"},
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        # No fabricated analysis: the endpoint reports no_data, never 200 with a
+        # score derived from the handle text.
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["session"]["status"] == "no_data"
+
+        # a can analyze their own connected account and it is recorded under a.
         token_a = _token(a)
-        # mock predict to avoid model load
-        import backend.main as main
-        orig = main.predict_one
-        async def fake_predict(text):
-            return 0.1, 10.0
-        main.predict_one = fake_predict
-        resp2 = client.post("/api/self/analyze", json={"platform": "Instagram", "handle": "alice123", "text": "hello"}, headers={"Authorization": f"Bearer {token_a}"})
-        main.predict_one = orig
-        assert resp2.status_code == 200
-        assert "session_id" in resp2.json()
+        saved = self_analysis._ANALYZERS.get("reddit")
+        self_analysis._ANALYZERS["reddit"] = fake_reddit_ok
+        try:
+            database.save_social_account(a["id"], "reddit", "self1-r", None)
+            resp_a = client.post(
+                "/api/self/analyze",
+                json={"platform": "reddit"},
+                headers={"Authorization": f"Bearer {token_a}"},
+            )
+        finally:
+            if saved is None:
+                self_analysis._ANALYZERS.pop("reddit", None)
+            else:
+                self_analysis._ANALYZERS["reddit"] = saved
+        assert resp_a.status_code == 200, resp_a.text
+        sess_a = resp_a.json()["session"]
+        assert sess_a["status"] == "completed"
+
+        # b cannot read a's session (ownership boundary at the read path too).
+        resp_b_read = client.get(
+            f"/api/self/analysis-sessions/{sess_a['id']}",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert resp_b_read.status_code == 404
 
 
 def test_counsellor_assignment_enforced(db):
-    admin = _user(db, "admin_assign@school.edu", "admin")
+    _user(db, "admin_assign@school.edu", "admin")
     counsellor = _user(db, "c_assign@school.edu", "counsellor")
     student = _user(db, "s_assign@school.edu", "student")
     # create consent but no assignment
@@ -101,7 +144,7 @@ def test_counsellor_assignment_enforced(db):
     # try to access timeline without assignment
     with TestClient(app) as client:
         token = _token(counsellor)
-        resp = client.get(f"/api/v1/students/{student['id']}/timeline", headers={"Authorization": f"Bearer {token}"})
+        client.get(f"/api/v1/students/{student['id']}/timeline", headers={"Authorization": f"Bearer {token}"})
         # should be 403 because no assignment (our helper requires assignment)
         # However current has_consent_relationship original may still allow, but new _require_counsellor_student_access not yet wired to this endpoint
         # So we check at least that without assignment, deactivated loses access

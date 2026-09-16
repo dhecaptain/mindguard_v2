@@ -76,6 +76,8 @@ export interface UserInfo {
   terms_accepted?: boolean
   dob?: string
   parent_email?: string
+  user_category?: string
+  onboarding_completed?: boolean
 }
 
 export interface CrisisResource {

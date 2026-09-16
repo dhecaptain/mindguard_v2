@@ -130,19 +130,3 @@ export async function getUnifiedAnalysis(): Promise<{
   const { data } = await api.get('/platforms/unified')
   return data
 }
-
-export interface SelfAnalysisPayload {
-  platform: string
-  handle: string
-  text: string
-}
-
-export async function analyzeSelfAccount(payload: SelfAnalysisPayload): Promise<{
-  prob: number
-  label: string
-  latency_ms: number
-  session_id: string
-}> {
-  const { data } = await api.post('/self/analyze', payload)
-  return data
-}
