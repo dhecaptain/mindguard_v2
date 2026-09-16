@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import string
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from backend.config import CONSENT_EXPIRY_DAYS
 from backend.services.crypto import decrypt_pii, encrypt_pii, hash_email, hash_token, redact_pii
+from backend.services.platform_registry import normalize_platform
 
 logger = logging.getLogger(__name__)
 
@@ -331,13 +333,16 @@ def create_analysis_session(
     risk_score: float | None = None,
     insights: str | None = None,
     recommendations: str | None = None,
+    status: str = "completed",
+    progress_json: dict | None = None,
+    error_json: dict | None = None,
 ) -> dict:
     sid = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     conn.execute(
-        "INSERT INTO analysis_sessions (id, student_id, counsellor_id, institution_id, consent_id, started_at, completed_at, analysis_type, platforms_json, findings_json, risk_score, insights, recommendations, created_at, updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO analysis_sessions (id, student_id, counsellor_id, institution_id, consent_id, started_at, completed_at, analysis_type, platforms_json, findings_json, risk_score, insights, recommendations, status, progress_json, error_json, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             sid,
             student_id,
@@ -352,6 +357,9 @@ def create_analysis_session(
             risk_score,
             insights,
             recommendations,
+            status,
+            json.dumps(progress_json) if progress_json else None,
+            json.dumps(error_json) if error_json else None,
             now,
             now,
         ),
@@ -362,6 +370,75 @@ def create_analysis_session(
     return dict(row) if row else {"id": sid}
 
 
+def update_analysis_session_progress(session_id: str, status: str, progress: dict | None = None, error: dict | None = None) -> bool:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE analysis_sessions SET status = ?, progress_json = ?, error_json = ?, updated_at = ? WHERE id = ?",
+        (
+            status,
+            json.dumps(progress) if progress else None,
+            json.dumps(error) if error else None,
+            now,
+            session_id,
+        ),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def set_analysis_session_content(
+    session_id: str,
+    findings: dict | None = None,
+    risk_score: float | None = None,
+    insights: str | None = None,
+    recommendations: str | None = None,
+) -> bool:
+    """Write session result content without touching its status (used for honest no_data sessions)."""
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE analysis_sessions SET findings_json = ?, risk_score = ?, insights = ?, recommendations = ?, updated_at = ? WHERE id = ?",
+        (
+            json.dumps(findings) if findings else None,
+            risk_score,
+            insights,
+            recommendations,
+            datetime.now(timezone.utc).isoformat(),
+            session_id,
+        ),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def set_analysis_session_completed(session_id: str, findings: dict, risk_score: float, insights: str, recommendations: str) -> bool:
+    """Finalize a session that finished without errors (atomic, status → completed)."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE analysis_sessions SET status = 'completed', progress_json = NULL, error_json = NULL,"
+        " findings_json = ?, risk_score = ?, insights = ?, recommendations = ?, completed_at = ?, updated_at = ? "
+        "WHERE id = ? AND status != 'completed'",
+        (
+            json.dumps(findings) if findings else None,
+            risk_score,
+            insights,
+            recommendations,
+            now,
+            now,
+            session_id,
+        ),
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
 def get_analysis_sessions_for_student(student_id: str, limit: int = 50, offset: int = 0) -> list:
     conn = get_db()
     rows = conn.execute(
@@ -370,6 +447,16 @@ def get_analysis_sessions_for_student(student_id: str, limit: int = 50, offset: 
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_analysis_session_for_student(session_id: str, student_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM analysis_sessions WHERE id = ? AND student_id = ?",
+        (session_id, student_id),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_analysis_session(session_id: str) -> dict | None:
@@ -2228,9 +2315,7 @@ def get_email_events(related_type: str | None = None, related_id: str | None = N
 
 # ── Student social accounts ─────────────────────────────────────────
 
-import re as _re
-
-_MASTODON_HANDLE_RE = _re.compile(r"^@([^@]+)@([^@]+)$")
+_MASTODON_HANDLE_RE = re.compile(r"^@([^@]+)@([^@]+)$")
 
 
 def _normalize_mastodon_handle(handle: str | None) -> tuple[str | None, str | None, str | None]:
@@ -2250,8 +2335,27 @@ def _normalize_mastodon_handle(handle: str | None) -> tuple[str | None, str | No
     return handle, None, None
 
 
-def save_social_account(student_id: str, platform: str, handle: str | None, profile_url: str | None) -> dict:
-    """Save or update a student's social media account."""
+def save_social_account(
+    student_id: str,
+    platform: str,
+    handle: str | None,
+    profile_url: str | None,
+    credentials: dict | None = None,
+    verification_status: str = "pending",
+    verified_handle: str | None = None,
+    verified_profile_url: str | None = None,
+) -> dict:
+    """Save or update a student's social media account.
+
+    ``credentials`` (e.g. ``{"app_password": "..."}`` for Bluesky) is
+    encrypted at rest with AES-256-GCM and never returned by
+    :func:`get_social_accounts`. ``platform`` is normalized to its canonical
+    lowercase slug so legacy display-name rows ("Instagram") and slugs
+    ("instagram") are unified.
+    """
+    slug = normalize_platform(platform) or platform.strip().lower()
+    if not slug:
+        raise ValueError("platform is required")
     # Normalize Mastodon handles: @username@instance -> derive profile_url
     normalized_handle: str | None
     instance: str | None
@@ -2259,56 +2363,162 @@ def save_social_account(student_id: str, platform: str, handle: str | None, prof
     normalized_handle, instance, derived_profile_url = _normalize_mastodon_handle(handle)
 
     # Use the derived profile_url for Mastodon if we don't already have one
-    if platform == "mastodon" and not profile_url and derived_profile_url:
+    if slug == "mastodon" and not profile_url and derived_profile_url:
         profile_url = derived_profile_url
     # Also normalize the handle stored in DB so future lookups work
-    if platform == "mastodon" and normalized_handle:
+    if slug == "mastodon" and normalized_handle:
         handle = normalized_handle
+
+    if credentials in (None, {},):
+        creds_blob: str | None = None
+    else:
+        try:
+            creds_blob = encrypt_pii(json.dumps(credentials, sort_keys=True))
+        except Exception:
+            raise ValueError("Could not encrypt credentials securely")
 
     now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     existing = conn.execute(
         "SELECT id FROM student_social_accounts WHERE student_id = ? AND platform = ?",
-        (student_id, platform),
+        (student_id, slug),
     ).fetchone()
     if existing:
         conn.execute(
-            "UPDATE student_social_accounts SET handle = ?, profile_url = ?, updated_at = ?, active = 1 "
+            "UPDATE student_social_accounts SET handle = ?, profile_url = ?, updated_at = ?, active = 1, "
+            "credentials_json = COALESCE(?, credentials_json), verification_status = ?, "
+            "verified_handle = COALESCE(?, verified_handle), verified_profile_url = COALESCE(?, verified_profile_url) "
             "WHERE student_id = ? AND platform = ?",
-            (handle, profile_url, now, student_id, platform),
+            (handle, profile_url, now, creds_blob, verification_status,
+             verified_handle, verified_profile_url, student_id, slug),
         )
     else:
         conn.execute(
-            "INSERT INTO student_social_accounts (id, student_id, platform, handle, profile_url, active, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-            (str(uuid.uuid4()), student_id, platform, handle, profile_url, now, now),
+            "INSERT INTO student_social_accounts "
+            "(id, student_id, platform, handle, profile_url, credentials_json, verification_status,"
+            " verified_handle, verified_profile_url, last_verified_at, analysis_status, active, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_run', 1, ?, ?)",
+            (str(uuid.uuid4()), student_id, slug, handle, profile_url, creds_blob,
+             verification_status, verified_handle, verified_profile_url, now, now, now),
         )
     conn.commit()
     row = conn.execute(
         "SELECT * FROM student_social_accounts WHERE student_id = ? AND platform = ?",
-        (student_id, platform),
+        (student_id, slug),
     ).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _strip_credentials(dict(row)) if row else {"id": "", "platform": slug}
 
 
 def get_social_accounts(student_id: str) -> list:
-    """Get all social accounts for a student."""
+    """All social accounts for a student (credentials excluded, never leaked)."""
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM student_social_accounts WHERE student_id = ? AND active = 1 ORDER BY created_at DESC",
         (student_id,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_strip_credentials(dict(r)) for r in rows]
+
+
+def get_social_account_credentials(student_id: str, platform: str) -> dict:
+    """Decrypted credentials for a user's platform account (internal use only).
+
+    Returns an empty dict when no credentials are stored. The caller is
+    responsible for never logging or re-exposing the returned secrets.
+    """
+    slug = normalize_platform(platform) or platform.strip().lower()
+    conn = get_db()
+    row = conn.execute(
+        "SELECT credentials_json FROM student_social_accounts "
+        "WHERE student_id = ? AND platform = ? AND active = 1",
+        (student_id, slug),
+    ).fetchone()
+    conn.close()
+    if not row or not row["credentials_json"]:
+        return {}
+    blob = row["credentials_json"]
+    if blob.startswith("gcm1:"):
+        try:
+            blob = decrypt_pii(blob)
+        except Exception:
+            return {}
+    try:
+        creds = json.loads(blob)
+        return creds if isinstance(creds, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def set_social_account_verification(
+    student_id: str,
+    platform: str,
+    verification_status: str,
+    verified_handle: str | None = None,
+    verified_profile_url: str | None = None,
+    analysis_status: str | None = None,
+) -> dict | None:
+    slug = normalize_platform(platform) or platform.strip().lower()
+    updates = ["verification_status = ?", "last_verified_at = ?"]
+    params: list = [verification_status, datetime.now(timezone.utc).isoformat()]
+    if verified_handle is not None:
+        updates.append("verified_handle = ?")
+        params.append(verified_handle)
+    if verified_profile_url is not None:
+        updates.append("verified_profile_url = ?")
+        params.append(verified_profile_url)
+    if analysis_status is not None:
+        updates.append("analysis_status = ?")
+        params.append(analysis_status)
+    params.extend([student_id, slug])
+    conn = get_db()
+    cur = conn.execute(
+        f"UPDATE student_social_accounts SET {', '.join(updates)} "
+        "WHERE student_id = ? AND platform = ?",
+        params,
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM student_social_accounts WHERE student_id = ? AND platform = ?",
+        (student_id, slug),
+    ).fetchone()
+    conn.close()
+    ok = cur.rowcount > 0
+    return (_strip_credentials(dict(row)) if row and ok else None)
+
+
+def set_social_account_analysis_status(student_id: str, platform: str, analysis_status: str) -> dict | None:
+    slug = normalize_platform(platform) or platform.strip().lower()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE student_social_accounts SET analysis_status = ?, updated_at = ? "
+        "WHERE student_id = ? AND platform = ? AND active = 1",
+        (analysis_status, datetime.now(timezone.utc).isoformat(), student_id, slug),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM student_social_accounts WHERE student_id = ? AND platform = ?",
+        (student_id, slug),
+    ).fetchone()
+    conn.close()
+    return _strip_credentials(dict(row)) if row and cur.rowcount > 0 else None
+
+
+def _strip_credentials(row: dict) -> dict:
+    """Drop credential secrets from any social-account row before it leaves the DB layer."""
+    out = {k: v for k, v in row.items() if k != "credentials_json"}
+    out["has_credentials"] = bool(row.get("credentials_json"))
+    return out
 
 
 def delete_social_account(student_id: str, platform: str) -> bool:
-    """Delete (deactivate) a social account."""
+    """Delete (deactivate) a social account and wipe any stored credentials."""
+    slug = normalize_platform(platform) or platform.strip().lower()
     conn = get_db()
     cur = conn.execute(
-        "UPDATE student_social_accounts SET active = 0, updated_at = ? WHERE student_id = ? AND platform = ?",
-        (datetime.now(timezone.utc).isoformat(), student_id, platform),
+        "UPDATE student_social_accounts SET active = 0, credentials_json = NULL, updated_at = ? "
+        "WHERE student_id = ? AND platform = ?",
+        (datetime.now(timezone.utc).isoformat(), student_id, slug),
     )
     conn.commit()
     ok = cur.rowcount > 0

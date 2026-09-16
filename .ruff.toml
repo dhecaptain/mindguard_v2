@@ -1,0 +1,5 @@
+# Restore ruff's classic default rule set (E4/E7/E9/F). Newer ruff versions
+# broaden the no-config default to lint+B/BLE/SIM/etc., which flags intentional
+# repo patterns (FastAPI Depends()/Header() defaults, broad excepts in error
+# handlers). pyflakes F rules remain enforced.
+select = ["E4", "E7", "E9", "F"]

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useAuthStore, useUiStore, useNotificationStore, usePlatformStore } from '../../store'
+import type { PageKey } from '../../store/uiStore'
 import { useCounsellorStore } from '../../store/counsellorStore'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { getAlerts } from '../../api/counsellor'
@@ -13,6 +14,12 @@ const STUDENT_NAV_ITEMS: { key: string; icon: string; label: string }[] = [
   { key: 'communications', icon: 'ti ti-mail', label: 'Messages' },
   { key: 'resources', icon: 'ti ti-ambulance', label: 'Crisis Resources' },
   { key: 'team', icon: 'ti ti-users', label: 'Team' },
+]
+
+const ADULT_STUDENT_NAV_ITEMS: { key: string; icon: string; label: string }[] = [
+  ...STUDENT_NAV_ITEMS.slice(0, 2),
+  { key: 'self-history', icon: 'ti ti-history', label: 'Analysis History' },
+  ...STUDENT_NAV_ITEMS.slice(2),
 ]
 
 const COUNSELLOR_NAV_BASE = [
@@ -38,7 +45,7 @@ const COUNSELLOR_NAV_BASE = [
 const ADMIN_NAV_ITEMS = [
   { key: 'admin', icon: 'ti ti-shield-check', label: 'Dashboard' },
   { key: 'counsellors', icon: 'ti ti-stethoscope', label: 'Counsellors' },
-  { key: 'consent-tracker', icon: 'ti ti-file-check', label: 'Consent' },
+  { key: 'consent-tracker', icon: 'ti ti-file-check', label: 'Consent Tracker' },
   { key: 'students', icon: 'ti ti-users', label: 'Students' },
   { key: 'audit-log', icon: 'ti ti-history', label: 'Audit' },
   ...COUNSELLOR_NAV_BASE.filter((i) => !['consent-tracker', 'students', 'audit-log'].includes(i.key)),
@@ -76,6 +83,7 @@ export default function Sidebar() {
   const role = user?.role_type?.toLowerCase() || 'student'
   const isCounsellor = role === 'counsellor' || role === 'school_admin'
   const isAdmin = role === 'admin'
+  const isAdult = user?.user_category === 'adult'
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const isCollapsed = isDesktop && sidebarCollapsed
 
@@ -87,7 +95,9 @@ export default function Sidebar() {
       ? COUNSELLOR_NAV_BASE.map((item) =>
           item.key === 'alert-queue' && openAlertCount > 0 ? { ...item, badge: openAlertCount } : item
         )
-      : STUDENT_NAV_ITEMS
+      : isAdult
+        ? ADULT_STUDENT_NAV_ITEMS
+        : STUDENT_NAV_ITEMS
 
   const analysedPlatforms: Record<string, boolean> = {
     reddit: Boolean(reddit),
@@ -109,7 +119,7 @@ export default function Sidebar() {
       try {
         const alerts = await getAlerts('OPEN')
         setOpenAlertCount(alerts.length)
-      } catch {}
+      } catch /* eslint-disable no-empty */ {}
     }
     fetchCount()
     const interval = setInterval(fetchCount, 60000)
@@ -265,7 +275,7 @@ export default function Sidebar() {
           return (
             <div
               key={item.key}
-              onClick={() => setPage(item.key as any)}
+              onClick={() => setPage(item.key as PageKey)}
               className={`relative flex items-center cursor-pointer transition-colors duration-150 ${
                 isCollapsed
                   ? 'justify-center mx-[6px] py-[10px] rounded-[8px]'

@@ -1,0 +1,232 @@
+"""Tests for the adult-gated self-analysis workspace.
+
+Covers: adult category gate, encrypted-at-rest credentials that are never
+echoed, no-fake-success sessions (``no_data`` instead of a fabricated score),
+and cross-user session isolation (IDOR). Platform retrieval is monkeypatched so
+the suite never touches the network or the ML model.
+"""
+
+import os
+from datetime import datetime, timezone
+
+os.environ.setdefault("JWT_SECRET", "self-analyze-test-secret")
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from backend.auth import hash_password  # noqa: E402
+from backend.services import self_analysis  # noqa: E402
+
+
+@pytest.fixture()
+def client(db):
+    from backend.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+def _approve(db, user_id):
+    conn = db.get_db()
+    conn.execute("UPDATE users SET status = 'approved' WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+def _make_adult(db, email: str) -> dict:
+    user = db.create_user(email, email.split("@")[0].title(), hash_password("pw-12345"), role_type="student")
+    _approve(db, user["id"])
+    assert db.update_user_onboarding(user["id"], "adult")
+    fresh = db.get_user_by_id(user["id"])
+    assert (fresh or {}).get("user_category") == "adult"
+    return fresh
+
+
+def _make_pending(db, email: str) -> dict:
+    user = db.create_user(email, email.split("@")[0].title(), hash_password("pw-12345"), role_type="student")
+    _approve(db, user["id"])
+    return user
+
+
+def _login(client, email: str) -> str:
+    resp = client.post("/api/auth/login", json={"email": email, "password": "pw-12345"})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["access_token"]
+
+
+def _connect(parent_db, user_id: str, platform: str, handle: str, creds=None) -> dict:
+    return parent_db.save_social_account(user_id, platform, handle, None, credentials=creds or None)
+
+
+def test_self_routes_require_adult_category(db, client):
+    _make_pending(db, "pending@self.test")
+    _make_adult(db, "adult@self.test")
+    token = _login(client, "pending@self.test")
+
+    resp = client.get("/api/self/platforms", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403
+    resp = client.post(
+        "/api/self/analyze", headers={"Authorization": f"Bearer {token}"}, json={"platform": "reddit"}
+    )
+    assert resp.status_code == 403
+
+    token_adult = _login(client, "adult@self.test")
+    resp = client.get("/api/self/platforms", headers={"Authorization": f"Bearer {token_adult}"})
+    assert resp.status_code == 200
+    slugs = [p["key"] for p in resp.json()["platforms"]]
+    assert "reddit" in slugs and "bluesky" in slugs
+
+
+def test_connect_encrypts_credentials_and_never_echoes(db, client):
+    adult = _make_adult(db, "creds@self.test")
+    _connect(db, adult["id"], "bluesky", "me@mydomain.bsky.social", {"app_password": "abcd-efgh-ijkl-mnop"})
+
+    # At rest: app password is ciphertext, not a raw string.
+    conn = db.get_db()
+    row = conn.execute(
+        "SELECT credentials_json FROM student_social_accounts WHERE student_id = ? AND platform = 'bluesky'",
+        (adult["id"],),
+    ).fetchone()
+    conn.close()
+    assert row and row["credentials_json"]
+    assert "abcd-efgh-ijkl-mnop" not in row["credentials_json"]
+
+    # Over the wire: credentials are never returned.
+    token = _login(client, "creds@self.test")
+    accs = client.get("/api/self/social-accounts", headers={"Authorization": f"Bearer {token}"}).json()["accounts"]
+    assert accs[0]["platform"] == "bluesky"
+    assert accs[0]["has_credentials"] is True
+    serialized = str(accs)
+    assert "app_password" not in serialized
+    assert "abcd-efgh-ijkl-mnop" not in serialized
+
+
+def test_analyze_with_no_data_never_fakes_a_score(db, client, monkeypatch):
+    adult = _make_adult(db, "nodata@self.test")
+    _connect(db, adult["id"], "reddit", "sneaky_snack")
+
+    async def fake_reddit(user_id):
+        return {"platform": "reddit", "status": "no_data", "message": "No public posts found."}
+
+    monkeypatch.setattr(self_analysis, "_ANALYZERS", {"reddit": fake_reddit})
+
+    token = _login(client, "nodata@self.test")
+    resp = client.post(
+        "/api/self/analyze",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"platform": "reddit"},
+    )
+    assert resp.status_code == 200, resp.text
+    session = resp.json()["session"]
+    assert session["status"] == "no_data"
+    assert session["risk_score"] in (None, 0)
+    findings = session.get("findings_json") or {}
+    assert findings.get("overall_risk") is None
+    assert findings.get("posts_analyzed") == 0
+    insights_text = session.get("insights")
+    assert insights_text and "no signals to report yet" in " ".join(insights_text)
+
+
+def test_analyze_only_uses_own_connected_accounts(db, client, monkeypatch):
+    _make_adult(db, "owna@self.test")
+    _connect(db, "owna@self.test", "reddit", "alice-reddit")
+
+    async def fake_reddit_ok(user_id):
+        now = datetime.now(timezone.utc).isoformat()
+        return {
+            "platform": "reddit",
+            "status": "ok",
+            "message": "OK",
+            "posts": [
+                {
+                    "platform": "reddit",
+                    "text": "I have been struggling to sleep and nothing helps these days",
+                    "risk_score": 0.85,
+                    "level": "critical",
+                    "date": now,
+                    "url": "https://reddit.com/user/alice/1",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(self_analysis, "_ANALYZERS", {"reddit": fake_reddit_ok})
+
+    # A analyzes own connected account -> completed session.
+    token_a = _login(client, "owna@self.test")
+    ra = client.post("/api/self/analyze", headers={"Authorization": f"Bearer {token_a}"}, json={"platform": "reddit"})
+    assert ra.status_code == 200, ra.text
+    sess_a = ra.json()["session"]
+    assert sess_a["status"] == "completed"
+    assert sess_a["findings_json"]["overall_risk"] >= 0.5
+
+    # B has no connected accounts -> analyze reports no_data for B, and never
+    # touches A's session or account.
+    token_b = _login(client, "ownb@self.test")
+    rb = client.post("/api/self/analyze", headers={"Authorization": f"Bearer {token_b}"}, json={"platform": "reddit"})
+    assert rb.status_code == 200, rb.text
+    assert rb.json()["session"]["status"] == "no_data"
+
+    # B cannot read A's session detail (IDOR).
+    resp = client.get(
+        f"/api/self/analysis-sessions/{sess_a['id']}",
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_guess_other_session_id_is_404(db, client):
+    _make_adult(db, "idor@self.test")
+    token = _login(client, "idor@self.test")
+    resp = client.get(
+        f"/api/self/analysis-sessions/{'deadbeef' * 4}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_verify_writes_public_verification_status(db, client, monkeypatch):
+    adult = _make_adult(db, "verify@self.test")
+    _connect(db, adult["id"], "reddit", "real-user")
+
+    def fake_fetch(username: str):
+        return [{"text": "hello everyone this is a public post about a topic worth talking through", "date": datetime.now(timezone.utc).isoformat(), "url": "https://reddit.com/r/x/1"}]
+
+    import backend.main as main_mod
+
+    monkeypatch.setattr(main_mod, "_fetch_reddit_rss_posts", fake_fetch)
+
+    token = _login(client, "verify@self.test")
+    resp = client.post(
+        "/api/self/social-accounts/reddit/verify",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["verified"] is True
+    assert body["verification_status"] == "verified"
+    assert body["verified_handle"] == "real-user"
+
+    accs = client.get("/api/self/social-accounts", headers={"Authorization": f"Bearer {token}"}).json()["accounts"]
+    assert accs[0]["verification_status"] == "verified"
+    assert accs[0]["verified_handle"] == "real-user"
+
+
+def test_delete_wipes_credentials(db, client):
+    adult = _make_adult(db, "del@self.test")
+    _connect(db, adult["id"], "bluesky", "del@del.bsky.social", {"app_password": "aaaa-bbbb-cccc-dddd"})
+    token = _login(client, "del@self.test")
+
+    resp = client.delete(
+        "/api/self/social-accounts/bluesky",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+
+    conn = db.get_db()
+    row = conn.execute(
+        "SELECT active, credentials_json FROM student_social_accounts WHERE student_id = ? AND platform = 'bluesky'",
+        (adult["id"],),
+    ).fetchone()
+    conn.close()
+    assert row and row["active"] == 0
+    assert row["credentials_json"] is None

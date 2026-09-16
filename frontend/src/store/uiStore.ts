@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { PlatformResult, VideoResult, Notification } from '../types'
 
-type PageKey =
+export type PageKey =
   | 'dashboard' | 'text-image' | 'batch' | 'reddit' | 'video' | 'bluesky' | 'mastodon'
   | 'youtube' | 'file' | 'facebook' | 'twitter' | 'unified'
   | 'resources' | 'team'
@@ -9,6 +9,7 @@ type PageKey =
   | 'alert-queue' | 'consent-tracker' | 'audit-log'
   | 'admin' | 'counsellors' | 'institutions' | 'assignments' | 'my-accounts'
   | 'notification-preferences'
+  | 'self-history' | 'self-session'
 
 function _initialPage(): PageKey {
   const key = window.location.hash.replace(/^#\/?/, '')
@@ -75,7 +76,7 @@ export const usePlatformStore = create<PlatformState>((set) => ({
   file: null,
   video: null,
   loading: false,
-  setPlatformResult: (key, result) => set({ [key]: result } as any),
+  setPlatformResult: (key: string, result: PlatformResult | VideoResult | null) => set({ [key]: result }),
   setLoading: (v) => set({ loading: v }),
   clearAll: () =>
     set({

@@ -11,9 +11,9 @@ import subprocess
 import sys
 import tempfile
 import time
-import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from urllib.parse import urlencode, urlparse
 import urllib.error
 import urllib.request
@@ -22,7 +22,6 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import httpx
 import jwt
-import re
 from pathlib import Path
 
 from fastapi import FastAPI, Header, Request, UploadFile, File, HTTPException, Depends
@@ -36,9 +35,7 @@ from backend.config import (
 )
 from backend.models.schemas import (
     TextAnalysisRequest, TextAnalysisResponse,
-    PlatformRequest, LoginRequest, RegisterRequest, ChangePasswordRequest, UserResponse,
-    CreateGroupRequest, UpdateGroupRequest, AddMemberRequest,
-    GroupMessageRequest, UpdateNotificationPreferenceRequest,
+    PlatformRequest, LoginRequest, RegisterRequest, ChangePasswordRequest, CreateGroupRequest, UpdateGroupRequest, GroupMessageRequest, UpdateNotificationPreferenceRequest,
     MuteGroupRequest, NOTIFICATION_TYPES,
     DemoRequestCreate, DemoRequestUpdate,
 )
@@ -53,7 +50,6 @@ from backend.services.email_templates import (
     demo_request_confirmation, demo_request_notification, student_status_notification,
     counsellor_invitation_notification,
 )
-from backend.services.predictor import predict_one, predict_batch
 from backend.utils import clean_text, risk_label, detect_socioeconomic, calibrate_risk_score, RESOURCES, US_STATE_RESOURCES, TEAM_MEMBERS
 from backend.database import (
     init_db, seed_defaults,
@@ -69,15 +65,14 @@ from backend.database import (
     get_counsellor_dashboard, accept_user_terms,
     # v1 additions
     create_consent, get_consent_by_id, get_consent_by_token,
-    get_consents_by_counsellor, get_consents_by_student, query_consents,
+    query_consents,
     get_consent_with_student, get_audit_log_for_target, get_consent_events,
     create_linked_account, get_linked_accounts, revoke_linked_account,
-    get_alerts, dispose_alert, get_alert_by_id, get_open_alert_for_student,
-    has_consent_relationship,
+    get_alerts, dispose_alert, get_alert_by_id, has_consent_relationship,
     write_audit, get_audit_log, get_all_audit_log,
     health_check,
     create_note, get_notes,
-    update_rolling_risk, get_rolling_risk, get_rolling_risk_history,
+    get_rolling_risk, get_rolling_risk_history,
     get_user_by_referral_code, get_all_users,
     update_user_password, update_user_role,
     get_institution_by_id, list_institutions, create_institution, list_students,
@@ -88,14 +83,13 @@ from backend.database import (
     add_group_member, remove_group_member, get_group_members,
     get_groups_for_user, is_group_member, get_group_unread_count,
     send_group_message, get_group_messages,
-    mark_group_message_read, mark_all_group_messages_read,
+    mark_all_group_messages_read,
     # notification preferences
     get_notification_preferences, set_notification_preference, should_notify,
     # social accounts & assignments
     save_social_account, get_social_accounts, delete_social_account,
     assign_student_to_counsellor, unassign_student_from_counsellor,
     get_assignment, get_assignments_for_counsellor, get_assignments_for_student,
-    count_counsellors, get_active_consent_count, get_accepted_consent_count,
 )
 from backend.services.consent_service import (
     dispatch_consent, remind_consent, record_consent_decision, record_view, accept_consent, decline_consent, revoke_consent,
@@ -184,6 +178,36 @@ class SPAStaticFiles(StaticFiles):
 
 def _require_analysis_staff(user: dict) -> None:
     require_permission(user, PERM_ANALYSIS_RUN)
+
+
+def _require_self_adult(user: dict) -> None:
+    """Self-analysis workspace is adult-gated (user declared adult on onboarding)."""
+    if (user.get("user_category") or "pending") != "adult":
+        raise HTTPException(403, "Complete onboarding as an adult to use the self-analysis workspace.")
+
+
+def _decode_json_field(value: Any) -> Any:
+    if value in (None, "", []):
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except (ValueError, TypeError):
+        return value
+
+
+def _decode_session_json(session: dict) -> dict:
+    out = dict(session)
+    for key in ("platforms_json", "findings_json", "progress_json", "error_json"):
+        if key in out:
+            out[key] = _decode_json_field(out.get(key))
+    for key in ("insights", "recommendations"):
+        if key in out and out.get(key):
+            decoded = _decode_json_field(out[key])
+            if isinstance(decoded, list):
+                out[key] = decoded
+    return out
 
 
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5188,http://127.0.0.1:5188").split(",") if o.strip()]
@@ -611,6 +635,7 @@ async def login(req: LoginRequest, request: Request):
         "role_type": user["role_type"],
         "referral_code": _generate_referral_code(),
         "terms_accepted": bool(user.get("terms_accepted_at")),
+        "user_category": user.get("user_category") or "pending",
         "access_token": token,
     }
 
@@ -767,148 +792,144 @@ async def complete_onboarding(data: dict, request: Request, user: dict = Depends
     return {"ok": True, "user": fresh}
 
 
+@app.get("/api/self/platforms")
+async def self_platform_catalog(user: dict = Depends(require_auth)):
+    _require_self_adult(user)
+    from backend.services.platform_registry import all_platforms
+
+    accounts = {a["platform"]: a for a in get_social_accounts(user["id"])}
+    platforms = []
+    for spec in all_platforms():
+        key = spec["key"]
+        acc = accounts.get(key)
+        platforms.append(
+            {
+                **spec,
+                "connected": acc is not None,
+                "verification_status": (acc or {}).get("verification_status") or "not_connected",
+                "verified_handle": (acc or {}).get("verified_handle"),
+                "verified_profile_url": (acc or {}).get("verified_profile_url"),
+                "analysis_status": (acc or {}).get("analysis_status") or "not_run",
+                "handle": (acc or {}).get("handle"),
+                "profile_url": (acc or {}).get("profile_url"),
+            }
+        )
+    return {"platforms": platforms}
+
+
 @app.get("/api/self/social-accounts")
 async def get_own_social_accounts(user: dict = Depends(require_auth)):
-    from backend.database import get_social_accounts
+    _require_self_adult(user)
     return {"accounts": get_social_accounts(user["id"])}
 
 
 @app.post("/api/self/social-accounts")
 async def add_own_social_account(data: dict, request: Request, user: dict = Depends(require_auth)):
-    platform = (data.get("platform") or "").strip()
-    handle = (data.get("handle") or "").strip()
-    profile_url = (data.get("profile_url") or "").strip()
+    _require_self_adult(user)
+    from backend.services.platform_registry import get_platform, normalize_platform
+
+    platform = normalize_platform((data.get("platform") or "").strip()) or ""
     if not platform:
         raise HTTPException(400, "platform is required")
+    spec = get_platform(platform) or {}
+    handle = (data.get("handle") or "").strip()
+    profile_url = (data.get("profile_url") or "").strip()
+    raw_creds = data.get("credentials")
+    raw_creds = raw_creds if isinstance(raw_creds, dict) else {}
+
+    # Accept a URL pasted into the handle field.
+    if (handle and not profile_url and handle.lower().startswith(("http://", "https://"))):
+        profile_url, handle = handle, ""
     if not handle and not profile_url:
         raise HTTPException(400, "handle or profile_url required")
-    if len(platform) > 32 or len(handle) > 128 or len(profile_url) > 512:
+    if len(handle) > 128 or len(profile_url) > 512:
         raise HTTPException(400, "Field too long")
-    from backend.database import save_social_account
-    acc = save_social_account(user["id"], platform, handle, profile_url)
+
+    # Build the secret bag from the platform's declared fields only — anything
+    # else (attacker-injected keys) is discarded before it reaches the DB.
+    allowed_fields = set((spec.get("credentials") or {}).get("secret_fields", []) or []) | {"handle", "channel", "profile_url"}
+    creds: dict = {}
+    if handle:
+        creds["handle"] = handle
+    if profile_url:
+        creds["profile_url"] = profile_url
+    for key, value in raw_creds.items():
+        if key in allowed_fields and isinstance(value, str) and value.strip():
+            creds[key] = value.strip()[:256]
+    if platform == "youtube":
+        creds["channel"] = (data.get("channel") or profile_url or handle or "").strip()[:512]
+
+    acc = save_social_account(
+        user["id"],
+        platform,
+        handle or None,
+        profile_url or None,
+        credentials=creds or None,
+    )
     write_audit(user["id"], user["role_type"], "SOCIAL_ACCOUNT_UPSERT", "user", user["id"],
                 payload={"platform": platform}, ip=_client_ip(request))
-    return {"ok": True, "account": acc}
+    return {"ok": True, "platform": platform, "account": acc}
+
+
+@app.post("/api/self/social-accounts/{platform}/verify")
+async def verify_own_social_account(platform: str, request: Request, user: dict = Depends(require_auth)):
+    _require_self_adult(user)
+    from backend.services.platform_registry import normalize_platform
+    from backend.services.self_analysis import verify_platform_connection
+
+    slug = normalize_platform(platform)
+    if not slug:
+        raise HTTPException(400, "Unknown platform")
+    result = await verify_platform_connection(user["id"], slug)
+    write_audit(user["id"], user["role_type"], "PLATFORM_VERIFY", "social_account", slug,
+                payload={"platform": slug, "verified": result.get("verified")}, ip=_client_ip(request))
+    return result
 
 
 @app.delete("/api/self/social-accounts/{platform}")
 async def delete_own_social_account(platform: str, request: Request, user: dict = Depends(require_auth)):
-    from backend.database import delete_social_account
-    ok = delete_social_account(user["id"], platform)
+    _require_self_adult(user)
+    from backend.services.platform_registry import normalize_platform
+
+    slug = normalize_platform(platform)
+    if not slug:
+        raise HTTPException(400, "Unknown platform")
+    ok = delete_social_account(user["id"], slug)
     if not ok:
         raise HTTPException(404, "Account not found")
     write_audit(user["id"], user["role_type"], "SOCIAL_ACCOUNT_DELETED", "user", user["id"],
-                payload={"platform": platform}, ip=_client_ip(request))
+                payload={"platform": slug}, ip=_client_ip(request))
     return {"ok": True}
 
 
 @app.post("/api/self/analyze")
 async def analyze_own_account(data: dict, request: Request, user: dict = Depends(require_auth)):
-    """Individual may analyze only own connected accounts (ownership enforced)."""
+    """Adult analyzes only own connected accounts (ownership enforced).
+
+    Runs real per-platform retrieval and model scoring. If nothing could be
+    retrieved, the session is recorded as ``no_data`` — never a fake score.
+    """
+    _require_self_adult(user)
+    _check_analysis_rate_limit(user["id"])
+    from backend.services.platform_registry import normalize_platform
+    from backend.services.self_analysis import run_self_analysis
+
     platform = (data.get("platform") or "").strip()
-    handle = (data.get("handle") or "").strip()
-    if not platform or not handle:
-        raise HTTPException(400, "platform and handle required")
-    from backend.database import get_social_accounts
-    own = get_social_accounts(user["id"])
-    owned_handles = {a["handle"] for a in own if a.get("platform") == platform}
-    owned_urls = {a["profile_url"] for a in own if a.get("platform") == platform}
-    if handle not in owned_handles and handle not in owned_urls:
-        raise HTTPException(403, "Handle not owned by you; add it via My Accounts first")
-    # Attempt to fetch actual platform posts/data for analysis.
-    # If platform data ingestion is not available, report clearly rather than
-    # pretending analysis occurred with zero items (Task #11).
-    posts: list[dict] = []
-    platform_data_available = False
+    slugs: list[str] = []
+    if platform:
+        slug = normalize_platform(platform)
+        if not slug:
+            raise HTTPException(400, "Unknown platform")
+        slugs = [slug]
+
     try:
-        # Find the account entry to get the profile URL
-        account = next((a for a in own if a.get("platform") == platform), None)
-        profile_url = (account or {}).get("profile_url")
-        if not profile_url:
-            raise ValueError("No profile URL for connected account")
-        # Try the scraper worker path (currently broken/missing worker;
-        # gracefully fall through to "unavailable" status).
-        import subprocess, sys
-        from pathlib import Path
-        worker = Path(__file__).resolve().parent.parent / "scraper_worker.py"
-        if worker.exists():
-            result = subprocess.run(
-                [sys.executable, str(worker), platform, profile_url, "3"],
-                capture_output=True, text=True, timeout=120,
-            )
-            if result.returncode == 0:
-                import json as _json
-                data = _json.loads(result.stdout.strip())
-                if data.get("ok"):
-                    posts = data.get("posts", [])
-                    platform_data_available = True
-        else:
-            logger.info("scraper_worker.py not available; platform data will be reported as unavailable")
-    except Exception as _e:
-        logger.info("Platform data ingestion failed for %s: %s", platform, _e)
-    # If we couldn't retrieve actual platform posts, fall back to analysing
-    # the handle name so the endpoint still returns a deterministic result
-    # rather than always 500'ing, but we flag that platform data was unavailable.
-    if not platform_data_available and not posts:
-        text = (data.get("text") or handle or "").strip()
-        if not text:
-            raise HTTPException(400, "No content to analyze")
-        try:
-            prob, ms = await predict_one(text)
-        except Exception as exc:
-            raise inference_http_error(exc)
-        cls = "Suicidal" if prob >= 0.5 else "Non-Suicidal"
-        save_analysis(user["id"], "self", text, prob, cls)
-        sess = create_analysis_session(
-            student_id=user["id"], counsellor_id=None, institution_id=user.get("institution_id"),
-            consent_id=None, analysis_type="self", platforms=[platform],
-            findings={"prob": prob, "label": cls, "note": "platform_data_unavailable"},
-            risk_score=prob,
-            insights=f"Self analysis for {platform}:{handle} (platform data unavailable)",
-        )
-        write_audit(user["id"], user["role_type"], "SELF_ANALYSIS", "analysis_session", sess["id"],
-                    payload={"platform": platform, "data_available": False}, ip=_client_ip(request))
-        return {"prob": prob, "label": cls, "latency_ms": ms, "session_id": sess["id"],
-                "platform_data_available": False}
-    # Platform data was actually fetched – run model on the retrieved posts.
-    if not posts:
-        raise HTTPException(500, "Platform data fetched but no posts returned")
-    import numpy as np
-    from backend.services.predictor import predict_batch
-    text_col = [clean_text(p.get("text", "")) for p in posts if (p.get("text") or "").strip()]
-    if not text_col:
-        raise HTTPException(500, "No analysable text in fetched posts")
-    probs = await predict_batch(text_col)
-    n_high = sum(1 for p in probs if p >= 0.55)
-    overall = float(np.mean(probs)) if probs else 0.0
-    cls = "Suicidal" if overall >= 0.5 else "Non-Suicidal"
-    # Build a platform-result-like structure.
-    from backend.main import _build_platform_result
-    platform_result = _build_platform_result(posts, platform)
-    platform_result["overall"] = overall
-    platform_result["n_high"] = n_high
-    platform_result["n_posts"] = len(posts)
-    platform_result["platform_key"] = platform
-    platform_result["username"] = handle
-    # Persist a durable analysis session with the actual platform results.
-    sess = create_analysis_session(
-        student_id=user["id"], counsellor_id=None, institution_id=user.get("institution_id"),
-        consent_id=None, analysis_type="social_wellbeing", platforms=[platform],
-        findings=platform_result, risk_score=overall,
-        insights=f"Platform analysis for {platform}:{handle}; {len(posts)} items reviewed; mean risk={overall:.2f}",
-        recommendations=f"Review {len(posts)} posts from {platform}; {n_high} high-risk items identified.",
-    )
-    write_audit(user["id"], user["role_type"], "SELF_ANALYSIS", "analysis_session", sess["id"],
-                payload={"platform": platform, "data_available": True, "n_posts": len(posts), "n_high": n_high}, ip=_client_ip(request))
-    return {
-        "prob": overall, "label": cls, "latency_ms": 0,
-        "session_id": sess["id"],
-        "platform_data_available": True,
-        "n_posts": len(posts),
-        "n_high": n_high,
-        "overall_risk": overall,
-        "findings": platform_result,
-    }
+        session = await run_self_analysis(user["id"], slugs)
+    except Exception as exc:  # noqa: BLE001
+        raise inference_http_error(exc)
+
+    write_audit(user["id"], user["role_type"], "SELF_ANALYSIS", "analysis_session", session["id"],
+                payload={"platforms": slugs, "status": session.get("status")}, ip=_client_ip(request))
+    return {"session": _decode_session_json(session)}
 
 
 @app.get("/api/v1/students/{student_id}/analysis-sessions")
@@ -923,6 +944,7 @@ async def list_analysis_sessions(
         pass
     else:
         from backend.database import has_active_assignment
+
         if not has_active_assignment(user["id"], student_id):
             raise HTTPException(403, "Student not assigned to you")
         # history remains auditable even after consent revoked; only new analysis requires valid consent
@@ -933,11 +955,24 @@ async def list_analysis_sessions(
 
 @app.get("/api/self/analysis-sessions")
 async def list_own_analysis_sessions(user: dict = Depends(require_auth), limit: int = 50, offset: int = 0):
+    _require_self_adult(user)
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
     sessions = get_analysis_sessions_for_student(user["id"], limit=limit, offset=offset)
-    total = len(get_analysis_sessions_for_student(user["id"], limit=1000, offset=0))
-    return {"sessions": sessions, "total": total, "limit": limit, "offset": offset}
+    decoded = [_decode_session_json(s) for s in sessions]
+    return {"sessions": decoded, "total": len(get_analysis_sessions_for_student(user["id"], limit=1000, offset=0)),
+            "limit": limit, "offset": offset}
+
+
+@app.get("/api/self/analysis-sessions/{session_id}")
+async def get_own_analysis_session(session_id: str, user: dict = Depends(require_auth)):
+    _require_self_adult(user)
+    from backend.database import get_analysis_session_for_student
+
+    sess = get_analysis_session_for_student(session_id, user["id"])
+    if not sess:
+        raise HTTPException(404, "Session not found")
+    return {"session": _decode_session_json(sess)}
 
 
 @app.get("/api/v1/analysis-sessions/{session_id}")
@@ -2294,7 +2329,7 @@ async def update_counsellor(counsellor_id: str, data: dict, request: Request, us
             for a in get_assignments_for_counsellor(counsellor_id, active_only=True):
                 unassign_student_from_counsellor(a["id"])
             try:
-                from backend.auth import blacklist_token
+                pass
                 # best-effort: blacklist any active tokens would require store, rely on status check
             except Exception:
                 pass
@@ -2377,6 +2412,7 @@ async def list_assignments(counsellor_id: str | None = None, student_id: str | N
     elif student_id:
         assignments = get_assignments_for_student(student_id)
     else:
+        from backend.database import get_db
         conn = get_db()
         rows = conn.execute(
             "SELECT csa.*, u_c.name as counsellor_name, u_c.email as counsellor_email, "
@@ -2739,7 +2775,7 @@ def _require_counsellor_student_access(user: dict, student_id: str) -> None:
     if user.get("role_type") == "admin":
         return
     _require_counsellor(user)
-    from backend.database import has_active_assignment, has_consent_relationship, get_user_by_id
+    from backend.database import has_active_assignment, get_user_by_id
     if not has_active_assignment(user["id"], student_id):
         raise HTTPException(403, "Student not assigned to you")
     if not has_consent_relationship(student_id, user["id"]):
@@ -3473,8 +3509,7 @@ async def available_students(user: dict = Depends(require_auth)):
     """List approved students not assigned to any counsellor."""
     if user["role_type"] != "admin":
         raise HTTPException(403, "Admin access required")
-    from backend.database import get_db, get_all_users, get_assignments_for_counsellor
-    import json
+    from backend.database import get_db
     conn = get_db()
     # Get all approved students from users table
     all_students = conn.execute(
