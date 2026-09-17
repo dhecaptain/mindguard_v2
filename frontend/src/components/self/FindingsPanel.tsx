@@ -147,7 +147,12 @@ export default function FindingsPanel({ session }: Props) {
   const signals = flattenSignals(findings.socioeconomic).slice(0, 6)
   const displayPlatforms = findings.platforms?.length
     ? findings.platforms.map((p) => p.platform)
-    : findings.platforms_analyzed
+    : findings.platforms_analyzed || []
+
+  const displayPlatformCount =
+    displayPlatforms.length ||
+    (Array.isArray(findings.platforms) ? findings.platforms.length : 0) ||
+    (Array.isArray(findings.platforms_analyzed) ? findings.platforms_analyzed.length : 0)
 
   return (
     <div className="bg-white rounded-xl border border-[#e5e7eb] p-[20px]">
@@ -168,7 +173,7 @@ export default function FindingsPanel({ session }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-[10px] mb-[8px]">
         <div className="px-[12px] py-[9px] rounded-lg bg-[#f8fafc] border border-[#e5e7eb]">
           <div className="text-[0.65rem] uppercase tracking-wide text-[#6b7280] font-bold">Platforms</div>
-          <div className="text-[1.05rem] font-bold text-[#1f2937]">{displayPlatforms.length}</div>
+          <div className="text-[1.05rem] font-bold text-[#1f2937]">{displayPlatformCount}</div>
         </div>
         <div className="px-[12px] py-[9px] rounded-lg bg-[#f8fafc] border border-[#e5e7eb]">
           <div className="text-[0.65rem] uppercase tracking-wide text-[#6b7280] font-bold">Posts analysed</div>

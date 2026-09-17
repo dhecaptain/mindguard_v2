@@ -439,22 +439,39 @@ def set_analysis_session_completed(session_id: str, findings: dict, risk_score: 
     return ok
 
 
-def get_analysis_sessions_for_student(student_id: str, limit: int = 50, offset: int = 0) -> list:
+def get_analysis_sessions_for_student(
+    student_id: str, limit: int = 50, offset: int = 0, analysis_type: str | None = None
+) -> list:
     conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM analysis_sessions WHERE student_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        (student_id, limit, offset),
-    ).fetchall()
+    if analysis_type:
+        rows = conn.execute(
+            "SELECT * FROM analysis_sessions WHERE student_id = ? AND analysis_type = ? "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (student_id, analysis_type, limit, offset),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM analysis_sessions WHERE student_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (student_id, limit, offset),
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def get_analysis_session_for_student(session_id: str, student_id: str) -> dict | None:
+def get_analysis_session_for_student(
+    session_id: str, student_id: str, analysis_type: str | None = None
+) -> dict | None:
     conn = get_db()
-    row = conn.execute(
-        "SELECT * FROM analysis_sessions WHERE id = ? AND student_id = ?",
-        (session_id, student_id),
-    ).fetchone()
+    if analysis_type:
+        row = conn.execute(
+            "SELECT * FROM analysis_sessions WHERE id = ? AND student_id = ? AND analysis_type = ?",
+            (session_id, student_id, analysis_type),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM analysis_sessions WHERE id = ? AND student_id = ?",
+            (session_id, student_id),
+        ).fetchone()
     conn.close()
     return dict(row) if row else None
 
