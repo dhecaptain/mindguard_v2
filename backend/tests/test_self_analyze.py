@@ -224,6 +224,47 @@ def test_not_retrievable_platform_analyzer_is_awaitable(db):
         assert inspect.iscoroutinefunction(analyzer), f"{slug} analyzer must be async"
 
 
+def test_self_history_excludes_non_self_sessions(db, client):
+    """Legacy counsellor/consent-gated sessions must never leak into the adult
+    self-service history (their findings shape would crash the frontend)."""
+
+    from backend.database import create_analysis_session
+
+    adult = _make_adult(db, "hist@self.test")
+
+    legacy = create_analysis_session(
+        student_id=adult["id"],
+        counsellor_id=None,
+        institution_id=None,
+        consent_id=None,
+        analysis_type="counsellor_student",
+        platforms=["reddit"],
+        findings={"posts": [], "result": {"rolling_score": 0.4}},
+    )
+    own_self = create_analysis_session(
+        student_id=adult["id"],
+        counsellor_id=None,
+        institution_id=None,
+        consent_id=None,
+        analysis_type="self",
+        platforms=["reddit"],
+        findings={"platforms_analyzed": ["reddit"], "posts_analyzed": 0},
+    )
+
+    token = _login(client, "hist@self.test")
+    resp = client.get("/api/self/analysis-sessions", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    ids = [s["id"] for s in resp.json()["sessions"]]
+    assert own_self["id"] in ids
+    assert legacy["id"] not in ids, "counsellor_student sessions must not appear in self history"
+
+    detail = client.get(
+        f"/api/self/analysis-sessions/{legacy['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 404, "counsellor_student session detail must 404 for the adult"
+
+
 def test_delete_wipes_credentials(db, client):
     adult = _make_adult(db, "del@self.test")
     _connect(db, adult["id"], "bluesky", "del@del.bsky.social", {"app_password": "aaaa-bbbb-cccc-dddd"})

@@ -963,9 +963,9 @@ async def list_own_analysis_sessions(user: dict = Depends(require_auth), limit: 
     _require_self_adult(user)
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    sessions = get_analysis_sessions_for_student(user["id"], limit=limit, offset=offset)
+    sessions = get_analysis_sessions_for_student(user["id"], limit=limit, offset=offset, analysis_type="self")
     decoded = [_decode_session_json(s) for s in sessions]
-    return {"sessions": decoded, "total": len(get_analysis_sessions_for_student(user["id"], limit=1000, offset=0)),
+    return {"sessions": decoded, "total": len(get_analysis_sessions_for_student(user["id"], limit=1000, offset=0, analysis_type="self")),
             "limit": limit, "offset": offset}
 
 
@@ -974,7 +974,7 @@ async def get_own_analysis_session(session_id: str, user: dict = Depends(require
     _require_self_adult(user)
     from backend.database import get_analysis_session_for_student
 
-    sess = get_analysis_session_for_student(session_id, user["id"])
+    sess = get_analysis_session_for_student(session_id, user["id"], analysis_type="self")
     if not sess:
         raise HTTPException(404, "Session not found")
     return {"session": _decode_session_json(sess)}
