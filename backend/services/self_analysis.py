@@ -273,14 +273,16 @@ async def _analyze_youtube(user_id: str) -> dict[str, Any]:
         return {"platform": "youtube", "status": "error", "message": f"Could not retrieve YouTube activity: {exc}"}
 
 
-def _analyze_not_retrievable(platform: str) -> dict[str, Any]:
-    spec = get_platform(platform)
-    name = (spec or {}).get("display_name") or platform.title()
-    return {
-        "platform": platform,
-        "status": "error",
-        "message": f"{name} cannot be analyzed from the self-service account connection yet — the platform requires manual export or an institutional subscription.",
-    }
+def make_not_retrievable(platform: str):
+    async def _analyzer(user_id: str) -> dict[str, Any]:
+        spec = get_platform(platform)
+        name = (spec or {}).get("display_name") or platform.title()
+        return {
+            "platform": platform,
+            "status": "error",
+            "message": f"{name} cannot be analyzed from the self-service account connection yet — the platform requires manual export or an institutional subscription.",
+        }
+    return _analyzer
 
 
 _ANALYZERS = {
@@ -288,11 +290,11 @@ _ANALYZERS = {
     "bluesky": _analyze_bluesky,
     "mastodon": _analyze_mastodon,
     "youtube": _analyze_youtube,
-    "instagram": _analyze_not_retrievable,
-    "linkedin": _analyze_not_retrievable,
-    "tiktok": _analyze_not_retrievable,
-    "facebook": _analyze_not_retrievable,
-    "twitter": _analyze_not_retrievable,
+    "instagram": make_not_retrievable("instagram"),
+    "linkedin": make_not_retrievable("linkedin"),
+    "tiktok": make_not_retrievable("tiktok"),
+    "facebook": make_not_retrievable("facebook"),
+    "twitter": make_not_retrievable("twitter"),
 }
 
 

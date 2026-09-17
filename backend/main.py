@@ -199,9 +199,14 @@ def _decode_json_field(value: Any) -> Any:
 
 def _decode_session_json(session: dict) -> dict:
     out = dict(session)
-    for key in ("platforms_json", "findings_json", "progress_json", "error_json"):
-        if key in out:
-            out[key] = _decode_json_field(out.get(key))
+    for db_key, out_key in (
+        ("platforms_json", "platforms"),
+        ("findings_json", "findings"),
+        ("progress_json", "progress"),
+        ("error_json", "error"),
+    ):
+        if db_key in out:
+            out[out_key] = _decode_json_field(out.pop(db_key))
     for key in ("insights", "recommendations"):
         if key in out and out.get(key):
             decoded = _decode_json_field(out[key])

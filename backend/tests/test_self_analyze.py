@@ -7,6 +7,7 @@ the suite never touches the network or the ML model.
 """
 
 import os
+import inspect
 from datetime import datetime, timezone
 
 os.environ.setdefault("JWT_SECRET", "self-analyze-test-secret")
@@ -120,7 +121,7 @@ def test_analyze_with_no_data_never_fakes_a_score(db, client, monkeypatch):
     session = resp.json()["session"]
     assert session["status"] == "no_data"
     assert session["risk_score"] in (None, 0)
-    findings = session.get("findings_json") or {}
+    findings = session.get("findings") or {}
     assert findings.get("overall_risk") is None
     assert findings.get("posts_analyzed") == 0
     insights_text = session.get("insights")
@@ -128,8 +129,8 @@ def test_analyze_with_no_data_never_fakes_a_score(db, client, monkeypatch):
 
 
 def test_analyze_only_uses_own_connected_accounts(db, client, monkeypatch):
-    _make_adult(db, "owna@self.test")
-    _connect(db, "owna@self.test", "reddit", "alice-reddit")
+    adult_a = _make_adult(db, "owna@self.test")
+    _connect(db, adult_a["id"], "reddit", "alice-reddit")
 
     async def fake_reddit_ok(user_id):
         now = datetime.now(timezone.utc).isoformat()
@@ -157,10 +158,11 @@ def test_analyze_only_uses_own_connected_accounts(db, client, monkeypatch):
     assert ra.status_code == 200, ra.text
     sess_a = ra.json()["session"]
     assert sess_a["status"] == "completed"
-    assert sess_a["findings_json"]["overall_risk"] >= 0.5
+    assert sess_a["findings"]["overall_risk"] >= 0.5
 
     # B has no connected accounts -> analyze reports no_data for B, and never
     # touches A's session or account.
+    _make_adult(db, "ownb@self.test")
     token_b = _login(client, "ownb@self.test")
     rb = client.post("/api/self/analyze", headers={"Authorization": f"Bearer {token_b}"}, json={"platform": "reddit"})
     assert rb.status_code == 200, rb.text
@@ -209,6 +211,17 @@ def test_verify_writes_public_verification_status(db, client, monkeypatch):
     accs = client.get("/api/self/social-accounts", headers={"Authorization": f"Bearer {token}"}).json()["accounts"]
     assert accs[0]["verification_status"] == "verified"
     assert accs[0]["verified_handle"] == "real-user"
+
+
+def test_not_retrievable_platform_analyzer_is_awaitable(db):
+    """A connected account whose platform can't be retrieved must not crash the
+    analyzer loop with a sync-dict ``await`` error (the deployed 503 root cause)."""
+
+    for slug in ("instagram", "linkedin", "tiktok", "facebook", "twitter"):
+        assert slug in self_analysis._ANALYZERS, f"missing analyzer for {slug}"
+        analyzer = self_analysis._ANALYZERS[slug]
+        assert callable(analyzer)
+        assert inspect.iscoroutinefunction(analyzer), f"{slug} analyzer must be async"
 
 
 def test_delete_wipes_credentials(db, client):
